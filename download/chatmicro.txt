@@ -1,0 +1,647 @@
+================================================================================
+SciMSPT - Scientific MicroServices Platform Technology
+Extracted Reference Material from AETH-1 Architecture Documentation
+================================================================================
+
+SOURCE: Endeavor Science (AETH-1) Investor Package v1.0
+EXTRACTION: Microservices Architecture & Platform Technical Content
+
+================================================================================
+
+
+################################################################################
+# Architecture Overview
+################################################################################
+
+3.4 ARCHITECTURE OVERVIEW
+--------------------------------------------------------------------------------
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        AETH-1 PLATFORM ARCHITECTURE                         │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         CLIENT LAYER                                 │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │   │
+│  │  │   Web IDE   │  │  Notebook   │  │   CLI Tool  │  │   Mobile    │ │   │
+│  │  │ (Next.js)   │  │ (Jupyter-like│  │   (Terminal)│  │  (View-only)│ │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘ │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                         API GATEWAY                                  │   │
+│  │  Authentication │ Rate Limiting │ Routing │ Load Balancing          │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                      MICROSERVICES LAYER                             │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │   │
+│  │  │ Sequence │ │ Molecule │ │ Data Viz │ │Workflow  │ │ Package  │  │   │
+│  │  │ Alignment│ │ Viewer   │ │ Engine   │ │Orchestr. │ │ Manager  │  │   │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘  │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐  │   │
+│  │  │ Container│ │  File    │ │  User    │ │Collabor. │ │ AI/ML    │  │   │
+│  │  │ Runtime  │ │ Storage  │ │  Auth    │ │ Services │ │ Services │  │   │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                    │                                        │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                      INFRASTRUCTURE LAYER                            │   │
+│  │  Container Orchestration (Kubernetes)                                │   │
+│  │  Object Storage (S3-compatible)                                       │   │
+│  │  Compute Pool (GPU-enabled for ML workloads)                          │   │
+│  │  Database Cluster (PostgreSQL + Redis + Elasticsearch)               │   │
+│  │  CDN for static assets                                               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+TECHOLOGY STACK:
+- Frontend: Next.js 16, React 19, TypeScript, Tailwind CSS
+- Backend: Node.js, Python (FastAPI), Go (performance services)
+- Database: PostgreSQL, Redis, Elasticsearch
+- Infrastructure: Kubernetes, Docker, Terraform
+- Compute: WebAssembly (browser), GPU clusters (server-side)
+- Real-time: WebSocket, Server-Sent Events
+
+
+
+
+################################################################################
+# Product Architecture
+################################################################################
+
+5.1 PRODUCT ARCHITECTURE (DEEP DIVE)
+--------------------------------------------------------------------------------
+
+AETH-1 is built on a microservices architecture with the following core 
+components:
+
+CORE PLATFORM SERVICES:
+
+1. IDENTITY & ACCESS MANAGEMENT (IAM)
+   - Email/password, OAuth (Google, GitHub, ORCID), SSO/SAML
+   - Role-based access control (RBAC)
+   - API key management
+   - Session management
+   - Audit logging
+
+2. PROJECT MANAGEMENT SERVICE
+   - Hierarchical project organization (workspace → project → experiment)
+   - Metadata tagging and search
+   - Template system for common project types
+   - Import/export capabilities
+   - Version history with diff view
+
+3. FILE STORAGE SERVICE
+   - Blob storage for large files (sequences, structures, datasets)
+   - Automatic preview generation
+   - Intelligent caching (frequently accessed files)
+   - Quota management (per-user, per-organization)
+   - Virus scanning for uploaded files
+
+4. CONTAINER RUNTIME SERVICE
+   - Docker container orchestration
+   - WebAssembly sandboxing for untrusted code
+   - Resource limits and isolation
+   - Pre-built scientific environment images
+   - GPU scheduling for ML workloads
+
+5. WORKFLOW ORCHESTRATION SERVICE
+   - DAG-based workflow definition (like Apache Airflow / Nextflow)
+   - Visual workflow builder (drag-and-drop)
+   - Parameter sweep support
+   - Parallel execution engine
+   - Checkpoint/resume for long-running jobs
+   - Integration with external compute (AWS Batch, Slurm clusters)
+
+6. PACKAGE REGISTRY SERVICE
+   - Scientific tool/package repository (like npm/PyPI)
+   - Semantic versioning
+   - Dependency resolution
+   - Security scanning (vulnerability detection)
+   - Usage analytics and popularity ranking
+   - Monetization options for publishers (paid packages)
+
+7. COLLABORATION SERVICE
+   - Real-time editing (Operational Transformation)
+   - Comments and annotations
+   - Activity feeds and notifications
+   - Sharing permissions (view/edit/manage)
+   - External collaboration links (time-limited, password-protected)
+
+8. NOTIFICATION & COMMUNICATION SERVICE
+   - In-app notifications
+   - Email digests
+   - Webhook integrations (Slack, Teams)
+   - SMS alerts for job completion (enterprise feature)
+
+SCIENTIFIC MICROSERVICES:
+
+9. SEQUENCE ANALYSIS SERVICE
+   - Nucleotide/protein sequence storage and retrieval
+   - BLAST-compatible alignment (integrated or via NCBI API)
+   - Multiple sequence alignment (MAFFT, Clustal Omega)
+   - Phylogenetic tree construction
+   - ORF prediction, motif search
+   - Format conversion (FASTA, GenBank, EMBL, etc.)
+
+10. MOLECULAR VISUALIZATION SERVICE
+    - 3D molecular rendering (WebGL/Three.js)
+    - Multiple representation modes (ball-stick, space-filling, ribbon)
+    - Structure superposition
+    - Ligand binding site visualization
+    - Molecular dynamics trajectory playback
+    - Export to high-quality images (PNG, SVG, POV-Ray)
+
+11. CHEMICAL INFORMATICS SERVICE
+    - SMILES/MOL file handling
+    - Substructure searching
+    - Molecular property calculation (RDKit backend)
+    - Reaction mapping and prediction
+    - SAR (Structure-Activity Relationship) analysis
+    - QSAR/QSPR modeling interfaces
+
+12. DATA VISUALIZATION SERVICE
+    - Interactive charting (scatter, line, bar, heatmap, volcano, PCA, etc.)
+    - Statistical overlay (regression, significance markers)
+    - Publication-quality export
+    - Dashboard builder
+    - Custom visualization API (for community contributions)
+
+13. NOTEBOOK RUNTIME SERVICE
+    - Jupyter-compatible kernel management
+    - Cell-by-cell execution
+    - Rich output rendering (plots, tables, HTML)
+    - Magic commands for scientific operations
+    - Scheduled notebook execution
+    - Version comparison between runs
+
+14. DOCUMENT GENERATION SERVICE
+    - LaTeX/PDF report generation
+    - Microsoft Word export
+    - Template system (journal formats, grant applications)
+    - Automated figure/table numbering
+    - Bibliography management (BibTeX integration)
+    - Collaborative editing
+
+15. AI/ML INFERENCE SERVICE
+    - Pre-trained model hosting
+    - Custom model deployment
+    - Protein structure prediction (AlphaFold-like)
+    - Property prediction models
+    - Natural language query interface ("find proteins similar to...")
+    - Automated insight generation
+
+
+
+################################################################################
+# Ui Design Principles
+################################################################################
+
+5.2 USER INTERFACE DESIGN PRINCIPLES
+--------------------------------------------------------------------------------
+
+DESIGN PHILOSOPHY: "Scientific Power, Consumer Simplicity"
+
+Core UI Principles:
+
+1. PROGRESSIVE DISCLOSURE
+   - Simple tasks are simple (one click to run BLAST)
+   - Advanced options available but hidden by default
+   - Expert users can access full parameter control
+   - Never overwhelm beginners with complexity
+
+2. CONSISTENT PATTERNS
+   - Same upload flow for every tool
+   - Same results viewer layout
+   - Same export/share options
+   - Same keyboard shortcuts everywhere
+   - Learn once, apply everywhere
+
+3. VISUAL FEEDBACK
+   - Progress indicators for long-running jobs
+   - Interactive previews before committing actions
+   - Clear error messages with actionable solutions
+   - Undo/redo for destructive operations
+   - Confirmation dialogs only when necessary
+
+4. ACCESSIBILITY
+   - WCAG 2.1 AA compliance
+   - Keyboard navigation for all features
+   - Screen reader compatible
+   - High contrast mode
+   - Localized interface (English, Chinese, Spanish, Japanese initially)
+
+5. PERFORMANCE PERCEPTION
+   - Optimistic UI updates (show results before confirmation)
+   - Skeleton loading states
+   - Smooth animations (respect prefers-reduced-motion)
+   - Offline capability for viewing cached data
+   - Background sync when connection returns
+
+UI COMPONENT LIBRARY:
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        AETH-1 UI COMPONENT SYSTEM                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Layout Components:                                                        │
+│  ├── App Shell (sidebar, header, main content area)                        │
+│  ├── Workspace Navigator (file tree, breadcrumbs)                          │
+│  ├── Panel System (resizable, dockable panels)                             │
+│  ├── Modal/Dialog System (context-preserving)                              │
+│  └── Command Palette (Cmd/Ctrl+K quick actions)                            │
+│                                                                             │
+│  Data Components:                                                          │
+│  ├── DataTable (sortable, filterable, selectable, exportable)              │
+│  ├── DataGrid (spreadsheet-like editing)                                   │
+│  ├── SequenceViewer (nucleotide/protein with highlighting)                 │
+│  ├── StructureViewer (3D molecule with controls)                           │
+│  ├── ImageGallery (zoomable, annotatable)                                  │
+│  └── JsonViewer (collapsible, syntax-highlighted)                          │
+│                                                                             │
+│  Input Components:                                                         │
+│  ├── FileUploader (drag-drop, progress, validation)                        │
+│  ├── FormBuilder (dynamic forms from JSON schema)                          │
+│  ├── ParameterEditor (tool-specific inputs with help text)                 │
+│  ├── CodeEditor (Monaco-powered, multi-language)                           │
+│  └── SearchBar (global search with filters)                                │
+│                                                                             │
+│  Output Components:                                                        │
+│  ├── ResultCard (summary with drill-down)                                  │
+│  ├── ProgressTracker (multi-step job status)                               │
+│  ├── NotificationToast (actionable alerts)                                 │
+│  ├── ChartContainer (responsive, exportable)                               │
+│  └── ReportViewer (PDF/HTML preview with annotation)                       │
+│                                                                             │
+│  Collaboration Components:                                                │
+│  ├── PresenceIndicator (showing who else is viewing)                       │
+│  ├── CommentThread (contextual discussion)                                 │
+│  ├── AvatarStack (team member display)                                     │
+│  ├── ShareDialog (permission configuration)                                │
+│  └── ActivityFeed (chronological event log)                                │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+
+################################################################################
+# Technology Stack Details
+################################################################################
+
+5.3 TECHNOLOGY STACK DETAILS
+--------------------------------------------------------------------------------
+
+FRONTEND STACK:
+
+Framework: Next.js 16 (App Router)
+- Server components for performance
+- Streaming SSR for large data
+- Edge functions for global distribution
+- Built-in optimization (image, font, script)
+
+Language: TypeScript (strict mode)
+- Type safety across codebase
+- Better IDE support
+- Self-documenting code
+- Easier refactoring
+
+Styling: Tailwind CSS 4
+- Utility-first approach
+- Design token system
+- Responsive by default
+- Dark mode support
+
+State Management: Zustand + React Query
+- Lightweight global state
+- Server state synchronization
+- Devtools integration
+- Optimistic updates
+
+Data Visualization:
+- D3.js for custom visualizations
+- Plotly.js for interactive charts
+- Three.js for 3D molecular graphics
+- Monaco Editor for code display
+
+Testing:
+- Vitest for unit tests
+- Playwright for e2e tests
+- Storybook for component development
+
+BACKEND STACK:
+
+API Layer: Next.js API Routes + FastAPI (Python)
+- Type-safe APIs with OpenAPI spec
+- Request validation
+- Rate limiting
+- CORS handling
+
+Services: Microservices architecture
+- Node.js/TypeScript for IO-heavy services
+- Python/FastAPI for ML/scientific services
+- Go for performance-critical services
+- gRPC for inter-service communication
+
+Database:
+- PostgreSQL (primary relational data)
+- Redis (caching, sessions, queues)
+- Elasticsearch (full-text search)
+- TimescaleDB (time-series metrics)
+
+Message Queue: Apache Kafka / Redis Streams
+- Event-driven architecture
+- Job queue for async processing
+- Event sourcing for audit log
+
+Infrastructure:
+- Kubernetes (container orchestration)
+- Helm (deployment management)
+- Terraform (infrastructure as code)
+- ArgoCD (GitOps deployment)
+
+Observability:
+- Prometheus (metrics)
+- Grafana (dashboards)
+- Jaeger (distributed tracing)
+- ELK Stack (logging)
+
+DEVOPS & SECURITY:
+
+CI/CD: GitHub Actions
+- Automated testing on every PR
+- Multi-environment deployments
+- Canary releases
+- Automated rollbacks
+
+Security:
+- OAuth 2.0 / OIDC authentication
+- JWT tokens with short expiry
+- Encryption at rest (AES-256)
+- Encryption in transit (TLS 1.3)
+- Secrets management (HashiCorp Vault)
+- Container vulnerability scanning
+- WAF (Web Application Firewall)
+- DDoS protection
+
+Compliance (Enterprise):
+- SOC 2 Type II certification path
+- HIPAA technical safeguards
+- GDPR data processing agreements
+- FDA 21 CFR Part 11 (electronic signatures, audit trails)
+
+
+
+################################################################################
+# Technical Whitepaper Abstract
+################################################################################
+
+                        PART 12: TECHNICAL WHITEPAPER
+================================================================================
+
+--------------------------------------------------------------------------------
+12.1 ABSTRACT
+--------------------------------------------------------------------------------
+
+Endeavor Science (AETH-1) presents a novel architectural approach to unifying 
+fragmented scientific computing workflows into a single, cloud-native platform. 
+By leveraging modern web technologies (WebAssembly, WebGL, containerization) 
+and established open-source scientific libraries, AETH-1 eliminates the 
+reproducibility crisis while dramatically reducing the barrier to entry for 
+computational research. This whitepaper details the technical architecture, 
+design decisions, and implementation strategies that enable AETH-1 to deliver 
+desktop-class scientific applications through a browser, with enterprise-grade 
+scalability and security.
+
+Keywords: scientific computing, cloud-native, WebAssembly, reproducibility, 
+microservices, containerization, bioinformatics, cheminformatics
+
+--------------------------------------------------------------------------------
+12.2 INTRODUCTION & MOTIVATION
+--------------------------------------------------------------------------------
+
+The challenge of integrating diverse scientific software tools into coherent 
+workflows has persisted for decades. Despite advances in individual tools, the 
+fundamental problem remains: each tool operates in isolation, using proprietary 
+formats, requiring complex installation procedures, and lacking standardized 
+interfaces for interoperation.
+
+AETH-1 addresses this through several key innovations:
+
+1. UNIFIED DATA MODEL
+   - Abstract scientific data types (sequences, molecules, tensors, images)
+   - Automatic format conversion and type inference
+   - Versioned, immutable data objects with full provenance
+
+2. CONTAINERIZED EXECUTION
+   - Each analysis runs in isolated, reproducible containers
+   - Environment snapshots captured automatically
+   - Portability across cloud providers and on-premise deployments
+
+3. WEB-NATIVE COMPUTATION
+   - WebAssembly for client-side computation (privacy, latency)
+   - Progressive enhancement: browser for light work, cloud for heavy
+   - Offline capability for viewed/cached data
+
+4. DECLARATIVE WORKFLOWS
+   - DAG-based workflow specification
+   - Automatic parallelization where possible
+   - Checkpoint/resume for long-running computations
+
+5. EXTENSIBLE PACKAGE ECOSYSTEM
+   - Standardized interface for scientific tools
+   - Dependency management and conflict resolution
+   - Community contribution incentives
+
+--------------------------------------------------------------------------------
+12.3 SYSTEM ARCHITECTURE
+
+
+################################################################################
+# System Architecture Detail
+################################################################################
+
+12.3 SYSTEM ARCHITECTURE
+--------------------------------------------------------------------------------
+
+[Detailed technical architecture - see Section 5.1 for overview]
+
+ARCHITECTURAL PRINCIPLES:
+
+1. Microservices with clear bounded contexts
+2. API-first design (all functionality accessible via API)
+3. Event-driven communication between services
+4. Immutable infrastructure (declarative configs, GitOps)
+5. Defense in depth (security at every layer)
+6. Observability by default (metrics, traces, logs)
+7. Graceful degradation (functionality degrades, doesn't fail)
+
+DATA ARCHITECTURE:
+
+Core Data Types:
+- Sequence (DNA, RNA, protein, arbitrary alphabet)
+- Molecule (graph-based, with 3D coordinates)
+- Table (tabular data with typed columns)
+- Image (raster and vector, with metadata)
+- Tensor (n-dimensional numerical arrays)
+- Document (text, rich text, structured)
+- Workflow (DAG definition with parameter bindings)
+
+Storage Strategy:
+- Hot data: Redis (frequently accessed, session data)
+- Warm data: PostgreSQL (relational queries, transactions)
+- Cold data: Object storage (S3, archival)
+- Search index: Elasticsearch (full-text, faceted search)
+- Time series: Timeseries DB (metrics, telemetry)
+
+Each data object is immutable once created. Modifications create new versions. 
+Full version history is maintained. Branching and merging supported for 
+collaborative editing scenarios.
+
+COMPUTE ARCHITECURE:
+
+Tier 1: Client-side (WebAssembly)
+- Light computations (format conversion, simple analysis)
+- Interactive visualizations
+- Privacy-sensitive preprocessing
+- Latency-critical operations
+
+Tier 2: Shared cloud (Serverless/Kubernetes)
+- Standard scientific computations
+- Moderate resource requirements
+- Cost-optimized execution
+- Auto-scaling based on queue depth
+
+Tier 3: Dedicated compute (GPU clusters, HPC)
+- Heavy computations (MD simulations, ML training)
+- Specialized hardware requirements
+- Reserved capacity for enterprise customers
+- Spot/preemptible instances for cost optimization
+
+Job Scheduler Algorithm:
+- Priority: Enterprise > Team > Pro > Community (configurable)
+- Fair-share within tiers (prevent starvation)
+- Estimated completion time for user feedback
+- Preemption for higher-priority jobs (with checkpoint)
+- Cost-aware scheduling (use spot when deadline permits)
+
+--------------------------------------------------------------------------------
+
+
+################################################################################
+# Security Model
+################################################################################
+
+12.4 SECURITY MODEL
+--------------------------------------------------------------------------------
+
+DEFENSE IN DEPTH LAYERS:
+
+Layer 1: Network Security
+- DDoS protection (Cloudflare or similar)
+- Web Application Firewall (WAF)
+- TLS 1.3 encryption everywhere
+- Geographic access controls (enterprise feature)
+
+Layer 2: Application Security
+- OWASP Top 10 mitigation
+- Input validation and sanitization
+- SQL injection prevention (parameterized queries)
+- XSS prevention (Content Security Policy)
+- CSRF protection (token-based)
+
+Layer 3: Authentication & Authorization
+- OAuth 2.0 / OpenID Connect
+- Multi-factor authentication (TOTP, WebAuthn)
+- Role-based access control (RBAC)
+- Attribute-based access control (ABAC) for fine-grained policies
+- Service-to-service authentication (mTLS)
+
+Layer 4: Data Protection
+- Encryption at rest (AES-256)
+- Encryption in transit (TLS 1.3)
+- Key management (HashiCorp Vault or cloud KMS)
+- Data classification (public, internal, confidential, restricted)
+- Retention policies and automated purging
+
+Layer 5: Container Security
+- Base image scanning (Trivy, Clair)
+- Runtime security monitoring (Falco)
+- Network segmentation between containers
+- Resource limits (CPU, memory, filesystem)
+- Read-only root filesystems where possible
+
+Layer 6: Audit & Compliance
+- Immutable audit logs (write-once storage)
+- Tamper-evident logging
+- Real-time alerting on suspicious patterns
+- Compliance dashboards (SOC 2, HIPAA, GDPR)
+- Exportable reports for auditors
+
+ENTERPRISE COMPLIANCE FEATURES:
+
+SOC 2 Type II:
+- Control documentation
+- Annual attestation
+- Trust principles: Security, Availability, Confidentiality
+
+HIPAA:
+- Business Associate Agreement (BAA) support
+- Protected Health Information (PHI) handling procedures
+- Access logging and audit trails
+- Data breach notification procedures
+
+FDA 21 CFR Part 11:
+- Electronic signatures (biometric or password-based)
+- Audit trails for all changes
+- Access controls with role assignments
+- System validation documentation
+- Electronic record integrity checks
+
+GDPR:
+- Data processing agreements
+- Right to export/delete personal data
+- Consent management
+- Data Protection Impact Assessment (DPIA) support
+- EU data residency option (European cloud region)
+
+--------------------------------------------------------------------------------
+12.5 PERFORMANCE TARGETS
+--------------------------------------------------------------------------------
+
+USER-FACING SLOs (Service Level Objectives):
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      PERFORMANCE TARGETS (P95 LATENCY)                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Operation                        │ Target    │ Measurement Method           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Page load (initial)              │ < 3 sec   │ Synthetic monitoring          │
+│ Navigation (page-to-page)        │ < 500 ms  │ RUM (Real User Monitoring)    │
+│ File upload (100 MB)             │ < 30 sec  │ Client-side timing           │
+│ Analysis submission              │ < 2 sec   │ API response time             │
+│ Analysis completion (small job)  │ < 60 sec  │ Queue-to-completion           │
+│ Search results                   │ < 500 ms  │ Query execution time          │
+│ Preview generation               │ < 5 sec   │ Worker processing time        │
+│ Export (PDF, 10 pages)           │ < 10 sec  │ Generation time              │
+│ Collaboration sync               │ < 1 sec   │ CRDT propagation              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+INFRASTRUCTURE SLOs:
+
+Availability:
+- Community tier: 99.5% (planned maintenance excluded)
+- Paid tiers: 99.9%
+- Enterprise: 99.99% (with SLA credits)
+
+Throughput:
+- Concurrent users: 10,000 (initial), 100,000 (Year 3 target)
+- Jobs per day: 100,000 (initial), 1M (Year 3 target)
+- Storage: 1 PB (initial), 10 PB (Year 3 target)
+
+Data Durability:
+- 11 nines (99.999999999%) for object storage
+- Point-in-time recovery for databases (RPO: 1 hour)
+- Cross-region replication for disaster recovery
+
+
