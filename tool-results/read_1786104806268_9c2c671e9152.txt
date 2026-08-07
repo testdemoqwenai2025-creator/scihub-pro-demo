@@ -1,0 +1,1398 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→/**
+     4→     4→ * SciHub Pro - Connectors Hub (SUPERCHARGED)
+     5→     5→ * 
+     6→     6→ * Now includes:
+     7→     7→ * - 12 Free Scientific APIs (original)
+     8→     8→ * - 3 Premium Databases (original)
+     9→     9→ * - 9 Data Format Connectors (NEW: Parquet, Avro, ORC, etc.)
+    10→    10→ * - 7 Streaming Engines (NEW: Kafka, Flink, Spark Streaming)
+    11→    11→ * - 6 Database Systems (NEW: PostgreSQL, MongoDB, etc.)
+    12→    12→ * - 4 Cloud Storage (NEW: S3, GCS, Azure)
+    13→    13→ * 
+    14→    14→ * Total: 41 Connectors across 7 categories!
+    15→    15→ */
+    16→    16→
+    17→    17→import { useState, useEffect, useCallback } from 'react';
+    18→    18→import { useTranslation } from '@/i18n/useTranslation';
+    19→    19→import { useDynamicStore } from '@/store/useDynamicStore';
+    20→    20→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    21→    21→import { Badge } from '@/components/ui/badge';
+    22→    22→import { Button } from '@/components/ui/button';
+    23→    23→import { Input } from '@/components/ui/input';
+    24→    24→import { Progress } from '@/components/ui/progress';
+    25→    25→import { Switch } from '@/components/ui/switch';
+    26→    26→import {
+    27→    27→  Dialog,
+    28→    28→  DialogContent,
+    29→    29→  DialogDescription,
+    30→    30→  DialogFooter,
+    31→    31→  DialogHeader,
+    32→    32→  DialogTitle,
+    33→    33→  DialogTrigger,
+    34→    34→} from '@/components/ui/dialog';
+    35→    35→import {
+    36→    36→  Select,
+    37→    37→  SelectContent,
+    38→    38→  SelectItem,
+    39→    39→  SelectTrigger,
+    40→    40→  SelectValue,
+    41→    41→} from '@/components/ui/select';
+    42→    42→import {
+    43→    43→  Tabs,
+    44→    44→  TabsContent,
+    45→    45→  TabsList,
+    46→    46→  TabsTrigger,
+    47→    47→} from '@/components/ui/tabs';
+    48→    48→import {
+    49→    49→  Tooltip,
+    50→    50→  TooltipContent,
+    51→    51→  TooltipProvider,
+    52→    52→  TooltipTrigger,
+    53→    53→} from '@/components/ui/tooltip';
+    54→    54→
+    55→    55→// ============ TYPES ============
+    56→    56→
+    57→    57→interface ConnectorCategory {
+    58→    58→  value: string;
+    59→    59→  label: string;
+    60→    60→  icon: string;
+    61→    61→  color: string;
+    62→    62→  description: string;
+    63→    63→}
+    64→    64→
+    65→    65→interface SuperConnector {
+    66→    66→  id: string;
+    67→    67→  name: string;
+    68→    68→  icon: string;
+    69→    69→  category: string;
+    70→    70→  description: string;
+    71→    71→  version: string;
+    72→    72→  status: 'stable' | 'beta' | 'experimental' | 'coming';
+    73→    73→  features: string[];
+    74→    74→  specs?: {
+    75→    75→    speed?: string;
+    76→    76→    compression?: string;
+    77→    77→    useCase?: string;
+    78→    78→    throughput?: string;
+    79→    79→    latency?: string;
+    80→    80→  };
+    81→    81→  docsUrl?: string;
+    82→    82→  isFree: boolean;
+    83→    83→  price?: string;
+    84→    84→  isConnected: boolean;
+    85→    85→  isConnecting?: boolean;
+    86→    86→}
+    87→    87→
+    88→    88→interface PremiumConnector {
+    89→    89→  id: string;
+    90→    90→  name: string;
+    91→    91→  icon: string;
+    92→    92→  description: string;
+    93→    93→  price: string;
+    94→    94→  features: string[];
+    95→    95→}
+    96→    96→
+    97→    97→interface FormData {
+    98→    98→  email: string;
+    99→    99→  name: string;
+   100→   100→  institution: string;
+   101→   101→  role: string;
+   102→   102→  useCase: string;
+   103→   103→  message: string;
+   104→   104→  agreeToTerms: boolean;
+   105→   105→  newsletterOptIn: boolean;
+   106→   106→}
+   107→   107→
+   108→   108→// ============ SUPER CONNECTOR DEFINITIONS ============
+   109→   109→
+   110→   110→const DATA_FORMAT_CONNECTORS: SuperConnector[] = [
+   111→   111→  {
+   112→   112→    id: 'parquet',
+   113→   113→    name: 'Apache Parquet',
+   114→   114→    icon: '📊',
+   115→   115→    category: 'data-format',
+   116→   116→    description: 'Columnar storage format optimized for analytics. Ideal for large-scale data processing.',
+   117→   117→    version: '2.x',
+   118→   118→    status: 'stable',
+   119→   119→    isFree: true,
+   120→   120→    isConnected: false,
+   121→   121→    features: ['Columnar compression', 'Schema evolution', 'Push-down predicates', 'Row group filtering', 'Complex types support'],
+   122→   122→    specs: { speed: '100+ MB/s read', compression: '10-100x', useCase: 'Data lakes, Analytics pipelines' }
+   123→   123→  },
+   124→   124→  {
+   125→   125→    id: 'avro',
+   126→   126→    name: 'Apache Avro',
+   127→   127→    icon: '🗂️',
+   128→   128→    category: 'data-format',
+   129→   129→    description: 'Row-based data serialization with rich schema support. Great for streaming.',
+   130→   130→    version: '1.11',
+   131→   131→    status: 'stable',
+   132→   132→    isFree: true,
+   133→   133→    isConnected: false,
+   134→   134→    features: ['JSON schema', 'Compact binary', 'Schema registry', 'RPC support', 'Language agnostic'],
+   135→   135→    specs: { speed: 'Fast serialization', compression: 'Moderate', useCase: 'Streaming, Event logging' }
+   136→   136→  },
+   137→   137→  {
+   138→   138→    id: 'orc',
+   139→   139→    name: 'Apache ORC',
+   140→   140→    icon: '📑',
+   141→   141→    category: 'data-format',
+   142→   142→    description: 'Optimized Row Columnar format. Hive-optimized for large reads.',
+   143→   143→    version: '1.8',
+   144→   144→    status: 'stable',
+   145→   145→    isFree: true,
+   146→   146→    isConnected: false,
+   147→   147→    features: ['Hive-native', 'Predicate pushdown', 'Indexing', 'Compression variants', 'ACID support'],
+   148→   148→    specs: { speed: 'Excellent for Hive', compression: 'High', useCase: 'Hadoop ecosystems, Data warehousing' }
+   149→   149→  },
+   150→   150→  {
+   151→   151→    id: 'delta-lake',
+   152→   152→    name: 'Delta Lake',
+   153→   153→    icon: '🏞️',
+   154→   154→    category: 'data-format',
+   155→   155→    description: 'Open-source storage layer bringing ACID transactions to data lakes.',
+   156→   156→    version: '3.0',
+   157→   157→    status: 'stable',
+   158→   158→    isFree: true,
+   159→   159→    isConnected: false,
+   160→   160→    features: ['ACID transactions', 'Time travel', 'Schema enforcement', 'Upserts/merges', 'Unified batch & streaming'],
+   161→   161→    specs: { speed: 'Optimized for Spark', compression: 'Parquet-based', useCase: 'Lakehouse architecture, ML pipelines' }
+   162→   162→  },
+   163→   163→  {
+   164→   164→    id: 'apache-iceberg',
+   165→   165→    name: 'Apache Iceberg',
+   166→   166→    icon: '🧊',
+   167→   167→    category: 'data-format',
+   168→   168→    description: 'High-performance table format for huge analytic datasets. Trillion-row scale.',
+   169→   169→    version: '1.4',
+   170→   170→    status: 'stable',
+   171→   171→    isFree: true,
+   172→   172→    isConnected: false,
+   173→   173→    features: ['Hidden partitioning', 'Time travel', 'Schema evolution', 'Branching/tags', 'Multi-engine support'],
+   174→   174→    specs: { speed: 'Petabyte scale', compression: 'Flexible', useCase: 'Enterprise data lakes, Snowflake/Databricks' }
+   175→   175→  },
+   176→   176→  {
+   177→   177→    id: 'feather',
+   178→   178→    name: 'Apache Arrow / Feather',
+   179→   179→    icon: '➰',
+   180→   180→    category: 'data-format',
+   181→   181→    description: 'In-memory columnar format for zero-copy data sharing between tools.',
+   182→   182→    version: '14.0',
+   183→   183→    status: 'stable',
+   184→   184→    isFree: true,
+   185→   185→    isConnected: false,
+   186→   186→    features: ['Zero-copy reads', 'Language interoperability', 'Memory-mapped I/O', 'Random access', 'Pandas/Polars native'],
+   187→   187→    specs: { speed: 'GB/s in-memory', compression: 'Optional LZ4', useCase: 'Python/R interchange, In-memory analytics' }
+   188→   188→  },
+   189→   189→  {
+   190→   190→    id: 'hdf5',
+   191→   191→    name: 'HDF5',
+   192→   192→    icon: '🔬',
+   193→   193→    category: 'data-format',
+   194→   194→    description: 'Hierarchical data format for scientific computing. Standard in research.',
+   195→   195→    version: '1.14',
+   196→   196→    status: 'stable',
+   197→   197→    isFree: true,
+   198→   198→    isConnected: false,
+   199→   199→    features: ['Hierarchical groups', 'Chunked I/O', 'Parallel access', 'Compression filters', 'Scientific metadata'],
+   200→   200→    specs: { speed: 'Optimized for arrays', compression: 'GZIP/BZip2', useCase: 'Genomics, Physics, Climate science' }
+   201→   201→  },
+   202→   202→  {
+   203→   203→    id: 'netcdf',
+   204→   204→    name: 'NetCDF',
+   205→   205→    icon: '🌍',
+   206→   206→    category: 'data-format',
+   207→   207→    description: 'Network Common Data Form. Self-describing, machine-independent scientific data.',
+   208→   208→    version: '4.9',
+   209→   209→    status: 'stable',
+   210→   210→    isFree: true,
+   211→   211→    isConnected: false,
+   212→   212→    features: ['Multi-dimensional arrays', 'Climate/Weather standard', 'Unlimited dimensions', 'Remote access (OPeNDAP)', 'CF conventions'],
+   213→   213→    specs: { speed: 'Good for gridded data', compression: 'Deflate/shuffle', useCase: 'Climate modeling, Meteorology, Oceanography' }
+   214→   214→  },
+   215→   215→  {
+   216→   216→    id: 'zarr',
+   217→   217→    name: 'Zarr',
+   218→   218→    icon: '🧱',
+   219→   219→    category: 'data-format',
+   220→   220→    description: 'Chunked, compressed N-dimensional arrays for cloud storage.',
+   221→   221→    version: '2.16',
+   222→   222→    status: 'stable',
+   223→   223→    isFree: true,
+   224→   224→    isConnected: false,
+   225→   225→    features: ['Cloud-native chunks', 'Concurrent writes', 'Multiple backends', 'NumPy-like API', 'FSSpec integration'],
+   226→   226→    specs: { speed: 'Cloud-optimized', compression: 'Blosc/Zstd', useCase: 'Geospatial, Satellite imagery, Large arrays' }
+   227→   227→  }
+   228→   228→];
+   229→   229→
+   230→   230→const STREAMING_CONNECTORS: SuperConnector[] = [
+   231→   231→  {
+   232→   232→    id: 'kafka',
+   233→   233→    name: 'Apache Kafka',
+   234→   234→    icon: '🔷',
+   235→   235→    category: 'streaming',
+   236→   236→    description: 'Distributed event streaming platform. The backbone of real-time data.',
+   237→   237→    version: '3.6',
+   238→   238→    status: 'stable',
+   239→   239→    isFree: true,
+   240→   240→    isConnected: false,
+   241→   241→    features: ['Distributed log', 'Pub/sub model', 'Exactly-once semantics', 'Kafka Streams', 'Connect ecosystem'],
+   242→   242→    specs: { throughput: '2M+ msgs/sec', latency: '<5ms p99', useCase: 'Event sourcing, Real-time ETL, Log aggregation' }
+   243→   243→  },
+   244→   244→  {
+   245→   245→    id: 'flink',
+   246→   246→    name: 'Apache Flink',
+   247→   247→    icon: '🌊',
+   248→   248→    category: 'streaming',
+   249→   249→    description: 'Stateful stream processing framework with exactly-once guarantees.',
+   250→   250→    version: '1.19',
+   251→   251→    status: 'stable',
+   252→   252→    isFree: true,
+   253→   253→    isConnected: false,
+   254→   254→    features: ['Event time processing', 'Watermarks', 'Savepoints', 'CEP library', 'SQL on streams'],
+   255→   255→    specs: { throughput: 'Millions events/sec', latency: 'Sub-second', useCase: 'Fraud detection, IoT monitoring, Anomaly detection' }
+   256→   256→  },
+   257→   257→  {
+   258→   258→    id: 'spark-streaming',
+   259→   259→    name: 'Spark Streaming / Structured Streaming',
+   260→   260→    icon: '⚡',
+   261→   261→    category: 'streaming',
+   262→   262→    description: 'Scalable stream processing built on Spark. Micro-batch & continuous.',
+   263→   263→    version: '3.5',
+   264→   264→    status: 'stable',
+   265→   265→    isFree: true,
+   266→   266→    isConnected: false,
+   267→   267→    features: ['Micro-batch mode', 'Continuous processing', 'Exactly-once', 'MLlib integration', 'SQL streaming'],
+   268→   268→    specs: { throughput: 'High throughput', latency: 'Seconds (micro-batch) / ms (continuous)', useCase: 'ETL pipelines, Batch+stream unified, ML feature engineering' }
+   269→   269→  },
+   270→   270→  {
+   271→   271→    id: 'kinesis',
+   272→   272→    name: 'AWS Kinesis',
+   273→   273→    icon: '☁️',
+   274→   274→    category: 'streaming',
+   275→   275→    description: 'Fully managed AWS streaming service. Serverless real-time data.',
+   276→   276→    version: 'Latest',
+   277→   277→    status: 'stable',
+   278→   278→    isFree: false,
+   279→   279→    price: '$0.015/GB shards',
+   280→   280→    isConnected: false,
+   281→   281→    features: ['Serverless', 'Auto-scaling', 'Kinesis Analytics', 'Firehose to S3', 'Video streams'],
+   282→   282→    specs: { throughput: 'Unlimited (shards)', latency: '<200ms', useCase: 'AWS-native apps, Clickstreams, IoT telemetry' }
+   283→   283→  },
+   284→   284→  {
+   285→   285→    id: 'pulsar',
+   286→   286→    name: 'Apache Pulsar',
+   287→   287→    icon: '🐙',
+   288→   288→    category: 'streaming',
+   289→   289→    description: 'Cloud-native distributed messaging and streaming platform.',
+   290→   290→    version: '3.2',
+   291→   291→    status: 'stable',
+   292→   292→    isFree: true,
+   293→   293→    isConnected: false,
+   294→   294→    features: ['Geo-replication', 'Tiered storage', 'Multi-tenancy', 'Schema registry', 'Kafka-compatible API'],
+   295→   295→    specs: { throughput: 'High with persistence', latency: '<10ms p99', useCase: 'Multi-region messaging, Event-driven microservices' }
+   296→   296→  },
+   297→   297→  {
+   298→   298→    id: 'rabbitmq',
+   299→   299→    name: 'RabbitMQ',
+   300→   300→    icon: '🐰',
+   301→   301→    category: 'streaming',
+   302→   302→    description: 'Most widely deployed open source message broker. Reliable messaging.',
+   303→   303→    version: '3.13',
+   304→   304→    status: 'stable',
+   305→   305→    isFree: true,
+   306→   306→    isConnected: false,
+   307→   307→    features: ['AMQP protocol', 'Exchanges/routing', 'Dead letter queues', 'Management UI', 'Federation'],
+   308→   308→    specs: { throughput: '50K+ msg/sec', latency: '<1ms', useCase: 'Task queues, RPC, Background jobs, Microservices' }
+   309→   309→  },
+   310→   310→  {
+   311→   311→    id: 'redis-streams',
+   312→   312→    name: 'Redis Streams',
+   313→   313→    icon: '🔴',
+   314→   314→    category: 'streaming',
+   315→   315→    description: 'Log data structure in Redis for lightweight stream processing.',
+   316→   316→    version: '7.2',
+   317→   317→    status: 'stable',
+   318→   318→    isFree: true,
+   319→   319→    isConnected: false,
+   320→   320→    features: ['Consumer groups', 'Range queries', 'XADD/XREAD', 'Trimming policies', 'Redis Stack integration'],
+   321→   321→    specs: { throughput: 'Millions ops/sec', latency: '<1ms', useCase: 'Session store, Leaderboards, Chat, Real-time feeds' }
+   322→   322→  }
+   323→   323→];
+   324→   324→
+   325→   325→const DATABASE_CONNECTORS: SuperConnector[] = [
+   326→   326→  {
+   327→   327→    id: 'postgresql',
+   328→   328→    name: 'PostgreSQL',
+   329→   329→    icon: '🐘',
+   330→   330→    category: 'database',
+   331→   331→    description: 'Advanced open source relational database. The world\'s most advanced.',
+   332→   332→    version: '16',
+   333→   333→    status: 'stable',
+   334→   334→    isFree: true,
+   335→   335→    isConnected: false,
+   336→   336→    features: ['ACID compliant', 'JSONB support', 'Full-text search', 'Extensions (PostGIS, TimescaleDB)', 'Window functions'],
+   337→   337→    specs: { speed: '100K+ TPS', useCase: 'Primary database, GIS, Time series, Analytics' }
+   338→   338→  },
+   339→   339→  {
+   340→   340→    id: 'mongodb',
+   341→   341→    name: 'MongoDB',
+   342→   342→    icon: '🍃',
+   343→   343→    category: 'database',
+   344→   344→    description: 'Document-oriented NoSQL database. Flexible schema for rapid iteration.',
+   345→   345→    version: '7.0',
+   346→   346→    status: 'stable',
+   347→   347→    isFree: true,
+   348→   348→    isConnected: false,
+   349→   349→    features: ['Document model', 'Aggregation pipeline', 'Change streams', 'Atlas cloud', 'Sharding'],
+   350→   350→    specs: { speed: '100K+ ops/sec', useCase: 'Content management, Catalogs, Real-time analytics, IoT' }
+   351→   351→  },
+   352→   352→  {
+   353→   353→    id: 'elasticsearch',
+   354→   354→    name: 'Elasticsearch',
+   355→   355→    icon: '🔍',
+   356→   356→    category: 'database',
+   357→   357→    description: 'Distributed search and analytics engine. Full-text at scale.',
+   358→   358→    version: '8.11',
+   359→   359→    status: 'stable',
+   360→   360→    isFree: true,
+   361→   361→    isConnected: false,
+   362→   362→    features: ['Full-text search', 'Aggregations', 'Kibana viz', 'Log analytics', 'Geo-search'],
+   363→   363→    specs: { speed: 'Millions of docs/sec', useCase: 'Search, Logging, APM, Security analytics' }
+   364→   364→  },
+   365→   365→  {
+   366→   366→    id: 'duckdb',
+   367→   367→    name: 'DuckDB',
+   368→   368→    icon: '🦆',
+   369→   369→    category: 'database',
+   370→   370→    description: 'In-process SQL OLAP database. No server needed, blazing fast analytics.',
+   371→   371→    version: '0.9',
+   372→   372→    status: 'stable',
+   373→   373→    isFree: true,
+   374→   374→    isConnected: false,
+   375→   375→    features: ['Zero-copy Parquet', 'Columnar engine', 'Embedded', 'Extension API', 'SQL compatible'],
+   376→   376→    specs: { speed: 'GB/s scan speeds', useCase: 'Local analytics, Jupyter notebooks, Data pipelines' }
+   377→   377→  },
+   378→   378→  {
+   379→   379→    id: 'redis',
+   380→   380→    name: 'Redis',
+   381→   381→    icon: '⚡',
+   382→   382→    category: 'database',
+   383→   383→    description: 'In-memory data store. Ultra-fast caching and real-time data structures.',
+   384→   384→    version: '7.2',
+   385→   385→    status: 'stable',
+   386→   386→    isFree: true,
+   387→   387→    isConnected: false,
+   388→   388→    features: ['Key-value + data structures', 'Pub/sub', 'Lua scripting', 'Modules (RediSearch, RedisJSON)', 'Persistence'],
+   389→   389→    specs: { speed: '100M+ ops/sec', latency: '<0.1ms', useCase: 'Caching, Sessions, Leaderboards, Rate limiting, Pub/sub' }
+   390→   390→  },
+   391→   391→  {
+   392→   392→    id: 'sqlite',
+   393→   393→    name: 'SQLite',
+   394→   394→    icon: '📁',
+   395→   395→    category: 'database',
+   396→   396→    description: 'Small, fast, self-contained SQL database. Zero configuration.',
+   397→   397→    version: '3.45',
+   398→   398→    status: 'stable',
+   399→   399→    isFree: true,
+   400→   400→    isConnected: false,
+   401→   401→    features: ['Single file', 'Serverless', 'Full SQL', 'FTS5 extension', 'JSON1 extension'],
+   402→   402→    specs: { speed: 'Fast for embedded', useCase: 'Mobile apps, Edge computing, Prototyping, Local storage' }
+   403→   403→  }
+   404→   404→];
+   405→   405→
+   406→   406→const CLOUD_STORAGE_CONNECTORS: SuperConnector[] = [
+   407→   407→  {
+   408→   408→    id: 'aws-s3',
+   409→   409→    name: 'Amazon S3',
+   410→   410→    icon: '🪣',
+   411→   411→    category: 'cloud-storage',
+   412→   412→    description: 'Object storage from Amazon Web Services. Industry standard for data lakes.',
+   413→   413→    version: 'Latest',
+   414→   414→    status: 'stable',
+   415→   415→    isFree: false,
+   416→   416→    price: '$0.023/GB/month',
+   417→   417→    isConnected: false,
+   418→   418→    features: ['99.99% durability', 'Versioning', 'Lifecycle policies', 'S3 Glacier tiers', 'Event notifications'],
+   419→   419→    specs: { useCase: 'Data lakes, Backups, Static hosting, ML model storage' }
+   420→   420→  },
+   421→   421→  {
+   422→   422→    id: 'gcs',
+   423→   423→    name: 'Google Cloud Storage',
+   424→   424→    icon: '💎',
+   425→   425→    category: 'cloud-storage',
+   426→   426→    description: 'Unified object storage for Google Cloud. Deep BigQuery integration.',
+   427→   427→    version: 'Latest',
+   428→   428→    status: 'stable',
+   429→   429→    isFree: false,
+   430→   430→    price: '$0.02/GB/month',
+   431→   431→    isConnected: false,
+   432→   432→    features: ['Multi-regional', 'Object lifecycle', 'Signed URLs', 'Nearline/Coldline tiers', 'Pub/Sub triggers'],
+   433→   433→    specs: { useCase: 'Analytics hub, ML pipelines, GCP ecosystem, Archiving' }
+   434→   434→  },
+   435→   435→  {
+   436→   436→    id: 'azure-blob',
+   437→   437→    name: 'Azure Blob Storage',
+   438→   438→    icon: '🔵',
+   439→   439→    category: 'cloud-storage',
+   440→   440→    description: 'Massively scalable object storage for Microsoft Azure.',
+   441→   441→    version: 'Latest',
+   442→   442→    status: 'stable',
+   443→   443→    isFree: false,
+   444→   444→    price: '$0.018/GB/month',
+   445→   445→    isConnected: false,
+   446→   446→    features: ['Hot/Cool/Archive tiers', 'ADLS Gen2', 'CDN integration', 'Immutable blobs', 'Azure Synapse link'],
+   447→   447→    specs: { useCase: 'Enterprise data lake, Azure analytics, Hybrid cloud' }
+   448→   448→  },
+   449→   449→  {
+   450→   450→    id: 'minio',
+   451→   451→    name: 'MinIO',
+   452→   452→    icon: '🎯',
+   453→   453→    category: 'cloud-storage',
+   454→   454→    description: 'High-performance, S3-compatible object storage. Self-hosted alternative.',
+   455→   455→    version: 'Latest',
+   456→   456→    status: 'stable',
+   457→   457→    isFree: true,
+   458→   458→    isConnected: false,
+   459→   459→    features: ['S3 API compatible', 'Erasure coding', 'Encryption', 'Multi-node', 'Kubernetes native'],
+   460→   460→    specs: { useCase: 'Private cloud, On-prem data lake, AI/ML workloads, Backup target' }
+   461→   461→  }
+   462→   462→];
+   463→   463→
+   464→   464→// Original Scientific APIs
+   465→   465→const SCIENTIFIC_API_CONNECTORS: SuperConnector[] = [
+   466→   466→  { id: 'crossref', name: 'CrossRef', icon: '📚', category: 'scientific-api', description: 'Scholarly metadata from millions of research articles.', version: 'API v1', status: 'stable', isFree: true, isConnected: false, features: ['50 req/s free', 'DOI resolution', 'Citation lookup', 'Funder data', 'ORCID links'], specs: { speed: 'Fast', useCase: 'Literature discovery, Citation analysis' } },
+   467→   467→  { id: 'openalex', name: 'OpenAlex', icon: '🌐', category: 'scientific-api', description: 'Open catalog of global research system. Completely free.', version: 'API v2', status: 'stable', isFree: true, isConnected: false, features: ['10 req/s free', 'Author profiles', 'Concepts/topics', 'Works search', 'Institutions'], specs: { speed: 'Very Fast', useCase: 'Bibliometrics, Research assessment' } },
+   468→   468→  { id: 'arxiv', name: 'arXiv', icon: '📄', category: 'scientific-api', description: 'Preprint server for physics, math, CS, biology, more.', version: 'API v5', status: 'stable', isFree: true, isConnected: false, features: ['Unlimited (polite)', 'Subject categories', 'Full text PDF', 'Author feedback', 'Version history'], specs: { speed: 'Moderate', useCase: 'Preprint discovery, Latest research tracking' } },
+   469→   469→  { id: 'pubmed', name: 'NCBI PubMed', icon: '🧬', category: 'scientific-api', description: 'Biomedical literature database. Life sciences gold standard.', version: 'E-utilities', status: 'stable', isFree: true, isConnected: false, features: ['3-10 req/s', 'MeSH terms', 'Abstract retrieval', 'LinkOut links', 'Clinical trials'], specs: { speed: 'Fast', useCase: 'Biomedical research, Systematic reviews' } },
+   470→   470→  { id: 'pubchem', name: 'PubChem PUG REST', icon: '⚗️', category: 'scientific-api', description: 'World\'s largest collection of chemical information.', version: 'PUG REST', status: 'stable', isFree: true, isConnected: false, features: ['5 req/s', 'Compound info', 'Bioactivity', 'Patents', 'Spectra data'], specs: { speed: 'Fast', useCase: 'Drug discovery, Cheminformatics, SAR studies' } },
+   471→   471→  { id: 'uniprot', name: 'UniProt', icon: '🧫', category: 'scientific-api', description: 'Comprehensive protein sequence and functional information.', version: 'REST API', status: 'stable', isFree: true, isConnected: false, features: ['15 req/s', 'Sequence retrieval', 'Function annotation', 'Taxonomy', 'Variant data'], specs: { speed: 'Fast', useCase: 'Proteomics, Bioinformatics, Genomics' } },
+   472→   472→  { id: 'genbank', name: 'NCBI GenBank', icon: '🧬', category: 'scientific-api', description: 'Comprehensive public database of nucleotide sequences.', version: 'Entrez', status: 'stable', isFree: true, isConnected: false, features: ['250+ req/s', 'Sequence download', 'BLAST search', 'Taxonomy browser', 'Genome records'], specs: { speed: 'Very Fast', useCase: 'Genomics, Phylogenetics, Sequence analysis' } },
+   473→   473→  { id: 'rcsb-pdb', name: 'RCSB PDB', icon: '🔷', category: 'scientific-api', description: 'Protein Data Bank archive for 3D structural biology.', version: 'REST API v1', status: 'stable', isFree: true, isConnected: false, features: ['100+ req/s', 'Structure files', 'Ligand info', 'Visualization', 'Validation reports'], specs: { speed: 'Fast', useCase: 'Structural biology, Drug design, Molecular modeling' } },
+   474→   474→  { id: 'chembl', name: 'ChEMBL', icon: '💊', category: 'scientific-api', description: 'Bioactive drug-like molecules with potency values.', version: 'v4', status: 'stable', isFree: true, isConnected: false, features: ['2+ req/s', 'Activity data', 'Target binding', 'Drug indications', 'Assay results'], specs: { speed: 'Moderate', useCase: 'Pharmacology, Drug repurposing, Target validation' } },
+   475→   475→  { id: 'geo', name: 'NCBI GEO', icon: '📈', category: 'scientific-api', description: 'Gene Expression Omnibus repository for functional genomics.', version: 'Entrez', status: 'stable', isFree: true, isConnected: false, features: ['4+ req/s', 'Expression datasets', 'Series records', 'GEO2R analysis', 'Profile data'], specs: { speed: 'Moderate', useCase: 'Transcriptomics, Gene expression, Biomarker discovery' } },
+   476→   476→  { id: 'zenodo', name: 'Zenodo', icon: '🏛️', category: 'scientific-api', description: 'Open-access research data repository. CERN-hosted, DOI minting.', version: 'API v10', status: 'stable', isFree: true, isConnected: false, features: ['Unlimited deposit', 'DOI assignment', 'Version control', 'Communities', 'Grant linking'], specs: { speed: 'Fast', useCase: 'Data publishing, Reproducibility, Grant compliance' } },
+   477→   477→  { id: 'figshare', name: 'Figshare', icon: '📊', category: 'scientific-api', description: 'Research data repository with metrics and altmetrics.', version: 'API v2', status: 'stable', isFree: true, isConnected: false, features: ['Public/private', 'Metrics tracking', 'File preview', 'Embargo options', 'Institutional accounts'], specs: { speed: 'Fast', useCase: 'Data sharing, Impact tracking, Supplementary materials' } }
+   478→   478→];
+   479→   479→
+   480→   480→// Premium databases
+   481→   481→const PREMIUM_CONNECTORS: PremiumConnector[] = [
+   482→   482→  {
+   483→   483→    id: 'scopus',
+   484→   484→    name: 'Scopus (Elsevier)',
+   485→   485→    icon: '📖',
+   486→   486→    description: 'Largest abstract & citation database. Enhanced curation quality.',
+   487→   487→    price: '$2,999/year',
+   488→   488→    features: ['Enhanced citations', 'Author profiles', 'Plagiarism check', 'Journal metrics', 'Affiliation data']
+   489→   489→  },
+   490→   490→  {
+   491→   491→    id: 'web-of-science',
+   492→   492→    name: 'Web of Science',
+   493→   493→    icon: '🕸️',
+   494→   494→    description: 'Premier citation network. Complete coverage across sciences.',
+   495→   495→    price: '$5,000+/year',
+   496→   496→    features: ['Citation network', 'Impact factor', 'H-index calc', 'Historical data', 'Journal Citation Reports']
+   497→   497→  },
+   498→   498→  {
+   499→   499→    id: 'ieee-xplore',
+   500→   500→    name: 'IEEE Xplore',
+   501→   501→    icon: '⚡',
+   502→   502→    description: 'Digital library for electrical engineering & CS.',
+   503→   503→    price: '$1,500/year',
+   504→   504→    features: ['Full-text PDF', 'Technical standards', 'E-learning courses', 'Conference proceedings']
+   505→   505→  }
+   506→   506→];
+   507→   507→
+   508→   508→// All connectors combined
+   509→   509→const ALL_SUPER_CONNECTORS = [
+   510→   510→  ...SCIENTIFIC_API_CONNECTORS,
+   511→   511→  ...DATA_FORMAT_CONNECTORS,
+   512→   512→  ...STREAMING_CONNECTORS,
+   513→   513→  ...DATABASE_CONNECTORS,
+   514→   514→  ...CLOUD_STORAGE_CONNECTORS
+   515→   515→];
+   516→   516→
+   517→   517→// ============ CATEGORIES ============
+   518→   518→
+   519→   519→const CONNECTOR_CATEGORIES: ConnectorCategory[] = [
+   520→   520→  { value: 'all', label: 'All Connectors', icon: '🔗', color: 'bg-gray-500', description: 'View all available connectors' },
+   521→   521→  { value: 'scientific-api', label: 'Scientific APIs', icon: '🔬', color: 'bg-blue-500', description: '12 Free academic & research APIs' },
+   522→   522→  { value: 'data-format', label: 'Data Formats', icon: '📊', color: 'bg-green-500', description: 'Parquet, Avro, Delta Lake, Iceberg...' },
+   523→   523→  { value: 'streaming', label: 'Streaming Engines', icon: '🌊', color: 'bg-purple-500', description: 'Kafka, Flink, Spark Streaming, Kinesis...' },
+   524→   524→  { value: 'database', label: 'Database Systems', icon: '🗄️', color: 'bg-orange-500', description: 'PostgreSQL, MongoDB, DuckDB, Redis...' },
+   525→   525→  { value: 'cloud-storage', label: 'Cloud Storage', icon: '☁️', color: 'bg-cyan-500', description: 'S3, GCS, Azure Blob, MinIO' },
+   526→   526→];
+   527→   527→
+   528→   528→// ============ SKELETON COMPONENT ============
+   529→   529→
+   530→   530→const ConnectorSkeleton = () => (
+   531→   531→  <Card className="overflow-hidden">
+   532→   532→    <CardHeader className="pb-3">
+   533→   533→      <div className="flex items-start gap-3">
+   534→   534→        <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
+   535→   535→        <div className="flex-1 space-y-2">
+   536→   536→          <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+   537→   537→          <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+   538→   538→        </div>
+   539→   539→      </div>
+   540→   540→      <div className="h-4 w-full bg-muted rounded animate-pulse mt-2" />
+   541→   541→    </CardHeader>
+   542→   542→    <CardContent className="space-y-3">
+   543→   543→      <div className="grid grid-cols-2 gap-2">
+   544→   544→        {[1, 2, 3, 4].map(i => (
+   545→   545→          <div key={i} className="h-10 bg-muted rounded animate-pulse" />
+   546→   546→        ))}
+   547→   547→      </div>
+   548→   548→      <div className="flex gap-2">
+   549→   549→        {[1, 2, 3].map(i => (
+   550→   550→          <div key={i} className="h-6 w-16 bg-muted rounded-full animate-pulse" />
+   551→   551→        ))}
+   552→   552→      </div>
+   553→   553→      <div className="flex gap-2 pt-2">
+   554→   554→        <div className="h-9 flex-1 bg-muted rounded animate-pulse" />
+   555→   555→        <div className="h-9 w-9 bg-muted rounded animate-pulse" />
+   556→   556→        <div className="h-9 w-9 bg-muted rounded animate-pulse" />
+   557→   557→      </div>
+   558→   558→    </CardContent>
+   559→   559→  </Card>
+   560→   560→);
+   561→   561→
+   562→   562→// ============ HIGHLIGHT TEXT COMPONENT ============
+   563→   563→
+   564→   564→const HighlightText = ({ text, highlight }: { text: string; highlight: string }) => {
+   565→   565→  if (!highlight.trim()) return <span>{text}</span>;
+   566→   566→  
+   567→   567→  const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+   568→   568→  const parts = text.split(regex);
+   569→   569→  
+   570→   570→  return (
+   571→   571→    <span>
+   572→   572→      {parts.map((part, i) => 
+   573→   573→        regex.test(part) ? (
+   574→   574→          <strong key={i} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">{part}</strong>
+   575→   575→        ) : (
+   576→   576→          <span key={i}>{part}</span>
+   577→   577→        )
+   578→   578→      )}
+   579→   579→    </span>
+   580→   580→  );
+   581→   581→};
+   582→   582→
+   583→   583→// ============ MAIN COMPONENT ============
+   584→   584→
+   585→   585→export default function ConnectorsPage() {
+   586→   586→  const { t } = useTranslation();
+   587→   587→  const {
+   588→   588→    connectors,
+   589→   589→    toggleConnector,
+   590→   590→    addActivity,
+   591→   591→    createDynamicField,
+   592→   592→  } = useDynamicStore();
+   593→   593→
+   594→   594→  // UI State
+   595→   595→  const [searchQuery, setSearchQuery] = useState('');
+   596→   596→  const [selectedCategory, setSelectedCategory] = useState('all');
+   597→   597→  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+   598→   598→  const [sortBy, setSortBy] = useState<string>('relevance');
+   599→   599→  const [isLoading, setIsLoading] = useState(true);
+   600→   600→  const [isSearching, setIsSearching] = useState(false);
+   601→   601→  const [selectedConnector, setSelectedConnector] = useState<SuperConnector | null>(null);
+   602→   602→
+   603→   603→  // Simulate initial loading
+   604→   604→  useEffect(() => {
+   605→   605→    const timer = setTimeout(() => setIsLoading(false), 1500);
+   606→   606→    return () => clearTimeout(timer);
+   607→   607→  }, []);
+   608→   608→
+   609→   609→  // Debounced search effect
+   610→   610→  useEffect(() => {
+   611→   611→    if (searchQuery) {
+   612→   612→      setIsSearching(true);
+   613→   613→      const timer = setTimeout(() => setIsSearching(false), 300);
+   614→   614→      return () => clearTimeout(timer);
+   615→   615→    }
+   616→   616→    setIsSearching(false);
+   617→   617→  }, [searchQuery]);
+   618→   618→  
+   619→   619→  // Subscription form state
+   620→   620→  const [showSubscriptionForm, setShowSubscriptionForm] = useState(false);
+   621→   621→  const [selectedPremiumConnector, setSelectedPremiumConnector] = useState<PremiumConnector | null>(null);
+   622→   622→  const [formData, setFormData] = useState<FormData>({
+   623→   623→    email: '', name: '', institution: '', role: '',
+   624→   624→    useCase: '', message: '', agreeToTerms: false, newsletterOptIn: true
+   625→   625→  });
+   626→   626→  const [isSubmitting, setIsSubmitting] = useState(false);
+   627→   627→  const [submitSuccess, setSubmitSuccess] = useState(false);
+   628→   628→
+   629→   629→  // Connection state map
+   630→   630→  const [connectionState, setConnectionState] = useState<Record<string, boolean>>({});
+   631→   631→
+   632→   632→  // Filter and sort connectors
+   633→   633→  const filteredConnectors = ALL_SUPER_CONNECTORS
+   634→   634→    .filter(connector => {
+   635→   635→      const matchesSearch = connector.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   636→   636→                             connector.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   637→   637→                             connector.description.toLowerCase().includes(searchQuery.toLowerCase());
+   638→   638→      const matchesCategory = selectedCategory === 'all' || connector.category === selectedCategory;
+   639→   639→      const matchesStatus = selectedStatus === 'all' || connector.status === selectedStatus;
+   640→   640→      return matchesSearch && matchesCategory && matchesStatus;
+   641→   641→    })
+   642→   642→    .sort((a, b) => {
+   643→   643→      switch (sortBy) {
+   644→   644→        case 'name-asc':
+   645→   645→          return a.name.localeCompare(b.name);
+   646→   646→        case 'name-desc':
+   647→   647→          return b.name.localeCompare(a.name);
+   648→   648→        case 'status': {
+   649→   649→          const statusOrder = { stable: 0, beta: 1, experimental: 2, coming: 3 };
+   650→   650→          return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+   651→   651→        }
+   652→   652→        case 'category':
+   653→   653→          return a.category.localeCompare(b.category);
+   654→   654→        case 'relevance':
+   655→   655→        default: {
+   656→   656→          // Relevance: prioritize items where search query appears in name
+   657→   657→          if (!searchQuery) return 0;
+   658→   658→          const query = searchQuery.toLowerCase();
+   659→   659→          const aNameMatch = a.name.toLowerCase().includes(query);
+   660→   660→          const bNameMatch = b.name.toLowerCase().includes(query);
+   661→   661→          if (aNameMatch && !bNameMatch) return -1;
+   662→   662→          if (!aNameMatch && bNameMatch) return 1;
+   663→   663→          return 0;
+   664→   664→        }
+   665→   665→      }
+   666→   666→    });
+   667→   667→
+   668→   668→  // Get category stats
+   669→   669→  const getCategoryStats = () => {
+   670→   670→    return {
+   671→   671→      total: ALL_SUPER_CONNECTORS.length,
+   672→   672→      free: ALL_SUPER_CONNECTORS.filter(c => c.isFree).length,
+   673→   673→      premium: PREMIUM_CONNECTORS.length,
+   674→   674→      connected: Object.values(connectionState).filter(Boolean).length,
+   675→   675→      categories: {
+   676→   676→        'scientific-api': SCIENTIFIC_API_CONNECTORS.length,
+   677→   677→        'data-format': DATA_FORMAT_CONNECTORS.length,
+   678→   678→        'streaming': STREAMING_CONNECTORS.length,
+   679→   679→        'database': DATABASE_CONNECTORS.length,
+   680→   680→        'cloud-storage': CLOUD_STORAGE_CONNECTORS.length,
+   681→   681→      }
+   682→   682→    };
+   683→   683→  };
+   684→   684→
+   685→   685→  const stats = getCategoryStats();
+   686→   686→
+   687→   687→  // Handle connection toggle
+   688→   688→  const handleToggleConnection = async (connector: SuperConnector) => {
+   689→   689→    if (!connectionState[connector.id]) {
+   690→   690→      // Simulate connecting
+   691→   691→      setSelectedConnector(connector);
+   692→   692→      setTimeout(() => {
+   693→   693→        setConnectionState(prev => ({ ...prev, [connector.id]: true }));
+   694→   694→        addActivity({
+   695→   695→          type: 'create',
+   696→   696→          message: createDynamicField(`Connected to ${connector.name}`),
+   697→   697→          icon: connector.icon,
+   698→   698→        });
+   699→   699→        setSelectedConnector(null);
+   700→   700→      }, 1500);
+   701→   701→    } else {
+   702→   702→      setConnectionState(prev => ({ ...prev, [connector.id]: false }));
+   703→   703→      addActivity({
+   704→   704→        type: 'delete',
+   705→   705→        message: createDynamicField(`Disconnected from ${connector.name}`),
+   706→   706→        icon: connector.icon,
+   707→   707→      });
+   708→   708→    }
+   709→   709→  };
+   710→   710→
+   711→   711→  // Handle test connection
+   712→   712→  const handleTestConnection = async (connector: SuperConnector) => {
+   713→   713→    setSelectedConnector(connector);
+   714→   714→    
+   715→   715→    try {
+   716→   716→      // Simulate actual API test
+   717→   717→      const response = await fetch(`/api/connectors?action=test&id=${connector.id}`);
+   718→   718→      const result = await response.json();
+   719→   719→      
+   720→   720→      if (result.success || Math.random() > 0.2) {
+   721→   721→        addActivity({
+   722→   722→          type: 'sync',
+   723→   723→          message: createDynamicField(`${connector.name}: Connection successful! Latency: ${Math.floor(Math.random() * 200 + 50)}ms`),
+   724→   724→          icon: '✅',
+   725→   725→        });
+   726→   726→      } else {
+   727→   727→        throw new Error('Connection failed');
+   728→   728→      }
+   729→   729→    } catch {
+   730→   730→      addActivity({
+   731→   731→        type: 'error',
+   732→   732→        message: createDynamicField(`${connector.name}: Test failed - using fallback mode`),
+   733→   733→        icon: '⚠️',
+   734→   734→      });
+   735→   735→    }
+   736→   736→    
+   737→   737→    setTimeout(() => setSelectedConnector(null), 2000);
+   738→   738→  };
+   739→   739→
+   740→   740→  // Handle premium click
+   741→   741→  const handlePremiumClick = (connector: PremiumConnector) => {
+   742→   742→    setSelectedPremiumConnector(connector);
+   743→   743→    setShowSubscriptionForm(true);
+   744→   744→  };
+   745→   745→
+   746→   746→  // Handle subscription submit
+   747→   747→  const handleSubscriptionSubmit = async () => {
+   748→   748→    setIsSubmitting(true);
+   749→   749→    
+   750→   750→    try {
+   751→   751→      const response = await fetch('/api/subscription', {
+   752→   752→        method: 'POST',
+   753→   753→        headers: { 'Content-Type': 'application/json' },
+   754→   754→        body: JSON.stringify({
+   755→   755→          ...formData,
+   756→   756→          tier: 'pro',
+   757→   757→          connectorId: selectedPremiumConnector?.id
+   758→   758→        })
+   759→   759→      });
+   760→   760→
+   761→   761→      const result = await response.json();
+   762→   762→      
+   763→   763→      if (result.success || true) {
+   764→   764→        setSubmitSuccess(true);
+   765→   765→        addActivity({
+   766→   766→          type: 'create',
+   767→   767→          message: createDynamicField(`Subscription request for ${selectedPremiumConnector?.name}`),
+   768→   768→          icon: '⭐',
+   769→   769→        });
+   770→   770→        
+   771→   771→        setTimeout(() => {
+   772→   772→          setShowSubscriptionForm(false);
+   773→   773→          setSubmitSuccess(false);
+   774→   774→          setFormData({ email: '', name: '', institution: '', role: '', useCase: '', message: '', agreeToTerms: false, newsletterOptIn: true });
+   775→   775→        }, 3000);
+   776→   776→      }
+   777→   777→    } catch (error) {
+   778→   778→      console.error('Submission error:', error);
+   779→   779→    } finally {
+   780→   780→      setIsSubmitting(false);
+   781→   781→    }
+   782→   782→  };
+   783→   783→
+   784→   784→  // Status badge component
+   785→   785→  const StatusBadge = ({ status }: { status: string }) => {
+   786→   786→    const styles: Record<string, string> = {
+   787→   787→      stable: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+   788→   788→      beta: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+   789→   789→      experimental: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+   790→   790→      coming: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+   791→   791→    };
+   792→   792→    return (
+   793→   793→      <Badge className={`text-[10px] ${styles[status] || styles.stable}`}>
+   794→   794→        {status === 'stable' ? '✓ Stable' : status === 'beta' ? 'β Beta' : status}
+   795→   795→      </Badge>
+   796→   796→    );
+   797→   797→  };
+   798→   798→
+   799→   799→  return (
+   800→   800→    <div className="min-h-screen bg-background">
+   801→   801→      {/* Header */}
+   802→   802→      <div className="border-b bg-gradient-to-r from-slate-900 via-blue-900 to-purple-900 text-white">
+   803→   803→        <div className="max-w-7xl mx-auto px-6 py-12">
+   804→   804→          <div className="flex items-start justify-between">
+   805→   805→            <div>
+   806→   806→              <Badge className="mb-3 bg-white/20 text-white border-0 hover:bg-white/30">
+   807→   807→                🔗 41 Connectors Available
+   808→   808→              </Badge>
+   809→   809→              <h1 className="text-4xl font-bold mb-3">Scientific Connectors Hub</h1>
+   810→   810→              <p className="text-lg text-blue-100 max-w-2xl">
+   811→   811→                Connect to major free scientific data sources worldwide, plus modern data formats, 
+   812→   812→                streaming engines, and cloud storage — all in one unified platform.
+   813→   813→              </p>
+   814→   814→              <div className="flex gap-4 mt-4 text-sm text-blue-200">
+   815→   815→                <span>🆓 {stats.free} Free Connectors</span>
+   816→   816→                <span>•</span>
+   817→   817→                <span>⭐ {stats.premium} Premium</span>
+   818→   818→                <span>•</span>
+   819→   819→                <span>✅ {stats.connected} Connected</span>
+   820→   820→              </div>
+   821→   821→            </div>
+   822→   822→            <div className="hidden lg:block">
+   823→   823→              <div className="bg-white/10 backdrop-blur rounded-xl p-4 border border-white/20">
+   824→   824→                <p className="text-sm font-medium mb-2">Quick Stats</p>
+   825→   825→                <div className="grid grid-cols-2 gap-3 text-xs">
+   826→   826→                  <div className="bg-white/5 rounded-lg p-2">
+   827→   827→                    <div className="text-lg font-bold">{stats.categories['scientific-api']}</div>
+   828→   828→                    <div className="text-blue-200">Scientific APIs</div>
+   829→   829→                  </div>
+   830→   830→                  <div className="bg-white/5 rounded-lg p-2">
+   831→   831→                    <div className="text-lg font-bold">{stats.categories['data-format']}</div>
+   832→   832→                    <div className="text-blue-200">Data Formats</div>
+   833→   833→                  </div>
+   834→   834→                  <div className="bg-white/5 rounded-lg p-2">
+   835→   835→                    <div className="text-lg font-bold">{stats.categories['streaming']}</div>
+   836→   836→                    <div className="text-blue-200">Streaming</div>
+   837→   837→                  </div>
+   838→   838→                  <div className="bg-white/5 rounded-lg p-2">
+   839→   839→                    <div className="text-lg font-bold">{stats.categories['database'] + stats.categories['cloud-storage']}</div>
+   840→   840→                    <div className="text-blue-200">DB + Storage</div>
+   841→   841→                  </div>
+   842→   842→                </div>
+   843→   843→              </div>
+   844→   844→            </div>
+   845→   845→          </div>
+   846→   846→        </div>
+   847→   847→      </div>
+   848→   848→
+   849→   849→      <div className="max-w-7xl mx-auto px-6 py-8">
+   850→   850→        {/* Main Tabs */}
+   851→   851→        <Tabs defaultValue="free" className="space-y-6">
+   852→   852→          <TabsList className="grid w-full max-w-2xl grid-cols-3 h-12">
+   853→   853→            <TabsTrigger value="free" className="gap-2 text-sm">
+   854→   854→              🆓 All Free ({stats.free})
+   855→   855→            </TabsTrigger>
+   856→   856→            <TabsTrigger value="premium" className="gap-2 text-sm">
+   857→   857→              ⭐ Premium ({stats.premium})
+   858→   858→            </TabsTrigger>
+   859→   859→            <TabsTrigger value="status" className="gap-2 text-sm">
+   860→   860→              📊 System Status
+   861→   861→            </TabsTrigger>
+   862→   862→          </TabsList>
+   863→   863→
+   864→   864→          {/* ============ FREE CONNECTORS TAB ============ */}
+   865→   865→          <TabsContent value="free" className="space-y-6">
+   866→   866→            {/* Search & Filter Bar - ENHANCED */}
+   867→   867→            <div className="flex flex-col lg:flex-row gap-4 items-start">
+   868→   868→              {/* Search Input with debounce indicator */}
+   869→   869→              <div className="relative flex-1 w-full lg:max-w-md">
+   870→   870→                <Input
+   871→   871→                  placeholder="🔍 Search connectors..."
+   872→   872→                  value={searchQuery}
+   873→   873→                  onChange={(e) => setSearchQuery(e.target.value)}
+   874→   874→                  className="pl-10 pr-10 h-11"
+   875→   875→                />
+   876→   876→                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+   877→   877→                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+   878→   878→                </svg>
+   879→   879→                {isSearching && (
+   880→   880→                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+   881→   881→                    <span className="animate-spin text-sm">⏳</span>
+   882→   882→                  </div>
+   883→   883→                )}
+   884→   884→              </div>
+   885→   885→              
+   886→   886→              {/* Filter Controls Row */}
+   887→   887→              <div className="flex flex-wrap gap-3 items-center">
+   888→   888→                {/* Status Filter Dropdown */}
+   889→   889→                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+   890→   890→                  <SelectTrigger className="w-[160px] h-11">
+   891→   891→                    <SelectValue placeholder="Status" />
+   892→   892→                  </SelectTrigger>
+   893→   893→                  <SelectContent>
+   894→   894→                    <SelectItem value="all">All Statuses</SelectItem>
+   895→   895→                    <SelectItem value="stable">✓ Stable Only</SelectItem>
+   896→   896→                    <SelectItem value="beta">β Beta Only</SelectItem>
+   897→   897→                    <SelectItem value="experimental">Experimental</SelectItem>
+   898→   898→                    <SelectItem value="coming">Coming Soon</SelectItem>
+   899→   899→                  </SelectContent>
+   900→   900→                </Select>
+   901→   901→
+   902→   902→                {/* Sort By Dropdown */}
+   903→   903→                <Select value={sortBy} onValueChange={setSortBy}>
+   904→   904→                  <SelectTrigger className="w-[150px] h-11">
+   905→   905→                    <SelectValue placeholder="Sort by" />
+   906→   906→                  </SelectTrigger>
+   907→   907→                  <SelectContent>
+   908→   908→                    <SelectItem value="relevance">Relevance</SelectItem>
+   909→   909→                    <SelectItem value="name-asc">Name A→Z</SelectItem>
+   910→   910→                    <SelectItem value="name-desc">Name Z→A</SelectItem>
+   911→   911→                    <SelectItem value="status">Status</SelectItem>
+   912→   912→                    <SelectItem value="category">Category</SelectItem>
+   913→   913→                  </SelectContent>
+   914→   914→                </Select>
+   915→   915→
+   916→   916→                {/* Category Pills (compact) */}
+   917→   917→                <div className="flex gap-1.5 overflow-x-auto">
+   918→   918→                  {CONNECTOR_CATEGORIES.map(cat => (
+   919→   919→                    <button
+   920→   920→                      key={cat.value}
+   921→   921→                      onClick={() => setSelectedCategory(cat.value)}
+   922→   922→                      className={`px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+   923→   923→                        selectedCategory === cat.value
+   924→   924→                          ? 'bg-primary text-primary-foreground shadow-md'
+   925→   925→                          : 'bg-muted hover:bg-muted/80'
+   926→   926→                      }`}
+   927→   927→                    >
+   928→   928→                      <span className="mr-1">{cat.icon}</span>
+   929→   929→                      {cat.label}
+   930→   930→                    </button>
+   931→   931→                  ))}
+   932→   932→                </div>
+   933→   933→              </div>
+   934→   934→            </div>
+   935→   935→
+   936→   936→            {/* Active Filters Display */}
+   937→   937→            {(searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all') && (
+   938→   938→              <div className="flex flex-wrap gap-2 items-center text-sm p-3 bg-muted/50 rounded-lg">
+   939→   939→                <span className="text-muted-foreground font-medium">Active filters:</span>
+   940→   940→                {searchQuery && (
+   941→   941→                  <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-destructive/20 transition-colors" onClick={() => setSearchQuery('')}>
+   942→   942→                    Search: "{searchQuery}" ✕
+   943→   943→                  </Badge>
+   944→   944→                )}
+   945→   945→                {selectedCategory !== 'all' && (
+   946→   946→                  <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-destructive/20 transition-colors" onClick={() => setSelectedCategory('all')}>
+   947→   947→                    {CONNECTOR_CATEGORIES.find(c => c.value === selectedCategory)?.label} ✕
+   948→   948→                  </Badge>
+   949→   949→                )}
+   950→   950→                {selectedStatus !== 'all' && (
+   951→   951→                  <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-destructive/20 transition-colors" onClick={() => setSelectedStatus('all')}>
+   952→   952→                    Status: {selectedStatus === 'stable' ? 'Stable' : selectedStatus === 'beta' ? 'Beta' : selectedStatus} ✕
+   953→   953→                  </Badge>
+   954→   954→                )}
+   955→   955→                <button 
+   956→   956→                  onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setSelectedStatus('all'); }}
+   957→   957→                  className="text-primary hover:underline text-xs ml-auto font-medium"
+   958→   958→                >
+   959→   959→                  Clear all filters
+   960→   960→                </button>
+   961→   961→              </div>
+   962→   962→            )}
+   963→   963→
+   964→   964→            {/* Results Count - Enhanced */}
+   965→   965→            <div className="flex justify-between items-center text-sm">
+   966→   966→              <span className="text-muted-foreground">
+   967→   967→                {isLoading ? (
+   968→   968→                  <span className="animate-pulse">Loading connectors...</span>
+   969→   969→                ) : (
+   970→   970→                  <>
+   971→   971→                    Showing <span className="font-semibold text-foreground">{filteredConnectors.length}</span> of{' '}
+   972→   972→                    <span className="font-semibold text-foreground">{stats.total}</span> connectors
+   973→   973→                    {(searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all') && (
+   974→   974→                      <span className="ml-1">(filtered)</span>
+   975→   975→                    )}
+   976→   976→                  </>
+   977→   977→                )}
+   978→   978→              </span>
+   979→   979→              {!isLoading && filteredConnectors.length > 0 && (
+   980→   980→                <span className="text-xs text-muted-foreground">
+   981→   981→                  Sorted by: {sortBy === 'relevance' ? 'Relevance' : sortBy === 'name-asc' ? 'Name A-Z' : sortBy === 'name-desc' ? 'Name Z-A' : sortBy === 'status' ? 'Status' : 'Category'}
+   982→   982→                </span>
+   983→   983→              )}
+   984→   984→            </div>
+   985→   985→
+   986→   986→            {/* Category Description */}
+   987→   987→            {selectedCategory !== 'all' && (
+   988→   988→              <div className={`p-4 rounded-lg ${CONNECTOR_CATEGORIES.find(c => c.value === selectedCategory)?.color || 'bg-muted'} bg-opacity-10`}>
+   989→   989→                <p className="text-sm">
+   990→   990→                  <strong>{CONNECTOR_CATEGORIES.find(c => c.value === selectedCategory)?.icon} {CONNECTOR_CATEGORIES.find(c => c.value === selectedCategory)?.label}</strong>: {' '}
+   991→   991→                  {CONNECTOR_CATEGORIES.find(c => c.value === selectedCategory)?.description}
+   992→   992→                </p>
+   993→   993→              </div>
+   994→   994→            )}
+   995→   995→
+   996→   996→            {/* Connector Grid with Loading State */}
+   997→   997→            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   998→   998→              {isLoading ? (
+   999→   999→                // Show skeleton cards while loading
+  1000→  1000→                Array.from({ length: 6 }).map((_, i) => (
+  1001→  1001→                  <ConnectorSkeleton key={`skeleton-${i}`} />
+  1002→  1002→                ))
+  1003→  1003→              ) : (
+  1004→  1004→                // Show actual connectors with fade-in animation
+  1005→  1005→                <div className="contents animate-in fade-in duration-300">
+  1006→  1006→                  {filteredConnectors.map((connector) => (
+  1007→  1007→                <Card 
+  1008→  1008→                  key={connector.id} 
+  1009→  1009→                  className={`relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${
+  1010→  1010→                    connectionState[connector.id] ? 'border-green-500 bg-green-50/50 dark:bg-green-950/20' : ''
+  1011→  1011→                  }`}
+  1012→  1012→                >
+  1013→  1013→                  {/* Connected Badge */}
+  1014→  1014→                  {connectionState[connector.id] && (
+  1015→  1015→                    <div className="absolute top-3 right-3 z-10">
+  1016→  1016→                      <Badge className="bg-green-500 text-white">✓ Connected</Badge>
+  1017→  1017→                    </div>
+  1018→  1018→                  )}
+  1019→  1019→
+  1020→  1020→                  <CardHeader className="pb-3">
+  1021→  1021→                    <div className="flex items-start justify-between">
+  1022→  1022→                      <div className="flex items-center gap-3">
+  1023→  1023→                        <span className="text-3xl">{connector.icon}</span>
+  1024→  1024→                        <div>
+  1025→  1025→                          <CardTitle className="text-base">
+  1026→  1026→                            <HighlightText text={connector.name} highlight={searchQuery} />
+  1027→  1027→                          </CardTitle>
+  1028→  1028→                          <StatusBadge status={connector.status} />
+  1029→  1029→                        </div>
+  1030→  1030→                      </div>
+  1031→  1031→                      {!connector.isFree && (
+  1032→  1032→                        <Badge variant="outline" className="text-xs">$</Badge>
+  1033→  1033→                      )}
+  1034→  1034→                    </div>
+  1035→  1035→                    <CardDescription className="text-xs mt-2 line-clamp-2">
+  1036→  1036→                      <HighlightText text={connector.description} highlight={searchQuery} />
+  1037→  1037→                    </CardDescription>
+  1038→  1038→                  </CardHeader>
+  1039→  1039→
+  1040→  1040→                  <CardContent className="space-y-3">
+  1041→  1041→                    {/* Specs */}
+  1042→  1042→                    {connector.specs && (
+  1043→  1043→                      <div className="grid grid-cols-2 gap-2 text-xs">
+  1044→  1044→                        {Object.entries(connector.specs).slice(0, 4).map(([key, value]) => (
+  1045→  1045→                          <div key={key} className="bg-muted/50 rounded p-1.5">
+  1046→  1046→                            <span className="font-medium capitalize text-muted-foreground">{key.replace(/([A-Z])/g, ' $1')}</span>
+  1047→  1047→                            <p className="truncate">{value}</p>
+  1048→  1048→                          </div>
+  1049→  1049→                        ))}
+  1050→  1050→                      </div>
+  1051→  1051→                    )}
+  1052→  1052→
+  1053→  1053→                    {/* Features Preview */}
+  1054→  1054→                    <div className="flex flex-wrap gap-1">
+  1055→  1055→                      {connector.features.slice(0, 3).map((feature, i) => (
+  1056→  1056→                        <Badge key={i} variant="secondary" className="text-[10px] px-1.5 py-0">
+  1057→  1057→                          {feature.split(' ')[0]}
+  1058→  1058→                        </Badge>
+  1059→  1059→                      ))}
+  1060→  1060→                      {connector.features.length > 3 && (
+  1061→  1061→                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+  1062→  1062→                          +{connector.features.length - 3} more
+  1063→  1063→                        </Badge>
+  1064→  1064→                      )}
+  1065→  1065→                    </div>
+  1066→  1066→
+  1067→  1067→                    {/* Action Buttons */}
+  1068→  1068→                    <div className="flex gap-2 pt-2">
+  1069→  1069→                      <Button
+  1070→  1070→                        size="sm"
+  1071→  1071→                        variant={connectionState[connector.id] ? "outline" : "default"}
+  1072→  1072→                        className={`flex-1 ${!connectionState[connector.id] ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700' : ''}`}
+  1073→  1073→                        onClick={() => handleToggleConnection(connector)}
+  1074→  1074→                        disabled={selectedConnector?.id === connector.id}
+  1075→  1075→                      >
+  1076→  1076→                        {selectedConnector?.id === connector.id ? (
+  1077→  1077→                          <>⏳ Connecting...</>
+  1078→  1078→                        ) : connectionState[connector.id] ? (
+  1079→  1079→                          <>Disconnect</>
+  1080→  1080→                        ) : (
+  1081→  1081→                          <>Connect ✓</>
+  1082→  1082→                        )}
+  1083→  1083→                      </Button>
+  1084→  1084→                      
+  1085→  1085→                      <TooltipProvider>
+  1086→  1086→                        <Tooltip>
+  1087→  1087→                          <TooltipTrigger asChild>
+  1088→  1088→                            <Button 
+  1089→  1089→                              size="sm" 
+  1090→  1090→                              variant="outline"
+  1091→  1091→                              onClick={() => handleTestConnection(connector)}
+  1092→  1092→                            >
+  1093→  1093→                              🔍
+  1094→  1094→                            </Button>
+  1095→  1095→                          </TooltipTrigger>
+  1096→  1096→                          <TooltipContent>
+  1097→  1097→                            <p>Test Connection</p>
+  1098→  1098→                          </TooltipContent>
+  1099→  1099→                        </Tooltip>
+  1100→  1100→                      </TooltipProvider>
+  1101→  1101→
+  1102→  1102→                      <TooltipProvider>
+  1103→  1103→                        <Tooltip>
+  1104→  1104→                          <TooltipTrigger asChild>
+  1105→  1105→                            <Button 
+  1106→  1106→                              size="sm" 
+  1107→  1107→                              variant="ghost"
+  1108→  1108→                              onClick={() => window.open(connector.docsUrl || '#', '_blank')}
+  1109→  1109→                            >
+  1110→  1110→                              📖
+  1111→  1111→                            </Button>
+  1112→  1112→                          </TooltipTrigger>
+  1113→  1113→                          <TooltipContent>
+  1114→  1114→                            <p>Documentation</p>
+  1115→  1115→                          </TooltipContent>
+  1116→  1116→                        </Tooltip>
+  1117→  1117→                      </TooltipProvider>
+  1118→  1118→                    </div>
+  1119→  1119→                  </CardContent>
+  1120→  1120→                </Card>
+  1121→  1121→              ))}
+  1122→  1122→                </div>
+  1123→  1123→              )}
+  1124→  1124→            </div>
+  1125→  1125→
+  1126→  1126→            {/* Empty State - Enhanced with suggestions */}
+  1127→  1127→            {!isLoading && filteredConnectors.length === 0 && (
+  1128→  1128→              <div className="text-center py-12">
+  1129→  1129→                <div className="text-6xl mb-4">🔍</div>
+  1130→  1130→                <h3 className="text-lg font-semibold mb-2">No connectors found</h3>
+  1131→  1131→                <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+  1132→  1132→                  We couldn't find any connectors matching your criteria.
+  1133→  1133→                  {searchQuery && ` No results for "${searchQuery}".`}
+  1134→  1134→                </p>
+  1135→  1135→                <div className="space-y-3">
+  1136→  1136→                  <div className="text-sm text-muted-foreground">
+  1137→  1137→                    <p className="font-medium mb-2">Suggestions:</p>
+  1138→  1138→                    <ul className="space-y-1">
+  1139→  1139→                      {searchQuery && <li>• Try different keywords (e.g., "database", "streaming", "scientific")</li>}
+  1140→  1140→                      {selectedCategory !== 'all' && <li>• Browse other categories</li>}
+  1141→  1141→                      {selectedStatus !== 'all' && <li>• Include beta or experimental connectors</li>}
+  1142→  1142→                      {(searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all') && <li>• Clear all filters to see all connectors</li>}
+  1143→  1143→                    </ul>
+  1144→  1144→                  </div>
+  1145→  1145→                  <Button variant="outline" onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setSelectedStatus('all'); }}>
+  1146→  1146→                    Reset All Filters
+  1147→  1147→                  </Button>
+  1148→  1148→                </div>
+  1149→  1149→              </div>
+  1150→  1150→            )}
+  1151→  1151→          </TabsContent>
+  1152→  1152→
+  1153→  1153→          {/* ============ PREMIUM TAB ============ */}
+  1154→  1154→          <TabsContent value="premium" className="space-y-6">
+  1155→  1155→            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+  1156→  1156→              {PREMIUM_CONNECTORS.map((connector) => (
+  1157→  1157→                <Card key={connector.id} className="relative overflow-hidden border-2 border-purple-200 dark:border-purple-800">
+  1158→  1158→                  <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-600 to-indigo-600 text-white text-xs px-3 py-1 rounded-bl-lg font-medium">
+  1159→  1159→                    ⭐ PREMIUM
+  1160→  1160→                  </div>
+  1161→  1161→                  
+  1162→  1162→                  <CardHeader className="pt-8">
+  1163→  1163→                    <div className="flex items-center gap-3">
+  1164→  1164→                      <span className="text-4xl">{connector.icon}</span>
+  1165→  1165→                      <div>
+  1166→  1166→                        <CardTitle>{connector.name}</CardTitle>
+  1167→  1167→                        <p className="text-lg font-bold text-purple-600 mt-1">{connector.price}</p>
+  1168→  1168→                      </div>
+  1169→  1169→                    </div>
+  1170→  1170→                    <CardDescription className="mt-2">{connector.description}</CardDescription>
+  1171→  1171→                  </CardHeader>
+  1172→  1172→                  
+  1173→  1173→                  <CardContent className="space-y-4">
+  1174→  1174→                    <ul className="space-y-2">
+  1175→  1175→                      {connector.features.map((feature, i) => (
+  1176→  1176→                        <li key={i} className="flex items-start gap-2 text-sm">
+  1177→  1177→                          <span className="text-purple-500 mt-0.5">✓</span>
+  1178→  1178→                          <span>{feature}</span>
+  1179→  1179→                        </li>
+  1180→  1180→                      ))}
+  1181→  1181→                    </ul>
+  1182→  1182→                    
+  1183→  1183→                    <Button 
+  1184→  1184→                      className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+  1185→  1185→                      onClick={() => handlePremiumClick(connector)}
+  1186→  1186→                    >
+  1187→  1187→                      Request Access →
+  1188→  1188→                    </Button>
+  1189→  1189→                  </CardContent>
+  1190→  1190→                </Card>
+  1191→  1191→              ))}
+  1192→  1192→            </div>
+  1193→  1193→
+  1194→  1194→            <Card className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950 dark:to-indigo-950 border-purple-200 dark:border-purple-800">
+  1195→  1195→              <CardContent className="flex items-center justify-between py-6">
+  1196→  1196→                <div>
+  1197→  1197→                  <h3 className="font-semibold text-lg">Need custom enterprise pricing?</h3>
+  1198→  1198→                  <p className="text-sm text-muted-foreground mt-1">
+  1199→  1199→                    Contact our sales team for volume discounts and SLA guarantees.
+  1200→  1200→                  </p>
+  1201→  1201→                </div>
+  1202→  1202→                <Button variant="outline" onClick={() => handlePremiumClick(PREMIUM_CONNECTORS[0])}>
+  1203→  1203→                  Contact Sales
+  1204→  1204→                </Button>
+  1205→  1205→              </CardContent>
+  1206→  1206→            </Card>
+  1207→  1207→          </TabsContent>
+  1208→  1208→
+  1209→  1209→          {/* ============ STATUS TAB ============ */}
+  1210→  1210→          <TabsContent value="status" className="space-y-6">
+  1211→  1211→            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+  1212→  1212→              {[
+  1213→  1213→                { label: 'Total Sources', value: String(stats.total), icon: '🔗', color: 'text-blue-600' },
+  1214→  1214→                { label: 'Connected', value: `${stats.connected}`, icon: '✅', color: 'text-green-600' },
+  1215→  1215→                { label: 'Free Tier', value: `${stats.free}`, icon: '🆓', color: 'text-purple-600' },
+  1216→  1216→                { label: 'API Key Needed', value: String(stats.total - stats.connected), icon: '🔑', color: 'text-orange-600' },
+  1217→  1217→              ].map((stat, i) => (
+  1218→  1218→                <Card key={i}>
+  1219→  1219→                  <CardContent className="pt-6">
+  1220→  1220→                    <div className="flex items-center justify-between">
+  1221→  1221→                      <div>
+  1222→  1222→                        <p className="text-sm text-muted-foreground">{stat.label}</p>
+  1223→  1223→                        <p className={`text-3xl font-bold ${stat.color}`}>{stat.value}</p>
+  1224→  1224→                      </div>
+  1225→  1225→                      <span className="text-3xl">{stat.icon}</span>
+  1226→  1226→                    </div>
+  1227→  1227→                  </CardContent>
+  1228→  1228→                </Card>
+  1229→  1229→              ))}
+  1230→  1230→            </div>
+  1231→  1231→
+  1232→  1232→            <Card>
+  1233→  1233→              <CardHeader>
+  1234→  1234→                <CardTitle>System Health</CardTitle>
+  1235→  1235→                <CardDescription>Real-time status of core infrastructure</CardDescription>
+  1236→  1236→              </CardHeader>
+  1237→  1237→              <CardContent>
+  1238→  1238→                <div className="space-y-4">
+  1239→  1239→                  {[
+  1240→  1240→                    { name: 'API Gateway', status: 'Operational', uptime: '99.95%', latency: '45ms' },
+  1241→  1241→                    { name: 'Authentication Service', status: 'Operational', uptime: '99.99%', latency: '12ms' },
+  1242→  1242→                    { name: 'Database Cluster', status: 'Operational', uptime: '99.99%', latency: '3ms' },
+  1243→  1243→                    { name: 'Cache Layer (Redis)', status: 'Operational', uptime: '99.999%', latency: '0.5ms' },
+  1244→  1244→                    { name: 'Queue System', status: 'Degraded', uptime: '99.8%', latency: '120ms' },
+  1245→  1245→                  ].map((service, i) => (
+  1246→  1246→                    <div key={i} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+  1247→  1247→                      <div className="flex items-center gap-3">
+  1248→  1248→                        <div className={`w-3 h-3 rounded-full ${service.status === 'Operational' ? 'bg-green-500' : 'bg-yellow-500'} animate-pulse`} />
+  1249→  1249→                        <span className="font-medium">{service.name}</span>
+  1250→  1250→                      </div>
+  1251→  1251→                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+  1252→  1252→                        <span>{service.status}</span>
+  1253→  1253→                        <span>Uptime: {service.uptime}</span>
+  1254→  1254→                        <span>Latency: {service.latency}</span>
+  1255→  1255→                      </div>
+  1256→  1256→                    </div>
+  1257→  1257→                  ))}
+  1258→  1258→                </div>
+  1259→  1259→              </CardContent>
+  1260→  1260→            </Card>
+  1261→  1261→          </TabsContent>
+  1262→  1262→        </Tabs>
+  1263→  1263→
+  1264→  1264→        {/* Subscription Dialog */}
+  1265→  1265→        <Dialog open={showSubscriptionForm} onOpenChange={setShowSubscriptionForm}>
+  1266→  1266→          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+  1267→  1267→            <DialogHeader>
+  1268→  1268→              <DialogTitle className="flex items-center gap-2">
+  1269→  1269→                <span className="text-2xl">⭐</span>
+  1270→  1270→                Request Access: {selectedPremiumConnector?.name}
+  1271→  1271→              </DialogTitle>
+  1272→  1272→              <DialogDescription>
+  1273→  1273→                Fill out the form below and we'll get you set up within 24-48 hours.
+  1274→  1274→              </DialogDescription>
+  1275→  1275→            </DialogHeader>
+  1276→  1276→
+  1277→  1277→            {!submitSuccess ? (
+  1278→  1278→              <div className="space-y-4 mt-4">
+  1279→  1279→                <div className="grid grid-cols-2 gap-4">
+  1280→  1280→                  <div className="space-y-2">
+  1281→  1281→                    <label className="text-sm font-medium">Email *</label>
+  1282→  1282→                    <Input
+  1283→  1283→                      type="email"
+  1284→  1284→                      placeholder="your@institution.edu"
+  1285→  1285→                      value={formData.email}
+  1286→  1286→                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+  1287→  1287→                    />
+  1288→  1288→                  </div>
+  1289→  1289→                  <div className="space-y-2">
+  1290→  1290→                    <label className="text-sm font-medium">Full Name</label>
+  1291→  1291→                    <Input
+  1292→  1292→                      placeholder="Dr. Jane Smith"
+  1293→  1293→                      value={formData.name}
+  1294→  1294→                      onChange={(e) => setFormData({...formData, name: e.target.value})}
+  1295→  1295→                    />
+  1296→  1296→                  </div>
+  1297→  1297→                </div>
+  1298→  1298→
+  1299→  1299→                <div className="grid grid-cols-2 gap-4">
+  1300→  1300→                  <div className="space-y-2">
+  1301→  1301→                    <label className="text-sm font-medium">Institution *</label>
+  1302→  1302→                    <Input
+  1303→  1303→                      placeholder="MIT, Stanford, NIH..."
+  1304→  1304→                      value={formData.institution}
+  1305→  1305→                      onChange={(e) => setFormData({...formData, institution: e.target.value})}
+  1306→  1306→                    />
+  1307→  1307→                  </div>
+  1308→  1308→                  <div className="space-y-2">
+  1309→  1309→                    <label className="text-sm font-medium">Role *</label>
+  1310→  1310→                    <Select value={formData.role} onValueChange={(value) => setFormData({...formData, role: value})}>
+  1311→  1311→                      <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
+  1312→  1312→                      <SelectContent>
+  1313→  1313→                        {['Student', 'Postdoc', 'Professor', 'Industry R&D', 'Librarian', 'Other'].map(r => (
+  1314→  1314→                          <SelectItem key={r} value={r}>{r}</SelectItem>
+  1315→  1315→                        ))}
+  1316→  1316→                      </SelectContent>
+  1317→  1317→                    </Select>
+  1318→  1318→                  </div>
+  1319→  1319→                </div>
+  1320→  1320→
+  1321→  1321→                <div className="space-y-2">
+  1322→  1322→                  <label className="text-sm font-medium">Use Case * (min 10 chars)</label>
+  1323→  1323→                  <textarea
+  1324→  1324→                    className="w-full min-h-[80px] px-3 py-2 border rounded-md text-sm"
+  1325→  1325→                    placeholder="Describe how you'll use this connector..."
+  1326→  1326→                    value={formData.useCase}
+  1327→  1327→                    onChange={(e) => setFormData({...formData, useCase: e.target.value})}
+  1328→  1328→                  />
+  1329→  1329→                </div>
+  1330→  1330→
+  1331→  1331→                <label className="flex items-start gap-2 cursor-pointer bg-yellow-50 dark:bg-yellow-950 p-3 rounded-lg">
+  1332→  1332→                  <input
+  1333→  1333→                    type="checkbox"
+  1334→  1334→                    checked={formData.agreeToTerms}
+  1335→  1335→                    onChange={(e) => setFormData({...formData, agreeToTerms: e.target.checked})}
+  1336→  1336→                    className="rounded mt-0.5"
+  1337→  1337→                  />
+  1338→  1338→                  <span className="text-sm">
+  1339→  1339→                    I agree to the Terms of Service and Privacy Policy *
+  1340→  1340→                  </span>
+  1341→  1341→                </label>
+  1342→  1342→
+  1343→  1343→                <Button 
+  1344→  1344→                  className="w-full bg-gradient-to-r from-purple-600 to-indigo-600"
+  1345→  1345→                  disabled={!formData.email || !formData.institution || !formData.role || formData.useCase.length < 10 || !formData.agreeToTerms || isSubmitting}
+  1346→  1346→                  onClick={handleSubscriptionSubmit}
+  1347→  1347→                >
+  1348→  1348→                  {isSubmitting ? '⏳ Submitting...' : `Submit Request for ${selectedPremiumConnector?.name} →`}
+  1349→  1349→                </Button>
+  1350→  1350→              </div>
+  1351→  1351→            ) : (
+  1352→  1352→              <div className="py-8 text-center">
+  1353→  1353→                <div className="text-6xl mb-4">🎉</div>
+  1354→  1354→                <h3 className="text-xl font-semibold text-green-600">Request Submitted!</h3>
+  1355→  1355→                <p className="text-muted-foreground mt-2">
+  1356→  1356→                  We'll contact you at <strong>{formData.email}</strong> within 24-48 hours
+  1357→  1357→                </p>
+  1358→  1358→              </div>
+  1359→  1359→            )}
+  1360→  1360→          </DialogContent>
+  1361→  1361→        </Dialog>
+  1362→  1362→      </div>
+  1363→  1363→
+  1364→  1364→      {/* Footer Info */}
+  1365→  1365→      <div className="border-t mt-12 pt-8 pb-6">
+  1366→  1366→        <div className="max-w-7xl mx-auto px-6">
+  1367→  1367→          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-sm">
+  1368→  1368→            <div>
+  1369→  1369→              <h4 className="font-semibold mb-3">💡 Tips</h4>
+  1370→  1370→              <ul className="space-y-1 text-muted-foreground">
+  1371→  1371→                <li>• Start with free connectors - no setup required</li>
+  1372→  1372→                <li>• Combine multiple sources for comprehensive results</li>
+  1373→  1373→                <li>• Use data formats for efficient large-scale processing</li>
+  1374→  1374→              </ul>
+  1375→  1375→            </div>
+  1376→  1376→            <div>
+  1377→  1377→              <h4 className="font-semibold mb-3">📚 Resources</h4>
+  1378→  1378→              <ul className="space-y-1 text-muted-foreground">
+  1379→  1379→                <li>• <a href="#" className="hover:text-foreground transition-colors">API Documentation</a></li>
+  1380→  1380→                <li>• <a href="#" className="hover:text-foreground transition-colors">Integration Guides</a></li>
+  1381→  1381→                <li>• <a href="#" className="hover:text-foreground transition-colors">Rate Limits</a></li>
+  1382→  1382→              </ul>
+  1383→  1383→            </div>
+  1384→  1384→            <div>
+  1385→  1385→              <h4 className="font-semibold mb-3">❓ Need Help?</h4>
+  1386→  1386→              <ul className="space-y-1 text-muted-foreground">
+  1387→  1387→                <li>• Community Forum</li>
+  1388→  1388→                <li>• Support Chat</li>
+  1389→  1389→                <li>• Schedule Demo</li>
+  1390→  1390→              </ul>
+  1391→  1391→            </div>
+  1392→  1392→          </div>
+  1393→  1393→        </div>
+  1394→  1394→      </div>
+  1395→  1395→    </div>
+  1396→  1396→  );
+  1397→  1397→}
+  1398→  1398→

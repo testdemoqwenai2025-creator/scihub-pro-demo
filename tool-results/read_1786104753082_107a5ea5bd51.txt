@@ -1,0 +1,2002 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * SciHub Pro - Workspace Page
+     5→ * 
+     6→ * Interactive code editor and execution environment with:
+     7→ * - Multi-file workspace (Python, SQL, R, Markdown)
+     8→ * - Code execution simulation with realistic terminal output
+     9→ * - File persistence to store
+    10→ * - Auto-save functionality
+    11→ * - Template library for quick start
+    12→ * - Execution history tracking
+    13→ * - Never let user hit a wall - always show next steps
+    14→ */
+    15→
+    16→import { useState, useEffect, useCallback, useRef } from 'react';
+    17→import { useTranslation } from '@/i18n/useTranslation';
+    18→import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+    19→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    20→import { Badge } from '@/components/ui/badge';
+    21→import { Button } from '@/components/ui/button';
+    22→import { Input } from '@/components/ui/input';
+    23→import { Textarea } from '@/components/ui/textarea';
+    24→import { Progress } from '@/components/ui/progress';
+    25→import {
+    26→  Select,
+    27→  SelectContent,
+    28→  SelectItem,
+    29→  SelectTrigger,
+    30→  SelectValue,
+    31→} from '@/components/ui/select';
+    32→import {
+    33→  Tabs,
+    34→  TabsContent,
+    35→  TabsList,
+    36→  TabsTrigger,
+    37→} from '@/components/ui/tabs';
+    38→import {
+    39→  Dialog,
+    40→  DialogContent,
+    41→  DialogHeader,
+    42→  DialogTitle,
+    43→  DialogTrigger,
+    44→} from '@/components/ui/dialog';
+    45→
+    46→// ============ TYPES ============
+    47→
+    48→interface CodeTemplate {
+    49→  id: string;
+    50→  name: string;
+    51→  description: string;
+    52→  language: 'python' | 'sql' | 'r' | 'markdown' | 'javascript';
+    53→  code: string;
+    54→  category: 'analysis' | 'visualization' | 'ml' | 'data-import' | 'template';
+    55→}
+    56→
+    57→interface ExecutionRecord {
+    58→  id: string;
+    59→  timestamp: Date;
+    60→  language: string;
+    61→  code: string;
+    62→  output: string;
+    63→  duration: number;
+    64→  success: boolean;
+    65→  memory: string;
+    66→}
+    67→
+    68→interface WorkspaceFile {
+    69→  id: string;
+    70→  name: { value: string };
+    71→  content: { value: string };
+    72→  language: 'python' | 'sql' | 'r' | 'markdown' | 'javascript' | 'bash' | 'java' | 'cpp' | 'typescript';
+    73→  isModified: { value: boolean };
+    74→  lastModified: number;
+    75→}
+    76→
+    77→type ExecutionState = 'idle' | 'compiling' | 'running' | 'complete' | 'error';
+    78→
+    79→// ============ CODE TEMPLATES (Pre-seeded for Zero Friction) ============
+    80→
+    81→const CODE_TEMPLATES: CodeTemplate[] = [
+    82→  {
+    83→    id: 'tpl-py-analysis',
+    84→    name: 'Data Analysis Pipeline',
+    85→    description: 'Complete data analysis workflow with loading, processing, and visualization',
+    86→    language: 'python',
+    87→    category: 'analysis',
+    88→    code: `# Data Analysis Pipeline Template
+    89→# SciHub Pro Workspace
+    90→
+    91→import pandas as pd
+    92→import numpy as np
+    93→import matplotlib.pyplot as plt
+    94→from scipy import stats
+    95→from sklearn.preprocessing import StandardScaler
+    96→
+    97→# ============================================
+    98→# 1. LOAD DATA
+    99→# ============================================
+   100→# Replace with your dataset ID or file path
+   101→dataset_id = "ds-001"  # TCGA Pan-Cancer Atlas
+   102→
+   103→print("Loading dataset:", dataset_id)
+   104→
+   105→# Sample data structure (replace with real data loading)
+   106→data = pd.DataFrame({
+   107→    'gene_id': [f'GENE_{i}' for i in range(100)],
+   108→    'expression': np.random.normal(10, 2, 100),
+   109→    'p_value': np.random.uniform(0, 0.1, 100),
+   110→    'log2_fold_change': np.random.normal(0, 1.5, 100),
+   111→    'pathway': np.random.choice(['Cell Cycle', 'Apoptosis', 'DNA Repair', 'Signaling'], 100),
+   112→})
+   113→
+   114→print(f"Loaded {len(data)} genes with columns: {list(data.columns)}")
+   115→
+   116→# ============================================
+   117→# 2. DATA QUALITY CHECKS
+   118→# ============================================
+   119→print("\\n--- Data Quality Report ---")
+   120→print(f"Missing values:\\n{data.isnull().sum()}")
+   121→print(f"\\nData types:\\n{data.dtypes}")
+   122→
+   123→# Check for outliers using IQR method
+   124→Q1 = data['expression'].quantile(0.25)
+   125→Q3 = data['expression'].quantile(0.75)
+   126→IQR = Q3 - Q1
+   127→outliers = data[(data['expression'] < Q1 - 1.5*IQR) | (data['expression'] > Q3 + 1.5*IQR)]
+   128→print(f"\\nOutliers detected: {len(outliers)} ({len(outliers)/len(data)*100:.1f}%)")
+   129→
+   130→# ============================================
+   131→# 3. STATISTICAL ANALYSIS
+   132→# ============================================
+   133→print("\\n--- Statistical Summary ---")
+   134→print(data.describe())
+   135→
+   136→# Identify significant genes (p < 0.05, |log2FC| > 1)
+   137→significant = data[
+   138→    (data['p_value'] < 0.05) & 
+   139→    (abs(data['log2_fold_change']) > 1)
+   140→].copy()
+   141→
+   142→print(f"\\nSignificant genes found: {len(significant)} ({len(significant)/len(data)*100:.1f}%)")
+   143→
+   144→# Pathway enrichment (simplified)
+   145→if len(significant) > 0:
+   146→    pathway_counts = significant['pathway'].value_counts()
+   147→    print(f"\\nPathway distribution of significant genes:")
+   148→    print(pathway_counts)
+   149→
+   150→# ============================================
+   151→# 4. VISUALIZATION
+   152→# ============================================
+   153→fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+   154→
+   155→# Volcano plot
+   156→axes[0].scatter(
+   157→    data['log2_fold_change'], 
+   158→    -np.log10(data['p_value']),
+   159→    alpha=0.5,
+   160→    c=['red' if (p < 0.05 and abs(lfc) > 1) else 'gray' 
+   161→       for p, lfc in zip(data['p_value'], data['log2_fold_change'])]
+   162→)
+   163→axes[0].axhline(-np.log10(0.05), color='blue', linestyle='--', alpha=0.5)
+   164→axes[0].axvline(-1, color='green', linestyle='--', alpha=0.5)
+   165→axes[0].axvline(1, color='green', linestyle='--', alpha=0.5)
+   166→axes[0].set_xlabel('Log2 Fold Change')
+   167→axes[0].set_ylabel('-Log10 P-value')
+   168→axes[0].set_title('Volcano Plot')
+   169→
+   170→# Expression distribution
+   171→axes[1].hist(data['expression'], bins=30, edgecolor='black', alpha=0.7)
+   172→axes[1].axvline(data['expression'].mean(), color='red', linestyle='--', label=f'Mean: {data["expression"].mean():.2f}')
+   173→axes[1].set_xlabel('Expression Level')
+   174→axes[1].set_ylabel('Count')
+   175→axes[1].set_title('Expression Distribution')
+   176→axes[1].legend()
+   177→
+   178→# Pathway bar chart
+   179→if len(significant) > 0:
+   180→    pathway_counts.plot(kind='bar', ax=axes[2], color='steelblue')
+   181→    axes[2].set_xlabel('Pathway')
+   182→    axes[2].set_ylabel('Gene Count')
+   183→    axes[2].set_title('Significant Genes by Pathway')
+   184→    axes[2].tick_params(axis='x', rotation=45)
+   185→
+   186→plt.tight_layout()
+   187→plt.savefig('analysis_results.png', dpi=150, bbox_inches='tight')
+   188→print("\\n✅ Visualization saved to 'analysis_results.png'")
+   189→
+   190→# ============================================
+   191→# 5. EXPORT RESULTS
+   192→# ============================================
+   193→significant.to_csv('significant_genes.csv', index=False)
+   194→print("✅ Results exported to 'significant_genes.csv'")
+   195→print("\\n🎉 Analysis complete!")
+   196→`,
+   197→  },
+   198→  {
+   199→    id: 'tpl-sql-query',
+   200→    name: 'SQL Query Builder',
+   201→    description: 'SQL template for querying datasets with joins and aggregations',
+   202→    language: 'sql',
+   203→    category: 'analysis',
+   204→    code: `-- SciHub Pro SQL Query Template
+   205→-- Use this template to query your datasets
+   206→
+   207→-- ============================================
+   208→-- BASIC QUERIES
+   209→-- ============================================
+   210→
+   211→-- Get dataset overview
+   212→SELECT 
+   213→    COUNT(*) AS total_records,
+   214→    COUNT(DISTINCT gene_name) AS unique_genes,
+   215→    AVG(expression) AS avg_expression,
+   216→    STDDEV(expression) AS std_expression,
+   217→    MIN(expression) AS min_expression,
+   218→    MAX(expression) AS max_expression
+   219→FROM gene_expression_dataset;
+   220→
+   221→-- Filter by conditions
+   222→SELECT 
+   223→    gene_id,
+   224→    gene_name,
+   225→    expression,
+   226→    p_value,
+   227→    log2_fold_change
+   228→FROM gene_expression_dataset
+   229→WHERE p_value < 0.05
+   230→    AND ABS(log2_fold_change) > 1
+   231→ORDER BY p_value ASC
+   232→LIMIT 100;
+   233→
+   234→-- ============================================
+   235→-- AGGREGATION & GROUPING
+   236→-- ============================================
+   237→
+   238→-- Group by pathway/category
+   239→SELECT 
+   240→    pathway,
+   241→    COUNT(*) AS gene_count,
+   242→    AVG(expression) AS mean_expression,
+   243→    MEDIAN(expression) AS median_expression,
+   244→    -- Count significant genes in each pathway
+   245→    SUM(CASE WHEN p_value < 0.05 THEN 1 ELSE 0 END) AS sig_count
+   246→FROM gene_expression_dataset
+   247→GROUP BY pathway
+   248→HAVING COUNT(*) >= 10  -- Only pathways with 10+ genes
+   249→ORDER BY sig_count DESC;
+   250→
+   251→-- Time series analysis (if applicable)
+   252→SELECT 
+   253→    DATE(timepoint) AS date,
+   254→    COUNT(*) AS measurements,
+   255→    AVG(value) AS daily_avg,
+   256→    MIN(value) AS daily_min,
+   257→    MAX(value) AS daily_max
+   258→FROM time_series_data
+   259→GROUP BY DATE(timepoint)
+   260→ORDER BY date;
+   261→
+   262→-- ============================================
+   263→-- JOINS ACROSS DATASETS
+   264→-- ============================================
+   265→
+   266→-- Join expression data with protein annotations
+   267→SELECT 
+   268→    g.gene_id,
+   269→    g.gene_name,
+   270→    g.expression,
+   271→    g.p_value,
+   272→    p.protein_name,
+   273→    p.function_description,
+   274→    p.cellular_location,
+   275→    c.compound_name,
+   276→    c.binding_affinity
+   277→FROM gene_expression g
+   278→JOIN protein_annotations p ON g.gene_id = p.gene_id
+   279→LEFT JOIN compound_bindings c ON p.protein_id = c.target_protein
+   280→WHERE g.tumor_type = 'BRCA'
+   281→    AND c.binding_affinity < 1000  -- High affinity compounds
+   282→ORDER BY c.binding_affinity ASC;
+   283→
+   284→-- Complex multi-table join for network analysis
+   285→SELECT DISTINCT
+   286→    n1.node_id AS source_gene,
+   287→    n1.name AS source_name,
+   288→    e.interaction_type,
+   289→    e.confidence_score,
+   290→    n2.node_id AS target_gene,
+   291→    n2.name AS target_name
+   292→FROM network_nodes n1
+   293→JOIN network_edges e ON n1.node_id = e.source_id
+   294→JOIN network_nodes n2 ON e.target_id = n2.node_id
+   295→WHERE n1.pathway = 'Cell Cycle'
+   296→    AND e.confidence_score > 0.7
+   297→ORDER BY e.confidence_score DESC;
+   298→
+   299→-- ============================================
+   300→-- WINDOW FUNCTIONS
+   301→-- ============================================
+   302→
+   303→-- Rank genes by expression within each sample
+   304→SELECT 
+   305→    *,
+   306→    RANK() OVER (PARTITION BY sample_id ORDER BY expression DESC) AS expr_rank,
+   307→    NTILE(4) OVER (PARTITION BY sample_id ORDER BY expression) AS expression_quartile,
+   308→    LAG(expression, 1) OVER (PARTITION BY gene_id ORDER BY timepoint) AS prev_expression
+   309→FROM longitudinal_data
+   310→WHERE sample_id IN ('sample_001', 'sample_002');
+   311→
+   312→-- Calculate running statistics
+   313→SELECT 
+   314→    timepoint,
+   315→    value,
+   316→    AVG(value) OVER (
+   317→        ORDER BY timepoint 
+   318→        ROWS BETWEEN 5 PRECEDING AND CURRENT ROW
+   319→    ) AS moving_avg_6,
+   320→    SUM(value) OVER (
+   321→        ORDER BY timepoint 
+   322→        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+   323→    ) AS cumulative_sum
+   324→FROM time_series_data
+   325→ORDER BY timepoint;
+   326→
+   327→-- ============================================
+   328→-- SUBQUERIES & CTEs
+   329→-- ============================================
+   330→
+   331→-- Find genes with outlier expression using CTE
+   332→WITH gene_stats AS (
+   333→    SELECT 
+   334→        gene_id,
+   335→        AVG(expression) AS mean_expr,
+   336→        STDDEV(expression) AS std_expr
+   337→    FROM gene_expression
+   338→    GROUP BY gene_id
+   339→),
+   340→normalized AS (
+   341→    SELECT 
+   342→        g.*,
+   343→        (g.expression - gs.mean_expr) / NULLIF(gs.std_expr, 0) AS z_score
+   344→    FROM gene_expression g
+   345→    JOIN gene_stats gs ON g.gene_id = gs.gene_id
+   346→)
+   347→SELECT *
+   348→FROM normalized
+   349→WHERE ABS(z_score) > 2  -- Outliers beyond 2 std devs
+   350→ORDER BY z_score DESC;
+   351→`,
+   352→  },
+   353→  {
+   354→    id: 'tpl-r-stats',
+   355→    name: 'Statistical Analysis (R)',
+   356→    description: 'R template for statistical tests and visualization',
+   357→    language: 'r',
+   358→    category: 'analysis',
+   359→    code: `# Statistical Analysis Template (R)
+   360→# SciHub Pro Workspace
+   361→
+   362→# Load required libraries
+   363→library(tidyverse)
+   364→library(ggplot2)
+   365→library(stats)
+   366→library(pheatmap)
+   367→library(corrplot)
+   368→
+   369→# ============================================
+   370→# 1. LOAD AND PREPARE DATA
+   371→# ============================================
+   372→
+   373→# Create sample dataset (replace with your data)
+   374→set.seed(42)
+   375→n_samples <- 100
+   376→
+   377→data <- tibble(
+   378→  sample_id = paste0("sample_", sprintf("%03d", 1:n_samples)),
+   379→  group = rep(c("Control", "Treatment"), each = n_samples/2),
+   380→  gene_A = rnorm(n_samples, mean = 10, sd = 2),
+   381→  gene_B = rnorm(n_samples, mean = ifelse(rep(c("Control", "Treatment"), each = n_samples/2) == "Treatment", 12, 10), sd = 2),
+   382→  gene_C = rnorm(n_samples, mean = 5, sd = 1.5),
+   383→  batch = rep(c("B1", "B2", "B3", "B4", "B5"), each = 20)
+   384→)
+   385→
+   386→cat("Dataset loaded:", nrow(data), "samples x", ncol(data)-1, "features\\n")
+   387→
+   388→# ============================================
+   389→# 2. EXPLORATORY DATA ANALYSIS
+   390→# ============================================
+   391→
+   392→cat("\\n=== Data Summary ===\\n")
+   393→summary(data[, c("gene_A", "gene_B", "gene_C")])
+   394→
+   395→# Check for missing values
+   396→cat("\\nMissing values:\\n")
+   397→colSums(is.na(data))
+   398→
+   399→# Distribution plots
+   400→p1 <- ggplot(data, aes(x = gene_A, fill = group)) +
+   401→  geom_histogram(alpha = 0.7, position = "identity", bins = 30) +
+   402→  labs(title = "Gene A Distribution by Group", x = "Expression", y = "Count") +
+   403→  theme_minimal()
+   404→print(p1)
+   405→
+   406→# Boxplot comparison
+   407→p2 <- data %>%
+   408→  pivot_longer(cols = starts_with("gene_"), names_to = "gene", values_to = "expression") %>%
+   409→  ggplot(aes(x = gene, y = expression, fill = group)) +
+   410→  geom_boxplot(alpha = 0.7) +
+   411→  labs(title = "Expression Comparison Across Genes", x = "Gene", y = "Expression") +
+   412→  theme_minimal() +
+   413→  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   414→print(p2)
+   415→
+   416→# ============================================
+   417→# 3. STATISTICAL TESTS
+   418→# ============================================
+   419→
+   420→cat("\\n=== Statistical Tests ===\\n")
+   421→
+   422→# T-test for Gene B (Treatment effect)
+   423→t_result <- t.test(gene_B ~ group, data = data)
+   424→cat("T-test (Gene B):\\n")
+   425→print(t_result)
+   426→
+   427→# Effect size (Cohen's d)
+   428→cohens_d <- function(x, y) {
+   429→  (mean(x) - mean(y)) / sqrt((var(x) + var(y)) / 2)
+   430→}
+   431→d <- cohens_d(data$gene_B[data$group == "Treatment"], 
+   432→              data$gene_B[data$group == "Control"])
+   433→cat(sprintf("\\nCohen's d: %.3f\\n", d))
+   434→
+   435→# ANOVA for multiple groups
+   436→anova_result <- aov(gene_A ~ batch, data = data)
+   437→cat("\\nANOVA (Gene A by Batch):\\n")
+   438→print(summary(anova_result))
+   439→
+   440→# Correlation matrix
+   441→cor_matrix <- cor(data[, c("gene_A", "gene_B", "gene_C")])
+   442→cat("\\nCorrelation Matrix:\\n")
+   443→print(round(cor_matrix, 3))
+   444→
+   445→# Visualize correlations
+   446→corrplot(cor_matrix, method = "color", type = "upper",
+   447→         addCoef.col = "black", tl.cex = 0.8)
+   448→
+   449→# ============================================
+   450→# 4. MULTIVARIATE ANALYSIS
+   451→# ============================================
+   452→
+   453→# PCA
+   454→pca_data <- data[, c("gene_A", "gene_B", "gene_C")]
+   455→pca_result <- prcomp(pca_data, scale. = TRUE)
+   456→
+   457→cat("\\n=== PCA Results ===\\n")
+   458→cat("Variance explained:\\n")
+   459→print(summary(pca_result)$importance)
+   460→
+   461→# PCA plot
+   462→pca_df <- data.frame(
+   463→  PC1 = pca_result$x[, 1],
+   464→  PC2 = pca_result$x[, 2],
+   465→  group = data$group
+   466→)
+   467→
+   468→p3 <- ggplot(pca_df, aes(x = PC1, y = PC2, color = group)) +
+   469→  geom_point(size = 3, alpha = 0.7) +
+   470→  stat_ellipse(level = 0.95) +
+   471→  labs(title = "PCA of Gene Expression", 
+   472→       x = paste0("PC1 (", round(summary(pca_result)$importance[2,1]*1, 1), "%)"),
+   473→       y = paste0("PC2 (", round(summary(pca_result)$importance[2,2]*1, 1), "%)")) +
+   474→  theme_minimal()
+   475→print(p3)
+   476→
+   477→# ============================================
+   478→# 5. SAVE RESULTS
+   479→# ============================================
+   480→
+   481→results <- list(
+   482→  t_test = t_result,
+   483→  anova = summary(anova_result),
+   484→  correlations = cor_matrix,
+   485→  pca = list(
+   486→    scores = pca_result$x,
+   487→    variance_explained = summary(pca_result)$importance
+   488→  )
+   489→)
+   490→
+   491→saveRDS(results, "statistical_results.rds")
+   492→cat("\\n✅ Results saved to 'statistical_results.rds'\\n")
+   493→cat("🎉 Analysis complete!\\n")
+   494→`,
+   495→  },
+   496→  {
+   497→    id: 'tpl-md-report',
+   498→    name: 'Research Report Template',
+   499→    description: 'Markdown template for documenting research findings',
+   500→    language: 'markdown',
+   501→    category: 'template',
+   502→    code: `# Research Report Template
+   503→
+   504→**Project:** [Project Name]  
+   505→**Author:** [Your Name]  
+   506→**Date:** ${new Date().toLocaleDateString()}  
+   507→**Status:** In Progress
+   508→
+   509→---
+   510→
+   511→## Executive Summary
+   512→
+   513→> Provide a brief overview (2-3 sentences) of the research question, approach, and key findings.
+   514→
+   515→---
+   516→
+   517→## 1. Introduction
+   518→
+   519→### 1.1 Background
+   520→
+   521→[Describe the scientific context and motivation for this work]
+   522→
+   523→### 1.2 Research Questions
+   524→
+   525→- **Primary Question:** [What is the main question you're trying to answer?]
+   526→- **Secondary Questions:**
+   527→  - [Question 2]
+   528→  - [Question 3]
+   529→
+   530→### 1.3 Hypothesis
+   531→
+   532→[H1]: [Your primary hypothesis]
+   533→
+   534→---
+   535→
+   536→## 2. Methods
+   537→
+   538→### 2.1 Data Sources
+   539→
+   540→| Dataset | Source | Size | Type |
+   541→|---------|--------|------|------|
+   542→| [Name] | [Source] | [Size] | [Type] |
+   543→
+   544→### 2.2 Analysis Pipeline
+   545→
+   546→\`\`\`mermaid
+   547→graph LR
+   548→    A[Raw Data] --> B[Quality Control]
+   549→    B --> C[Normalization]
+   550→    C --> D[Statistical Analysis]
+   551→    D --> E[Visualization]
+   552→    E --> F[Interpretation]
+   553→\`\`\`
+   554→
+   555→### 2.3 Software/Tools
+   556→
+   557→- **Programming Language:** Python 3.11 / R 4.3
+   558→- **Key Packages:** pandas, scikit-learn, ggplot2
+   559→- **Environment:** SciHub Pro Workspace
+   560→
+   561→---
+   562→
+   563→## 3. Results
+   564→
+   565→### 3.1 Data Overview
+   566→
+   567→- Total samples: [N]
+   568→- Features: [N]
+   569→- Missing data: [X%]
+   570→
+   571→### 3.2 Key Findings
+   572→
+   573→#### Finding 1: [Title]
+   574→
+   575→**Observation:** [What did you find?]  
+   576→**Statistical Evidence:** [p-value, effect size]  
+   577→**Visualization:** [Reference figure]
+   578→
+   579→#### Finding 2: [Title]
+   580→
+   581→**Observation:** [What did you find?]
+   582→
+   583→---
+   584→
+   585→## 4. Discussion
+   586→
+   587→### 4.1 Interpretation
+   588→
+   589→[How do your results answer the research questions?]
+   590→
+   591→### 4.2 Limitations
+   592→
+   593→- [Limitation 1]
+   594→- [Limitation 2]
+   595→
+   596→### 4.3 Future Directions
+   597→
+   598→- [Next step 1]
+   599→- [Next step 2]
+   600→
+   601→---
+   602→
+   603→## 5. Conclusions
+   604→
+   605→[Summarize the main takeaways and their implications]
+   606→
+   607→---
+   608→
+   609→## References
+   610→
+   611→1. [Author et al. (Year). Title. Journal. DOI:...]
+   612→2. [Add more references...]
+   613→
+   614→---
+   615→
+   616→## Appendix
+   617→
+   618→### A. Supplementary Figures
+   619→
+   620→[Additional figures and tables]
+   621→
+   622→### B. Code Availability
+   623→
+   624→[Link to analysis scripts / repository]
+   625→
+   626→### C. Raw Data
+   627→
+   628→[Data availability statement]
+   629→
+   630→---
+   631→
+   632→*Report generated using SciHub Pro Workspace*
+   633→`,
+   634→  },
+   635→  {
+   636→    id: 'tpl-js-viz',
+   637→    name: 'Interactive Visualization',
+   638→    description: 'JavaScript template for creating interactive charts',
+   639→    language: 'javascript',
+   640→    category: 'visualization',
+   641→    code: `// Interactive Visualization Template
+   642→// SciHub Pro Workspace
+   643→
+   644→// This template creates interactive D3.js-style visualizations
+   645→// For use in notebook environments or web export
+   646→
+   647→const data = {
+   648→  // Sample gene expression data
+   649→  genes: Array.from({ length: 50 }, (_, i) => ({
+   650→    id: \`GENE_\${i+1}\`,
+   651→    expression: Math.random() * 20 + 5,
+   652→    pValue: Math.random() * 0.1,
+   653→    foldChange: (Math.random() - 0.5) * 6,
+   654→    pathway: ['Cell Cycle', 'Apoptosis', 'DNA Repair', 'Signaling'][Math.floor(Math.random() * 4)],
+   655→    significant: Math.random() > 0.8
+   656→  }))
+   657→};
+   658→
+   659→// ============================================
+   660→// VOLCANO PLOT
+   661→// ============================================
+   662→
+   663→function createVolcanoPlot(containerId) {
+   664→  const container = document.getElementById(containerId);
+   665→  
+   666→  // Setup SVG
+   667→  const width = 800;
+   668→  const height = 500;
+   669→  const margin = { top: 40, right: 40, bottom: 60, left: 70 };
+   670→  
+   671→  // Scales
+   672→  const xScale = d3.scaleLinear()
+   673→    .domain(d3.extent(data.genes, d => d.foldChange))
+   674→    .range([margin.left, width - margin.right]);
+   675→    
+   676→  const yScale = d3.scaleLinear()
+   677→    .domain([0, -Math.log10(d3.min(data.genes, d => d.pValue)) * 1.1])
+   678→    .range([height - margin.bottom, margin.top]);
+   679→  
+   680→  // Draw points
+   681→  const svg = d3.select(container).append('svg')
+   682→    .attr('width', width)
+   683→    .attr('height', height);
+   684→    
+   685→  svg.selectAll('circle')
+   686→    .data(data.genes)
+   687→    .enter()
+   688→    .append('circle')
+   689→    .attr('cx', d => xScale(d.foldChange))
+   690→    .attr('cy', d => yScale(-Math.log10(d.pValue)))
+   691→    .attr('r', d => d.significant ? 6 : 4)
+   692→    .attr('fill', d => {
+   693→      if (d.significant && d.foldChange > 0) return '#e41a1c'; // Red up
+   694→      if (d.significant && d.foldChange < 0) return '#377eb8'; // Blue down
+   695→      return '#999999'; // Gray not significant
+   696→    })
+   697→    .attr('opacity', 0.7)
+   698→    .on('mouseover', showTooltip)
+   699→    .on('mouseout', hideTooltip);
+   700→    
+   701→  // Threshold lines
+   702→  svg.append('line')
+   703→    .attr('x1', xScale(-1))
+   704→    .attr('y1', margin.top)
+   705→    .attr('x2', xScale(-1))
+   706→    .attr('y2', height - margin.bottom)
+   707→    .attr('stroke', 'green')
+   708→    .attr('stroke-dasharray', '5,5');
+   709→    
+   710→  svg.append('line')
+   711→    .attr('x1', xScale(1))
+   712→    .attr('y1', margin.top)
+   713→    .attr('x2', xScale(1))
+   714→    .attr('y2', height - margin.bottom)
+   715→    .attr('stroke', 'green')
+   716→    .attr('stroke-dasharray', '5,5');
+   717→    
+   718→  svg.append('line')
+   719→    .attr('x1', margin.left)
+   720→    .attr('y1', yScale(-Math.log10(0.05)))
+   721→    .attr('x2', width - margin.right)
+   722→    .attr('y2', yScale(-Math.log10(0.05)))
+   723→    .attr('stroke', 'blue')
+   724→    .attr('stroke-dasharray', '5,5');
+   725→    
+   726→  // Axes
+   727→  svg.append('g')
+   728→    .attr('transform', \`translate(0, \${height - margin.bottom})\`)
+   729→    .call(d3.axisBottom(xScale));
+   730→    
+   731→  svg.append('g')
+   732→    .attr('transform', \`translate(\${margin.left}, 0)\`)
+   733→    .call(d3.axisLeft(yScale));
+   734→    
+   735→  // Labels
+   736→  svg.append('text')
+   737→    .attr('x', width / 2)
+   738→    .attr('y', height - 10)
+   739→    .attr('text-anchor', 'middle')
+   740→    .text('Log2 Fold Change');
+   741→    
+   742→  svg.append('text')
+   743→    .attr('transform', 'rotate(-90)')
+   744→    .attr('x', -(height / 2))
+   745→    .attr('y', 20)
+   746→    .attr('text-anchor', 'middle')
+   747→    .text('-Log10(P-value)');
+   748→}
+   749→
+   750→// ============================================
+   751→// HEATMAP
+   752→// ============================================
+   753→
+   754→function createHeatmap(containerId) {
+   755→  // Sample matrix data
+   756→  const matrix = [];
+   757→  const genes = data.genes.slice(0, 10);
+   758→  const samples = ['Sample_1', 'Sample_2', 'Sample_3', 'Sample_4', 'Sample_5'];
+   759→  
+   760→  genes.forEach(gene => {
+   761→    samples.forEach(sample => {
+   762→      matrix.push({
+   763→        gene: gene.id,
+   764→        sample: sample,
+   765→        value: gene.expression + (Math.random() - 0.5) * 5
+   766→      });
+   767→    });
+   768→  });
+   769→  
+   770→  // Color scale
+   771→  const colorScale = d3.scaleSequential(d3.interpolateRdBu)
+   772→    .domain(d3.extent(matrix, d => d.value));
+   773→    
+   774→  // Render heatmap cells...
+   775→}
+   776→
+   777→// ============================================
+   778→// USAGE
+   779→// ============================================
+   780→
+   781→// Initialize when DOM is ready
+   782→document.addEventListener('DOMContentLoaded', () => {
+   783→  createVolcanoPlot('volcano-container');
+   784→  createHeatmap('heatmap-container');
+   785→});
+   786→
+   787→console.log('Visualization templates loaded successfully!');
+   788→console.log(\`Ready to visualize \${data.genes.length} genes\`);
+   789→`,
+   790→  },
+   791→];
+   792→
+   793→// ============ EXECUTION SIMULATION HELPERS ============
+   794→
+   795→const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+   796→
+   797→const generatePythonOutput = (code: string): string => {
+   798→  const lines = code.split('\n');
+   799→  const outputs: string[] = [];
+   800→  
+   801→  // Detect print statements and generate appropriate output
+   802→  const hasPrint = code.includes('print(');
+   803→  const hasDataFrame = code.includes('pd.DataFrame') || code.includes('DataFrame');
+   804→  const hasMatplotlib = code.includes('plt.') || code.includes('matplotlib');
+   805→  const hasDescribe = code.includes('.describe()');
+   806→  
+   807→  if (hasDataFrame || hasPrint) {
+   808→    // Simulate DataFrame creation
+   809→    if (hasDataFrame) {
+   810→      outputs.push('');
+   811→      outputs.push('   gene_id  expression   p_value  log2_fold_change     pathway');
+   812→      outputs.push('0   GENE_0    9.823452  0.045678          -0.234567   Cell Cycle');
+   813→      outputs.push('1   GENE_1   11.234567  0.023456           1.345678  Apoptosis');
+   814→      outputs.push('2   GENE_2    8.765432  0.067890          -0.987654   DNA Repair');
+   815→      outputs.push('3   GENE_3   12.345678  0.012345           2.123456   Signaling');
+   816→      outputs.push('4   GENE_4   10.123456  0.056789          -0.456789   Cell Cycle');
+   817→      outputs.push('...');
+   818→      outputs.push(`[${Math.floor(Math.random() * 50 + 80)} rows x 5 columns]`);
+   819→    }
+   820→    
+   821→    // Simulate print statements
+   822→    if (hasPrint) {
+   823→      outputs.push('');
+   824→      if (code.includes('Loading dataset')) {
+   825→        outputs.push('Loading dataset: ds-001');
+   826→      }
+   827→      if (code.includes('Loaded')) {
+   828→        outputs.push(`Loaded ${Math.floor(Math.random() * 50 + 80)} genes with columns: ['gene_id', 'expression', 'p_value', 'log2_fold_change', 'pathway']`);
+   829→      }
+   830→      if (code.includes('Data Quality')) {
+   831→        outputs.push('');
+   832→        outputs.push('--- Data Quality Report ---');
+   833→        outputs.push('Missing values:');
+   834→        outputs.push('gene_id             0');
+   835→        outputs.push('expression          0');
+   836→        outputs.push('p_value             0');
+   837→        outputs.push('log2_fold_change    0');
+   838→        outputs.push('pathway             0');
+   839→        outputs.push('dtype: int64');
+   840→      }
+   841→      if (code.includes('Outliers detected')) {
+   842→        const outlierCount = Math.floor(Math.random() * 10 + 3);
+   843→        outputs.push(`\\nOutliers detected: ${outlierCount} (${(outlierCount / 100 * 100).toFixed(1)}%)`);
+   844→      }
+   845→      if (code.includes('Statistical Summary') || hasDescribe) {
+   846→        outputs.push('');
+   847→        outputs.push('--- Statistical Summary ---');
+   848→        outputs.push('         expression      p_value  log2_fold_change');
+   849→        outputs.push('count   100.000000   100.000000        100.000000');
+   850→        outputs.push('mean     10.023456     0.048765          0.123456');
+   851→        outputs.push('std       2.012345     0.028765          1.487654');
+   852→        outputs.push('min       4.567890     0.001234         -3.987654');
+   853→        outputs.push('25%       8.654321     0.025678         -0.987654');
+   854→        outputs.push('50%      10.012345     0.048765          0.098765');
+   855→        outputs.push('75%     11.345678     0.069876          1.234567');
+   856→        outputs.push('max      15.678901     0.098765          4.567890');
+   857→      }
+   858→      if (code.includes('Significant genes found')) {
+   859→        const sigCount = Math.floor(Math.random() * 20 + 10);
+   860→        outputs.push(`\\nSignificant genes found: ${sigCount} (${sigCount}%)`);
+   861→      }
+   862→      if (code.includes('Visualization saved')) {
+   863→        outputs.push('\\n✅ Visualization saved to \'analysis_results.png\'');
+   864→      }
+   865→      if (code.includes('exported')) {
+   866→        outputs.push('✅ Results exported to \'significant_genes.csv\'');
+   867→      }
+   868→      if (code.includes('complete')) {
+   869→        outputs.push('\\n🎉 Analysis complete!');
+   870→      }
+   871→    }
+   872→  } else {
+   873→    // Generic Python output
+   874→    outputs.push('Hello, Science!');
+   875→    outputs.push('');
+   876→    outputs.push('[Execution completed successfully]');
+   877→  }
+   878→  
+   879→  // ASCII Chart simulation if matplotlib is used
+   880→  if (hasMatplotlib) {
+   881→    outputs.push('');
+   882→    outputs.push('┌─────────────────────────────────────────────────────────────┐');
+   883→    outputs.push('│                    Volcano Plot                            │');
+   884→    outputs.push('│                                                             │');
+   885→    outputs.push('│  5 │                                    ●                   │');
+   886→    outputs.push('│    │                               ●     ●                  │');
+   887→    outputs.push('│  4 │                          ●  ●  ●     ●                │');
+   888→    outputs.push('│    │                     ●  ●  ●        ●  ●               │');
+   889→    outputs.push('│  3 │                ●  ●  ●                 ●              │');
+   890→    outputs.push('│    │           ●  ●  ●        ----|----●  ●                 │');
+   891→    outputs.push('│  2 │      ●  ●  ●              |    |                       │');
+   892→    outputs.push('│    │   ●  ●                     |    |                       │');
+   893→    outputs.push('│  1 │  ●  ●                      |    |                       │');
+   894→    outputs.push('│    │●                            |    |                       │');
+   895→    outputs.push('│  0 ┼────────────────────────────┼────┼──────────────────────│');
+   896→    outputs.push('│   -4  -3  -2  -1   0   1   2   3    4   Log2 Fold Change    │');
+   897→    outputs.push('└─────────────────────────────────────────────────────────────┘');
+   898→  }
+   899→  
+   900→  return outputs.length > 0 ? '\n' + outputs.join('\n') : '\n[No output]';
+   901→};
+   902→
+   903→const generateSQLOutput = (code: string): string => {
+   904→  const outputs: string[] = [];
+   905→  
+   906→  // Detect query type
+   907→  const hasSelect = code.toUpperCase().includes('SELECT');
+   908→  const hasJoin = code.toUpperCase().includes('JOIN');
+   909→  const hasGroupBy = code.toUpperCase().includes('GROUP BY');
+   910→  const hasCTE = code.toUpperCase().includes('WITH');
+   911→  const hasWindowFunc = code.includes('OVER (');
+   912→  
+   913→  if (hasSelect) {
+   914→    // Query plan
+   915→    outputs.push('');
+   916→    outputs.push('→ Query Plan: Seq Scan on gene_expression_dataset (cost=0.00..142.50 rows=100 width=124)');
+   917→    
+   918→    if (code.toUpperCase().includes('WHERE')) {
+   919→      outputs.push('→ Filter: (p_value < 0.05::double precision)');
+   920→    }
+   921→    if (hasJoin) {
+   922→      outputs.push('→ Hash Join: (cost=145.00..520.30 rows=50 width=256)');
+   923→      outputs.push('→   Hash Cond: (g.gene_id = p.gene_id)');
+   924→    }
+   925→    if (hasGroupBy) {
+   926→      outputs.push('→ GroupAggregate (cost=120.00..180.00 rows=10 width=64)');
+   927→      outputs.push('→   Group Key: pathway');
+   928→      outputs.push('→   Sort Key: sig_count DESC');
+   929→    }
+   930→    
+   931→    outputs.push('');
+   932→    
+   933→    // Result table based on query type
+   934→    if (code.includes('COUNT(*)') && !hasGroupBy) {
+   935→      outputs.push('┌──────────────┬─────────────┬───────────────┬──────────────┬──────────────┬──────────────┐');
+   936→      outputs.push('│ total_records│ unique_genes│ avg_expression│ std_expression│ min_expression│ max_expression│');
+   937→      outputs.push('├──────────────┼─────────────┼───────────────┼──────────────┼──────────────┼──────────────┤');
+   938→      outputs.push('│        1,247│         892│      10.2345  │     2.0123   │     4.5679   │    15.6789   │');
+   939→      outputs.push('└──────────────┴─────────────┴───────────────┴──────────────┴──────────────┴──────────────┘');
+   940→      outputs.push('');
+   941→      outputs.push('→ Returned 1 row in 45ms');
+   942→    } else if (hasGroupBy) {
+   943→      outputs.push('┌───────────────┬───────────┬───────────────┬────────────────┬──────────┐');
+   944→      outputs.push('│    pathway    │ gene_count│ mean_expression│ median_expression│ sig_count│');
+   945→      outputs.push('├───────────────┼───────────┼───────────────┼────────────────┼──────────┤');
+   946→      outputs.push('│ Cell Cycle    │       245│       10.4567  │       10.2345  │       42│');
+   947→      outputs.push('│ Apoptosis     │       198│        9.8765  │        9.7654  │       38│');
+   948→      outputs.push('│ DNA Repair    │       176│       11.2345  │       11.0123  │       28│');
+   949→      outputs.push('│ Signaling     │       234│        9.5432  │        9.4321  │       35│');
+   950→      outputs.push('│ Metabolism    │       187│       10.1234  │        9.9876  │       31│');
+   951→      outputs.push('└───────────────┴───────────┴───────────────┴────────────────┴──────────┘');
+   952→      outputs.push('');
+   953→      outputs.push('→ Returned 5 rows in 128ms');
+   954→    } else if (hasJoin) {
+   955→      outputs.push('┌─────────┬───────────┬────────────┬──────────┬──────────────────┬───────────────────┬────────────────┬───────────────┬──────────────┐');
+   956→      outputs.push('│ gene_id │ gene_name │ expression │ p_value  │   protein_name   │ function_description│ cellular_location│ compound_name │binding_affinity│');
+   957→      outputs.push('├─────────┼───────────┼────────────┼──────────┼──────────────────┼───────────────────┼────────────────┼───────────────┼──────────────┤');
+   958→      outputs.push('│ GENE_042│ TP53      │   14.5678 │ 0.00123  │ P53 protein      │ Tumor suppressor  │ Nucleus        │ Nutlin-3      │          5.2  │');
+   959→      outputs.push('│ GENE_089│ BRCA1     │   13.2345 │ 0.00234  │ BRCA1 protein    │ DNA repair        │ Nucleus        │ Olaparib      │         42.1  │');
+   960→      outputs.push('│ GENE_156│ EGFR      │   12.9876 │ 0.00345  │ EGFR receptor    │ Signal transduction│ Membrane       │ Gefitinib     │        125.6  │');
+   961→      outputs.push('│ ...     │           │            │          │                  │                  │                │               │              │');
+   962→      outputs.push('└─────────┴───────────┴────────────┴──────────┴──────────────────┴───────────────────┴────────────────┴───────────────┴──────────────┘');
+   963→      outputs.push('');
+   964→      outputs.push('→ Returned 47 rows in 234ms');
+   965→    } else if (hasWindowFunc) {
+   966→      outputs.push('┌──────────┬────────────┬───────────┬───────────┬──────────────┬───────────────────┬────────────────────┬────────────────┐');
+   967→      outputs.push('│  gene_id │ expression │  p_value  │fold_change│  expr_rank   │expression_quartile│ prev_expression    │    sample_id   │');
+   968→      outputs.push('├──────────┼────────────┼───────────┼───────────┼──────────────┼───────────────────┼────────────────────┼────────────────┤');
+   969→      outputs.push('│ GENE_012 │   15.2345  │ 0.00234   │  2.34567  │      1       │        4         │     14.1234        │  sample_001    │');
+   970→      outputs.push('│ GENE_045 │   14.9876  │ 0.00345   │  2.12345  │      2       │        4         │     14.5678        │  sample_001    │');
+   971→      outputs.push('│ GENE_078 │   14.5678  │ 0.00456   │  1.98765  │      3       │        4         │     14.2345        │  sample_001    │');
+   972→      outputs.push('│ GENE_023 │   11.2345  │ 0.02345   │ -1.23456  │     45       │        2         │     11.5678        │  sample_001    │');
+   973→      outputs.push('│ ...      │            │           │           │             │                   │                    │                │');
+   974→      outputs.push('└──────────┴────────────┴───────────┴───────────┴──────────────┴───────────────────┴────────────────────┴────────────────┘');
+   975→      outputs.push('');
+   976→      outputs.push('→ Returned 200 rows in 189ms');
+   977→    } else {
+   978→      // Default SELECT result
+   979→      outputs.push('┌─────────┬───────────┬────────────┬──────────┬────────────────┐');
+   980→      outputs.push('│ gene_id │ gene_name │ expression │ p_value  │ log2_fold_change│');
+   981→      outputs.push('├─────────┼───────────┼────────────┼──────────┼────────────────┤');
+   982→      outputs.push('│ GENE_001│ GENEA     │   9.8234   │ 0.04567  │    -0.23456    │');
+   983→      outputs.push('│ GENE_002│ GENEB     │  11.2345   │ 0.02345  │     1.34567    │');
+   984→      outputs.push('│ GENE_003│ GENEC     │   8.7654   │ 0.06789  │    -0.98765    │');
+   985→      outputs.push('│ GENE_004| GENED     │  12.3456   │ 0.01234  │     2.12345    │');
+   986→      outputs.push('│ GENE_005| GENEE     │  10.1234   │ 0.05678  │    -0.45678    │');
+   987→      outputs.push('│ ...     │           │            │          │                │');
+   988→      outputs.push('└─────────┴───────────┴────────────┴──────────┴────────────────┘');
+   989→      outputs.push('');
+   990→      outputs.push('→ Returned 87 rows in 156ms');
+   991→    }
+   992→  }
+   993→  
+   994→  if (hasCTE) {
+   995→    outputs.push('');
+   996→    outputs.push('→ CTE "gene_stats": Materialized (892 rows)');
+   997→    outputs.push('→ CTE "normalized": Materialized (892 rows, filtered to 43 outliers)');
+   998→  }
+   999→  
+  1000→  return outputs.length > 0 ? outputs.join('\n') : '\nQuery executed successfully.';
+  1001→};
+  1002→
+  1003→const generateROutput = (code: string): string => {
+  1004→  const outputs: string[] = [];
+  1005→  
+  1006→  const hasCat = code.includes('cat(');
+  1007→  const hasPrint = code.includes('print(');
+  1008→  const hasSummary = code.includes('summary(');
+  1009→  const hasTTest = code.includes('t.test(');
+  1010→  const hasAnova = code.includes('aov(');
+  1011→  const hasCorr = code.includes('cor(');
+  1012→  const hasPCA = code.includes('prcomp(');
+  1013→  const hasGgplot = code.includes('ggplot(');
+  1014→  
+  1015→  // Library loading messages
+  1016→  if (code.includes('library(')) {
+  1017→    outputs.push('Loading required package: ggplot2');
+  1018→    outputs.push('Warning: package \'ggplot2\' was built under R version 4.3.3');
+  1019→    outputs.push('Loading required package: pheatmap');
+  1020→    outputs.push('Loading required package: corrplot');
+  1021→    outputs.push('corrplot 0.92 loaded');
+  1022→    outputs.push('');
+  1023→  }
+  1024→  
+  1025→  if (hasCat) {
+  1026→    if (code.includes('Dataset loaded')) {
+  1027→      outputs.push('Dataset loaded: 100 samples x 4 features');
+  1028→    }
+  1029→    if (code.includes('Data Summary')) {
+  1030→      outputs.push('');
+  1031→      outputs.push('=== Data Summary ===');
+  1032→      outputs.push('');
+  1033→      outputs.push('     gene_A          gene_B          gene_C       ');
+  1034→      outputs.push(' Min.   : 4.567   Min.   : 8.123   Min.   :1.234  ');
+  1035→      outputs.push(' 1st Qu.: 8.654   1st Qu.:10.456   1st Qu.:3.987  ');
+  1036→      outputs.push(' Median :10.123   Median :11.987   Median :5.012  ');
+  1037→      outputs.push(' Mean   :10.023   Mean   :11.876   Mean   :5.034  ');
+  1038→      outputs.push(' 3rd Qu.:11.456   3rd Qu.:13.234   3rd Qu.:6.078  ');
+  1039→      outputs.push(' Max.   :15.678   Max.   :15.987   Max.   :8.976  ');
+  1040→    }
+  1041→    if (code.includes('Missing values')) {
+  1042→      outputs.push('');
+  1043→      outputs.push('Missing values:');
+  1044→      outputs.push('sample_id       gene_A       gene_B       gene_C        batch ');
+  1045→      outputs.push('        0           0           0           0           0 ');
+  1046→    }
+  1047→  }
+  1048→  
+  1049→  if (hasSummary) {
+  1050→    outputs.push('');
+  1051→    outputs.push('=== Statistical Tests ===');
+  1052→    outputs.push('');
+  1053→    outputs.push('T-test (Gene B):');
+  1054→  }
+  1055→  
+  1056→  if (hasTTest) {
+  1057→    outputs.push('');
+  1058→    outputs.push('\tWelch Two Sample t-test');
+  1059→    outputs.push('');
+  1060→    outputs.push('data:  gene_B by group');
+  1061→    outputs.push('t = 4.2345, df = 97.123, p-value = 0.0000523');
+  1062→    outputs.push('alternative hypothesis: true difference in means is not equal to 0');
+  1063→    outputs.push('95 percent confidence interval:');
+  1064→    outputs.push(' 1.234567 3.456789');
+  1065→    outputs.push('sample estimates:');
+  1066→    outputs.push('mean in group Control mean in group Treatment ');
+  1067→    outputs.push('           10.123456            11.768789 ');
+  1068→    outputs.push('');
+  1069→    outputs.push("Cohen's d: 0.847");
+  1070→  }
+  1071→  
+  1072→  if (hasAnova) {
+  1073→    outputs.push('');
+  1074→    outputs.push('ANOVA (Gene A by Batch):');
+  1075→    outputs.push('            Df Sum Sq Mean Sq F value Pr(>F)  ');
+  1076→    outputs.push('batch        4  45.67  11.418   2.987  0.0234 *');
+  1077→    outputs.push('Residuals   95 364.32   3.835                 ');
+  1078→    outputs.push('---');
+  1079→    outputs.push('Signif. codes:  0 \'***\' 0.001 \'**\' 0.01 \'*\' 0.05 \'.\' 0.1 \' \' 1');
+  1080→  }
+  1081→  
+  1082→  if (hasCorr) {
+  1083→    outputs.push('');
+  1084→    outputs.push('Correlation Matrix:');
+  1085→    outputs.push('         gene_A gene_B gene_C');
+  1086→    outputs.push('gene_A  1.000  0.234 -0.123');
+  1087→    outputs.push('gene_B  0.234  1.000  0.456');
+  1088→    outputs.push('gene_C -0.123  0.456  1.000');
+  1089→  }
+  1090→  
+  1091→  if (hasPCA) {
+  1092→    outputs.push('');
+  1093→    outputs.push('=== PCA Results ===');
+  1094→    outputs.push('Variance explained:');
+  1095→    outputs.push('                            PC1     PC2     PC3');
+  1096→    outputs.push('Standard deviation     1.4567  0.9876  0.8234');
+  1097→    outputs.push('Proportion of Variance 0.5234  0.2401  0.1665');
+  1098→    outputs.push('Cumulative Proportion  0.5234  0.7635  1.0000');
+  1099→  }
+  1100→  
+  1101→  if (hasGgplot) {
+  1102→    outputs.push('');
+  1103→    outputs.push('`geom_smooth()` using formula = \'y ~ x\'');
+  1104→    outputs.push('');
+  1105→    outputs.push('┌─────────────────────────────────────────────────────────────┐');
+  1106→    outputs.push('│              Gene A Distribution by Group                 │');
+  1107→    outputs.push('│                                                             │');
+  1108→    outputs.push('│  Count  30 │  ████                                           │');
+  1109→    outputs.push('│         25 │  █████                                         │');
+  1110→    outputs.push('│         20 │  ███████                                       │');
+  1111→    outputs.push('│         15 │  █████████                                     │');
+  1112→    outputs.push('│         10 │  ███████████                                   │');
+  1113→    outputs.push('│          5 │  █████████████                                 │');
+  1114→    outputs.push('│          0 │  ████████████████                              │');
+  1115→    outputs.push('│             └────────────────────────────────              │');
+  1116→    outputs.push('│              6    8   10   12   14                         │');
+  1117→    outputs.push('│                        Expression                           │');
+  1118→    outputs.push('└─────────────────────────────────────────────────────────────┘');
+  1119→  }
+  1120→  
+  1121→  if (code.includes('saveRDS')) {
+  1122→    outputs.push('');
+  1123→    outputs.push('✅ Results saved to \'statistical_results.rds\'');
+  1124→    outputs.push('🎉 Analysis complete!');
+  1125→  }
+  1126→  
+  1127→  return outputs.length > 0 ? '\n' + outputs.join('\n') : '\n[No output]';
+  1128→};
+  1129→
+  1130→const generateJSOutput = (code: string): string => {
+  1131→  const outputs: string[] = [];
+  1132→  
+  1133→  const hasConsoleLog = code.includes('console.log');
+  1134→  const hasD3 = code.includes('d3.');
+  1135→  const hasData = code.includes('const data');
+  1136→  
+  1137→  if (hasConsoleLog) {
+  1138→    if (code.includes('loaded successfully')) {
+  1139→      outputs.push('Visualization templates loaded successfully!');
+  1140→    }
+  1141→    if (code.includes('Ready to visualize')) {
+  1142→      outputs.push('Ready to visualize 50 genes');
+  1143→    }
+  1144→    if (code.includes('Hello, Science!')) {
+  1145→      outputs.push('Hello, Science!');
+  1146→    }
+  1147→  }
+  1148→  
+  1149→  if (hasData) {
+  1150→    outputs.push('');
+  1151→    outputs.push('{');
+  1152→    outputs.push('  genes: [');
+  1153→    outputs.push('    { id: \'GENE_1\', expression: 18.23, pValue: 0.045, foldChange: 2.34, pathway: \'Cell Cycle\', significant: false },');
+  1154→    outputs.push('    { id: \'GENE_2\', expression: 12.45, pValue: 0.023, foldChange: -1.56, pathway: \'Apoptosis\', significant: true },');
+  1155→    outputs.push('    { id: \'GENE_3\', expression: 22.67, pValue: 0.012, foldChange: 1.89, pathway: \'DNA Repair\', significant: true },');
+  1156→    outputs.push('    ... 47 more items');
+  1157→    outputs.push('  ]');
+  1158→    outputs.push('}');
+  1159→  }
+  1160→  
+  1161→  if (hasD3) {
+  1162→    outputs.push('');
+  1163→    outputs.push('SVG created: 800x500');
+  1164→    outputs.push('Data points rendered: 50');
+  1165→    outputs.push('Threshold lines added: 3');
+  1166→    outputs.push('Axes configured: X (Log2 Fold Change), Y (-Log10 P-value)');
+  1167→  }
+  1168→  
+  1169→  // Object inspection
+  1170→  if (code.includes('createVolcanoPlot')) {
+  1171→    outputs.push('');
+  1172→    outputs.push('[Function: createVolcanoPlot] {');
+  1173→    outputs.push('  length: 1,');
+  1174→    outputs.push('  name: \'createVolcanoPlot\'');
+  1175→    outputs.push('}');
+  1176→  }
+  1177→  
+  1178→  if (code.includes('createHeatmap')) {
+  1179→    outputs.push('');
+  1180→    outputs.push('[Function: createHeatmap] {');
+  1181→    outputs.push('  length: 1,');
+  1182→    outputs.push('  name: \'createHeatmap\'');
+  1183→    outputs.push('}');
+  1184→  }
+  1185→  
+  1186→  return outputs.length > 0 ? '\n' + outputs.join('\n') : '\n[No output]';
+  1187→};
+  1188→
+  1189→const generateMarkdownOutput = (code: string): string => {
+  1190→  const outputs: string[] = [];
+  1191→  
+  1192→  outputs.push('');
+  1193→  outputs.push('#'.repeat(60));
+  1194→  outputs.push('# RENDERED MARKDOWN PREVIEW');
+  1195→  outputs.push('#'.repeat(60));
+  1196→  outputs.push('');
+  1197→  
+  1198→  // Simple markdown rendering simulation
+  1199→  const lines = code.split('\n');
+  1200→  let inCodeBlock = false;
+  1201→  
+  1202→  for (const line of lines) {
+  1203→    if (line.trim().startsWith('```')) {
+  1204→      inCodeBlock = !inCodeBlock;
+  1205→      if (inCodeBlock) {
+  1206→        outputs.push('<div class="code-block">');
+  1207→      } else {
+  1208→        outputs.push('</div>');
+  1209→      }
+  1210→      continue;
+  1211→    }
+  1212→    
+  1213→    if (inCodeBlock) {
+  1214→      outputs.push('  ' + line);
+  1215→      continue;
+  1216→    }
+  1217→    
+  1218→    // Headers
+  1219→    if (line.startsWith('# ')) {
+  1220→      outputs.push(`<h1>${line.substring(2)}</h1>`);
+  1221→    } else if (line.startsWith('## ')) {
+  1222→      outputs.push(`<h2>${line.substring(3)}</h2>`);
+  1223→    } else if (line.startsWith('### ')) {
+  1224→      outputs.push(`<h3>${line.substring(4)}</h3>`);
+  1225→    } else if (line.startsWith('> ')) {
+  1226→      outputs.push(`<blockquote>${line.substring(2)}</blockquote>`);
+  1227→    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+  1228→      outputs.push(`<li>${line.substring(2)}</li>`);
+  1229→    } else if (line.match(/^\d+\.\s/)) {
+  1230→      outputs.push(`<li>${line.replace(/^\d+\.\s/, '')}</li>`);
+  1231→    } else if (line.trim() === '---') {
+  1232→      outputs.push('<hr/>');
+  1233→    } else if (line.trim()) {
+  1234→      outputs.push(`<p>${line}</p>`);
+  1235→    }
+  1236→  }
+  1237→  
+  1238→  outputs.push('');
+  1239→  outputs.push('#'.repeat(60));
+  1240→  outputs.push('*Full Markdown rendering would include syntax highlighting,');
+  1241→  outputs.push('table formatting, image embedding, and MathJax support*');
+  1242→  outputs.push('#'.repeat(60));
+  1243→  
+  1244→  return outputs.join('\n');
+  1245→};
+  1246→
+  1247→const generateSimulatedOutput = (lang: string, code: string, duration: number): string => {
+  1248→  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+  1249→  const headers: Record<string, string> = {
+  1250→    python: `[SciHub Pro] Python 3.11.5 | Started at: ${timestamp}`,
+  1251→    sql: `[SciHub Pro] PostgreSQL 16.1 | Started at: ${timestamp}`,
+  1252→    r: `[SciHub Pro] R 4.3.2 | Started at: ${timestamp}`,
+  1253→    javascript: `[SciHub Pro] Node.js 20.10 | Started at: ${timestamp}`,
+  1254→    markdown: `[SciHub Pro] Markdown Renderer | Started at: ${timestamp}`,
+  1255→  };
+  1256→  
+  1257→  let body = '';
+  1258→  
+  1259→  switch (lang) {
+  1260→    case 'python':
+  1261→      body = generatePythonOutput(code);
+  1262→      break;
+  1263→    case 'sql':
+  1264→      body = generateSQLOutput(code);
+  1265→      break;
+  1266→    case 'r':
+  1267→      body = generateROutput(code);
+  1268→      break;
+  1269→    case 'javascript':
+  1270→      body = generateJSOutput(code);
+  1271→      break;
+  1272→    case 'markdown':
+  1273→      body = generateMarkdownOutput(code);
+  1274→      break;
+  1275→    default:
+  1276→      body = `\n${'#'.repeat(50)}\n# Output for ${lang.toUpperCase()}\n${'#'.repeat(50)}\n\n[Execution completed successfully]\n`;
+  1277→  }
+  1278→  
+  1279→  const memoryUsage = (Math.random() * 100 + 20).toFixed(1);
+  1280→  const footer = `\n[SciHub Pro] Execution completed in ${(duration / 1000).toFixed(3)}s | Memory: ${memoryUsage} MB | Exit code: 0`;
+  1281→  
+  1282→  return `${headers[lang]}${body}${footer}`;
+  1283→};
+  1284→
+  1285→// ============ WORKSPACE PAGE COMPONENT ============
+  1286→
+  1287→export default function WorkspacePage() {
+  1288→  const { t } = useTranslation();
+  1289→  const store = useSciHubStore();
+  1290→  
+  1291→  // Store state
+  1292→  const {
+  1293→    workspaceFiles,
+  1294→    activeFileId,
+  1295→    addWorkspaceFile,
+  1296→    updateFileContent,
+  1297→    setActiveFile,
+  1298→    deleteWorkspaceFile,
+  1299→    executeCode,
+  1300→    activities,
+  1301→    addActivity,
+  1302→    preferences,
+  1303→    guidanceSuggestions,
+  1304→    getRelevantGuidance,
+  1305→    dismissGuidance,
+  1306→  } = store;
+  1307→
+  1308→  // Local UI state
+  1309→  const [showNewFileDialog, setShowNewFileDialog] = useState(false);
+  1310→  const [newFileName, setNewFileName] = useState('');
+  1311→  const [newFileLanguage, setNewFileLanguage] = useState<WorkspaceFile['language']>('python');
+  1312→  const [showTemplates, setShowTemplates] = useState(false);
+  1313→  const [isExecuting, setIsExecuting] = useState(false);
+  1314→  const [executionResult, setExecutionResult] = useState<string | null>(null);
+  1315→  const [executionError, setExecutionError] = useState<string | null>(null);
+  1316→  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+  1317→
+  1318→  // NEW: Terminal & Execution Simulation State
+  1319→  const [executionState, setExecutionState] = useState<ExecutionState>('idle');
+  1320→  const [terminalOutput, setTerminalOutput] = useState<string>('');
+  1321→  const [executionHistory, setExecutionHistory] = useState<ExecutionRecord[]>([]);
+  1322→  const [showTerminal, setShowTerminal] = useState(true);
+  1323→  const [executionStats, setExecutionStats] = useState<{ duration: number; memory: string; exitCode: number } | null>(null);
+  1324→  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  1325→  const terminalRef = useRef<HTMLDivElement>(null);
+  1326→
+  1327→  // Get active file
+  1328→  const activeFile = workspaceFiles.find((f) => f.id === activeFileId);
+  1329→
+  1330→  // Guidance for this context
+  1331→  const relevantGuidance = getRelevantGuidance('workspace');
+  1332→
+  1333→  // Auto-scroll terminal when new output appears
+  1334→  useEffect(() => {
+  1335→    if (terminalRef.current && showTerminal) {
+  1336→      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+  1337→    }
+  1338→  }, [terminalOutput, executionState, showTerminal]);
+  1339→
+  1340→  // Auto-save effect
+  1341→  useEffect(() => {
+  1342→    if (!activeFile || !activeFile.isModified.value) return;
+  1343→    
+  1344→    const timer = setTimeout(() => {
+  1345→      setAutoSaveStatus('saving');
+  1346→      // Simulate auto-save
+  1347→      setTimeout(() => {
+  1348→        setAutoSaveStatus('saved');
+  1349→      }, 500);
+  1350→    }, preferences.autoSaveInterval * 1000);
+  1351→
+  1352→    return () => clearTimeout(timer);
+  1353→  }, [activeFile?.content.value, preferences.autoSaveInterval]);
+  1354→
+  1355→  // ============ HANDLERS ============
+  1356→
+  1357→  const handleCreateFile = () => {
+  1358→    if (!newFileName.trim()) return;
+  1359→
+  1360→    addWorkspaceFile({
+  1361→      name: createDynamicField(newFileName.endsWith(`.${newFileLanguage}`) ? newFileName : `${newFileName}.${newFileLanguage}`),
+  1362→      content: createDynamicField(getDefaultContent(newFileLanguage)),
+  1363→      language: newFileLanguage,
+  1364→      isModified: createDynamicField(false),
+  1365→    });
+  1366→
+  1367→    addActivity({
+  1368→      type: 'create',
+  1369→      message: createDynamicField(`Created file: ${newFileName}`),
+  1370→      icon: '📄',
+  1371→    });
+  1372→
+  1373→    setShowNewFileDialog(false);
+  1374→    setNewFileName('');
+  1375→  };
+  1376→
+  1377→  const handleContentChange = (content: string) => {
+  1378→    if (!activeFileId) return;
+  1379→    updateFileContent(activeFileId, content);
+  1380→    setAutoSaveStatus('unsaved');
+  1381→  };
+  1382→
+  1383→  // ENHANCED: Run Code with full execution simulation
+  1384→  const handleRunCode = async () => {
+  1385→    if (!activeFileId || !activeFile) return;
+  1386→    
+  1387→    const code = activeFile.content.value;
+  1388→    const currentLanguage = activeFile.language;
+  1389→    
+  1390→    // 1. Set state to compiling
+  1391→    setExecutionState('compiling');
+  1392→    setSelectedHistoryId(null);
+  1393→    const startTime = new Date();
+  1394→    setTerminalOutput(`[${startTime.toLocaleTimeString()}] Compiling ${currentLanguage.toUpperCase()} code...\n`);
+  1395→    setShowTerminal(true);
+  1396→    
+  1397→    await sleep(500);
+  1398→    
+  1399→    // 2. Set state to running with animation
+  1400→    setExecutionState('running');
+  1401→    setTerminalOutput(prev => prev + `[${new Date().toLocaleTimeString()}] Executing...\n`);
+  1402→    
+  1403→    // Add running animation dots
+  1404→    let dotCount = 0;
+  1405→    const dotInterval = setInterval(() => {
+  1406→      dotCount = (dotCount + 1) % 4;
+  1407→      setTerminalOutput(prev => {
+  1408→        // Remove previous animation line and add new one
+  1409→        const lines = prev.split('\n');
+  1410→        const filteredLines = lines.filter(l => !l.startsWith('[Running]'));
+  1411→        return [...filteredLines, `[Running]${'.'.repeat(dotCount)}`].join('\n');
+  1412→      });
+  1413→    }, 300);
+  1414→    
+  1415→    // 3. Simulate execution time based on language
+  1416→    const execTimes: Record<string, number> = {
+  1417→      python: 1200 + Math.random() * 800,
+  1418→      sql: 400 + Math.random() * 400,
+  1419→      r: 1500 + Math.random() * 1000,
+  1420→      javascript: 600 + Math.random() * 600,
+  1421→      markdown: 200 + Math.random() * 200,
+  1422→    };
+  1423→    const execTime = execTimes[currentLanguage] || 1000;
+  1424→    
+  1425→    await sleep(execTime);
+  1426→    
+  1427→    // Stop animation
+  1428→    clearInterval(dotInterval);
+  1429→    
+  1430→    // 4. Generate simulated output
+  1431→    const output = generateSimulatedOutput(currentLanguage, code, execTime);
+  1432→    const memoryUsage = (Math.random() * 100 + 20).toFixed(1);
+  1433→    
+  1434→    // 5. Show final output (remove animation line)
+  1435→    setTerminalOutput(prev => {
+  1436→      const lines = prev.split('\n').filter(l => !l.startsWith('[Running]'));
+  1437→      return lines.join('\n') + '\n' + output;
+  1438→    });
+  1439→    
+  1440→    setExecutionState('complete');
+  1441→    setExecutionStats({
+  1442→      duration: execTime,
+  1443→      memory: `${memoryUsage} MB`,
+  1444→      exitCode: 0,
+  1445→    });
+  1446→    
+  1447→    // Also update legacy state for backward compatibility
+  1448→    setExecutionResult(output);
+  1449→    
+  1450→    // 6. Add to history
+  1451→    const record: ExecutionRecord = {
+  1452→      id: Date.now().toString(),
+  1453→      timestamp: new Date(),
+  1454→      language: currentLanguage,
+  1455→      code: code.substring(0, 200),
+  1456→      output: output,
+  1457→      duration: execTime,
+  1458→      success: true,
+  1459→      memory: `${memoryUsage} MB`,
+  1460→    };
+  1461→    setExecutionHistory(prev => [record, ...prev].slice(0, 5));
+  1462→    
+  1463→    // 7. Log activity
+  1464→    addActivity({
+  1465→      type: 'compute',
+  1466→      message: createDynamicField(`Executed ${activeFile.name.value}: Success (${(execTime/1000).toFixed(2)}s)`),
+  1467→      icon: '✅',
+  1468→    });
+  1469→    
+  1470→    // 8. Reset to idle after 3 seconds
+  1471→    setTimeout(() => {
+  1472→      setExecutionState('idle');
+  1473→    }, 3000);
+  1474→  };
+  1475→
+  1476→  // Legacy handler wrapper for backward compatibility
+  1477→  const handleExecute = async () => {
+  1478→    await handleRunCode();
+  1479→  };
+  1480→
+  1481→  const handleUseTemplate = (template: CodeTemplate) => {
+  1482→    addWorkspaceFile({
+  1483→      name: createDynamicField(`${template.name.toLowerCase().replace(/\s+/g, '_')}.${template.language === 'r' ? 'r' : template.language}`),
+  1484→      content: createDynamicField(template.code),
+  1485→      language: template.language,
+  1486→      isModified: createDynamicField(true),
+  1487→    });
+  1488→
+  1489→    addActivity({
+  1490→      type: 'create',
+  1491→      message: createDynamicField(`Created file from template: ${template.name}`),
+  1492→      icon: '📋',
+  1493→    });
+  1494→
+  1495→    setShowTemplates(false);
+  1496→  };
+  1497→
+  1498→  const handleDeleteFile = (id: string) => {
+  1499→    const file = workspaceFiles.find((f) => f.id === id);
+  1500→    if (!file) return;
+  1501→
+  1502→    deleteWorkspaceFile(id);
+  1503→    addActivity({
+  1504→      type: 'delete',
+  1505→      message: createDynamicField(`Deleted file: ${file.name.value}`),
+  1506→      icon: '🗑️',
+  1507→    });
+  1508→  };
+  1509→
+  1510→  // View historical execution
+  1511→  const handleViewHistory = (record: ExecutionRecord) => {
+  1512→    setSelectedHistoryId(record.id);
+  1513→    setTerminalOutput(record.output);
+  1514→    setExecutionStats({
+  1515→      duration: record.duration,
+  1516→      memory: record.memory,
+  1517→      exitCode: 0,
+  1518→    });
+  1519→    setShowTerminal(true);
+  1520→  };
+  1521→
+  1522→  // Clear terminal
+  1523→  const handleClearTerminal = () => {
+  1524→    setTerminalOutput('');
+  1525→    setExecutionStats(null);
+  1526→    setSelectedHistoryId(null);
+  1527→  };
+  1528→
+  1529→  // ============ HELPERS ============
+  1530→
+  1531→  const getDefaultContent = (lang: WorkspaceFile['language']): string => {
+  1532→    const defaults: Record<string, string> = {
+  1533→      python: '# New Python script\n# Start coding here...\n\nprint("Hello, Science!")\n',
+  1534→      sql: '-- New SQL query\n-- Write your query here\n\nSELECT * FROM dataset LIMIT 10;\n',
+  1535→      r: '# New R script\n# Start coding here\n\ncat("Hello, Science!\\n")\n',
+  1536→      markdown: '# New Document\n\nStart writing here...\n',
+  1537→      javascript: '// New JavaScript file\n// Start coding here\n\nconsole.log("Hello, Science!");\n',
+  1538→      bash: '#!/bin/bash\n# New shell script\n\necho "Hello, Science!"\n',
+  1539→      java: '// New Java file\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, Science!");\n    }\n}\n',
+  1540→      cpp: '// New C++ file\n#include <iostream>\n\nint main() {\n    std::cout << "Hello, Science!" << std::endl;\n    return 0;\n}\n',
+  1541→      typescript: '// New TypeScript file\nconsole.log("Hello, Science!");\n',
+  1542→    };
+  1543→    return defaults[lang] || '';
+  1544→  };
+  1545→
+  1546→  const getLanguageIcon = (lang: WorkspaceFile['language']): string => {
+  1547→    const icons: Record<string, string> = {
+  1548→      python: '🐍',
+  1549→      sql: '🗃️',
+  1550→      r: '📊',
+  1551→      markdown: '📝',
+  1552→      javascript: '⚡',
+  1553→      bash: '💻',
+  1554→      java: '☕',
+  1555→      cpp: '⚙️',
+  1556→      typescript: '💎',
+  1557→    };
+  1558→    return icons[lang] || '📄';
+  1559→  };
+  1560→
+  1561→  const getLanguageColor = (lang: WorkspaceFile['language']): string => {
+  1562→    const colors: Record<string, string> = {
+  1563→      python: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  1564→      sql: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+  1565→      r: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+  1566→      markdown: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+  1567→      javascript: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+  1568→      bash: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+  1569→      java: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  1570→      cpp: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+  1571→      typescript: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+  1572→    };
+  1573→    return colors[lang] || 'bg-gray-100 text-gray-800';
+  1574→  };
+  1575→
+  1576→  // Get run button configuration based on state
+  1577→  const getRunButtonConfig = () => {
+  1578→    switch (executionState) {
+  1579→      case 'compiling':
+  1580→        return {
+  1581→          text: '⏳ Compiling...',
+  1582→          className: 'bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-white',
+  1583→          disabled: true,
+  1584→        };
+  1585→      case 'running':
+  1586→        return {
+  1587→          text: '● Executing...',
+  1588→          className: 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white animate-pulse',
+  1589→          disabled: true,
+  1590→        };
+  1591→      case 'complete':
+  1592→        return {
+  1593→          text: '✓ Complete',
+  1594→          className: 'bg-gradient-to-r from-green-600 to-teal-600 text-white',
+  1595→          disabled: false,
+  1596→        };
+  1597→      case 'error':
+  1598→        return {
+  1599→          text: '✗ Error - Retry?',
+  1600→          className: 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white',
+  1601→          disabled: false,
+  1602→        };
+  1603→      default:
+  1604→        return {
+  1605→          text: '▶ Run Code',
+  1606→          className: 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white',
+  1607→          disabled: false,
+  1608→        };
+  1609→    }
+  1610→  };
+  1611→
+  1612→  const runButtonConfig = getRunButtonConfig();
+  1613→
+  1614→  return (
+  1615→    <div className="min-h-screen bg-background">
+  1616→      {/* Header */}
+  1617→      <div className="p-6 pb-0">
+  1618→        <div className="flex items-start justify-between">
+  1619→          <div>
+  1620→            <h1 className="text-3xl font-bold text-foreground">
+  1621→              {t('workspace.title') || 'Workspace'}
+  1622→            </h1>
+  1623→            <p className="text-muted-foreground mt-1">
+  1624→              {t('workspace.subtitle') || 'Write, execute, and analyze code interactively'}
+  1625→            </p>
+  1626→          </div>
+  1627→
+  1628→          {/* Status Indicators */}
+  1629→          <div className="flex items-center gap-4">
+  1630→            {/* Execution Status */}
+  1631→            {executionState !== 'idle' && (
+  1632→              <Badge 
+  1633→                variant="secondary" 
+  1634→                className={
+  1635→                  executionState === 'running' ? 'animate-pulse bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+  1636→                  executionState === 'compiling' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+  1637→                  executionState === 'complete' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+  1638→                  'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+  1639→                }
+  1640→              >
+  1641→                {executionState === 'compiling' && '⏳ Compiling'}
+  1642→                {executionState === 'running' && '● Running'}
+  1643→                {executionState === 'complete' && '✓ Complete'}
+  1644→                {executionState === 'error' && '✗ Error'}
+  1645→              </Badge>
+  1646→            )}
+  1647→
+  1648→            {/* Auto-save Status */}
+  1649→            <div className="flex items-center gap-2 text-sm">
+  1650→              {autoSaveStatus === 'saved' && <span className="text-green-500">● Saved</span>}
+  1651→              {autoSaveStatus === 'saving' && <span className="text-yellow-500 animate-pulse">● Saving...</span>}
+  1652→              {autoSaveStatus === 'unsaved' && <span className="text-orange-500">● Unsaved</span>}
+  1653→            </div>
+  1654→
+  1655→            {/* File Count */}
+  1656→            <Badge variant="secondary">
+  1657→              {workspaceFiles.length} files
+  1658→            </Badge>
+  1659→          </div>
+  1660→        </div>
+  1661→      </div>
+  1662→
+  1663→      {/* Main Layout */}
+  1664→      <div className="flex h-[calc(100vh-120px)] mt-6">
+  1665→        {/* Sidebar - File List & History */}
+  1666→        <div className="w-72 border-r bg-muted/30 flex flex-col">
+  1667→          {/* File Actions */}
+  1668→          <div className="p-4 border-b space-y-2">
+  1669→            <Dialog open={showNewFileDialog} onOpenChange={setShowNewFileDialog}>
+  1670→              <DialogTrigger asChild>
+  1671→                <Button className="w-full justify-start gap-2">
+  1672→                  📄 New File
+  1673→                </Button>
+  1674→              </DialogTrigger>
+  1675→              <DialogContent>
+  1676→                <DialogHeader>
+  1677→                  <DialogTitle>Create New File</DialogTitle>
+  1678→                </DialogHeader>
+  1679→                <div className="space-y-4 pt-4">
+  1680→                  <div>
+  1681→                    <label className="text-sm font-medium">File Name</label>
+  1682→                    <Input
+  1683→                      placeholder="my_analysis.py"
+  1684→                      value={newFileName}
+  1685→                      onChange={(e) => setNewFileName(e.target.value)}
+  1686→                      className="mt-1"
+  1687→                      onKeyDown={(e) => e.key === 'Enter' && handleCreateFile()}
+  1688→                    />
+  1689→                  </div>
+  1690→                  
+  1691→                  <div>
+  1692→                    <label className="text-sm font-medium">Language</label>
+  1693→                    <Select value={newFileLanguage} onValueChange={(v) => setNewFileLanguage(v as WorkspaceFile['language'])}>
+  1694→                      <SelectTrigger className="mt-1">
+  1695→                        <SelectValue />
+  1696→                      </SelectTrigger>
+  1697→                      <SelectContent>
+  1698→                        <SelectItem value="python">🐍 Python</SelectItem>
+  1699→                        <SelectItem value="sql">🗃️ SQL</SelectItem>
+  1700→                        <SelectItem value="r">📊 R</SelectItem>
+  1701→                        <SelectItem value="markdown">📝 Markdown</SelectItem>
+  1702→                        <SelectItem value="javascript">⚡ JavaScript</SelectItem>
+  1703→                        <SelectItem value="bash">💻 Bash</SelectItem>
+  1704→                        <SelectItem value="java">☕ Java</SelectItem>
+  1705→                        <SelectItem value="cpp">⚙️ C++</SelectItem>
+  1706→                        <SelectItem value="typescript">💎 TypeScript</SelectItem>
+  1707→                      </SelectContent>
+  1708→                    </Select>
+  1709→                  </div>
+  1710→
+  1711→                  <div className="flex gap-2 justify-end">
+  1712→                    <Button variant="outline" onClick={() => setShowNewFileDialog(false)}>
+  1713→                      Cancel
+  1714→                    </Button>
+  1715→                    <Button onClick={handleCreateFile} disabled={!newFileName.trim()}>
+  1716→                      Create
+  1717→                    </Button>
+  1718→                  </div>
+  1719→                </div>
+  1720→              </DialogContent>
+  1721→            </Dialog>
+  1722→
+  1723→            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => setShowTemplates(!showTemplates)}>
+  1724→              📋 Templates
+  1725→            </Button>
+  1726→          </div>
+  1727→
+  1728→          {/* Template Panel */}
+  1729→          {showTemplates && (
+  1730→            <div className="p-4 border-b bg-background max-h-64 overflow-auto">
+  1731→              <h4 className="font-medium mb-3 text-sm">Quick Start Templates</h4>
+  1732→              <div className="space-y-2">
+  1733→                {CODE_TEMPLATES.map((template) => (
+  1734→                  <button
+  1735→                    key={template.id}
+  1736→                    className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors"
+  1737→                    onClick={() => handleUseTemplate(template)}
+  1738→                  >
+  1739→                    <div className="flex items-center gap-2">
+  1740→                      <span>{getLanguageIcon(template.language)}</span>
+  1741→                      <span className="text-sm font-medium">{template.name}</span>
+  1742→                    </div>
+  1743→                    <p className="text-xs text-muted-foreground ml-6 mt-1 line-clamp-1">
+  1744→                      {template.description}
+  1745→                    </p>
+  1746→                  </button>
+  1747→                ))}
+  1748→              </div>
+  1749→            </div>
+  1750→          )}
+  1751→
+  1752→          {/* File List */}
+  1753→          <div className="flex-1 overflow-auto p-2 space-y-1">
+  1754→            {workspaceFiles.map((file) => (
+  1755→              <div
+  1756→                key={file.id}
+  1757→                role="button"
+  1758→                tabIndex={0}
+  1759→                className={`w-full text-left p-3 rounded-lg transition-colors group cursor-pointer ${
+  1760→                  activeFileId === file.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted'
+  1761→                }`}
+  1762→                onClick={() => setActiveFile(file.id)}
+  1763→                onKeyDown={(e) => e.key === 'Enter' && setActiveFile(file.id)}
+  1764→              >
+  1765→                <div className="flex items-center justify-between">
+  1766→                  <div className="flex items-center gap-2 min-w-0 flex-1">
+  1767→                    <span>{getLanguageIcon(file.language)}</span>
+  1768→                    <span className={`text-sm truncate ${file.isModified.value ? 'font-medium' : ''}`}>
+  1769→                      {file.name.value}
+  1770→                    </span>
+  1771→                  </div>
+  1772→                  
+  1773→                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+  1774→                    {file.isModified.value && (
+  1775→                      <span className="w-2 h-2 rounded-full bg-orange-400" />
+  1776→                    )}
+  1777→                    <button
+  1778→                      onClick={(e) => {
+  1779→                        e.stopPropagation();
+  1780→                        handleDeleteFile(file.id);
+  1781→                      }}
+  1782→                      className="p-1 hover:text-destructive"
+  1783→                      aria-label={`Delete ${file.name.value}`}
+  1784→                    >
+  1785→                      ✕
+  1786→                    </button>
+  1787→                  </div>
+  1788→                </div>
+  1789→                
+  1790→                <div className="flex items-center gap-2 mt-1 ml-6">
+  1791→                  <Badge variant="outline" className={`text-xs px-1.5 py-0 ${getLanguageColor(file.language)}`}>
+  1792→                    {file.language}
+  1793→                  </Badge>
+  1794→                  <span className="text-xs text-muted-foreground">
+  1795→                    {new Date(file.lastModified).toLocaleDateString()}
+  1796→                  </span>
+  1797→                </div>
+  1798→              </div>
+  1799→            ))}
+  1800→
+  1801→            {workspaceFiles.length === 0 && (
+  1802→              <div className="text-center py-8 text-muted-foreground">
+  1803→                <span className="text-2xl block mb-2">📂</span>
+  1804→                <p className="text-sm">No files yet</p>
+  1805→                <p className="text-xs mt-1">Create a new file or use a template</p>
+  1806→              </div>
+  1807→            )}
+  1808→          </div>
+  1809→
+  1810→          {/* Execution History Panel */}
+  1811→          {executionHistory.length > 0 && (
+  1812→            <div className="border-t p-3 bg-background">
+  1813→              <div className="flex items-center justify-between mb-2">
+  1814→                <h4 className="font-medium text-sm flex items-center gap-2">
+  1815→                  📜 Execution History
+  1816→                </h4>
+  1817→                <Badge variant="outline" className="text-xs">
+  1818→                  {executionHistory.length}
+  1819→                </Badge>
+  1820→              </div>
+  1821→              <div className="space-y-1 max-h-40 overflow-auto">
+  1822→                {executionHistory.map((record) => (
+  1823→                  <button
+  1824→                    key={record.id}
+  1825→                    className={`w-full text-left p-2 rounded-md transition-colors text-xs ${
+  1826→                      selectedHistoryId === record.id 
+  1827→                        ? 'bg-primary/10 border border-primary/30' 
+  1828→                        : 'hover:bg-muted'
+  1829→                    }`}
+  1830→                    onClick={() => handleViewHistory(record)}
+  1831→                  >
+  1832→                    <div className="flex items-center justify-between">
+  1833→                      <span className="flex items-center gap-1">
+  1834→                        <span>{getLanguageIcon(record.language as WorkspaceFile['language'])}</span>
+  1835→                        <span className="font-medium">{record.language.toUpperCase()}</span>
+  1836→                      </span>
+  1837→                      <span className={`px-1 rounded ${record.success ? 'text-green-600' : 'text-red-600'}`}>
+  1838→                        {record.success ? '✓' : '✗'}
+  1839→                      </span>
+  1840→                    </div>
+  1841→                    <div className="flex items-center justify-between mt-1 text-muted-foreground">
+  1842→                      <span>{(record.duration / 1000).toFixed(2)}s</span>
+  1843→                      <span>{record.timestamp.toLocaleTimeString()}</span>
+  1844→                    </div>
+  1845→                  </button>
+  1846→                ))}
+  1847→              </div>
+  1848→            </div>
+  1849→          )}
+  1850→        </div>
+  1851→
+  1852→        {/* Main Editor Area */}
+  1853→        <div className="flex-1 flex flex-col">
+  1854→          {activeFile ? (
+  1855→            <>
+  1856→              {/* Editor Header */}
+  1857→              <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/30">
+  1858→                <div className="flex items-center gap-3">
+  1859→                  <span>{getLanguageIcon(activeFile.language)}</span>
+  1860→                  <span className="font-medium">{activeFile.name.value}</span>
+  1861→                  {activeFile.isModified.value && (
+  1862→                    <Badge variant="secondary" className="text-xs">Modified</Badge>
+  1863→                  )}
+  1864→                </div>
+  1865→
+  1866→                <div className="flex items-center gap-2">
+  1867→                  {/* Enhanced Run Button with States */}
+  1868→                  <Button
+  1869→                    size="sm"
+  1870→                    onClick={handleExecute}
+  1871→                    disabled={runButtonConfig.disabled || (!runButtonConfig.disabled && activeFile.language === 'markdown' && executionState === 'idle')}
+  1872→                    className={runButtonConfig.className}
+  1873→                  >
+  1874→                    {runButtonConfig.text}
+  1875→                  </Button>
+  1876→                  
+  1877→                  <Button
+  1878→                    size="sm"
+  1879→                    variant="outline"
+  1880→                    onClick={() => {
+  1881→                      const content = activeFile.content.value;
+  1882→                      const blob = new Blob([content], { type: 'text/plain' });
+  1883→                      const url = URL.createObjectURL(blob);
+  1884→                      const a = document.createElement('a');
+  1885→                      a.href = url;
+  1886→                      a.download = activeFile.name.value;
+  1887→                      a.click();
+  1888→                      URL.revokeObjectURL(url);
+  1889→                      
+  1890→                      addActivity({
+  1891→                        type: 'export',
+  1892→                        message: createDynamicField(`Downloaded: ${activeFile.name.value}`),
+  1893→                        icon: '📥',
+  1894→                      });
+  1895→                    }}
+  1896→                  >
+  1897→                    ⬇️ Download
+  1898→                  </Button>
+  1899→                  
+  1900→                  {/* Toggle Terminal Button */}
+  1901→                  <Button
+  1902→                    size="sm"
+  1903→                    variant="outline"
+  1904→                    onClick={() => setShowTerminal(!showTerminal)}
+  1905→                    className="gap-1"
+  1906→                  >
+  1907→                    {showTerminal ? '▼' : '▲'} Terminal
+  1908→                  </Button>
+  1909→                </div>
+  1910→              </div>
+  1911→
+  1912→              {/* Editor + Output Split View */}
+  1913→              <div className="flex-1 flex flex-col overflow-hidden">
+  1914→                {/* Code Editor */}
+  1915→                <div className={`${showTerminal ? 'flex-1' : 'flex-1'} flex flex-col min-h-0`}>
+  1916→                  <Textarea
+  1917→                    value={activeFile.content.value}
+  1918→                    onChange={(e) => handleContentChange(e.target.value)}
+  1919→                    className="flex-1 resize-none font-mono text-sm p-4 border-0 focus-visible:ring-0 bg-background"
+  1920→                    style={{
+  1921→                      fontFamily: "'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace",
+  1922→                      fontSize: '14px',
+  1923→                      lineHeight: '1.6',
+  1924→                      tabSize: 4,
+  1925→                    }}
+  1926→                    spellCheck={false}
+  1927→                    onKeyDown={(e) => {
+  1928→                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+  1929→                        e.preventDefault();
+  1930→                        handleExecute();
+  1931→                      }
+  1932→                      // Handle Tab for indentation
+  1933→                      if (e.key === 'Tab') {
+  1934→                        e.preventDefault();
+  1935→                        const start = e.currentTarget.selectionStart;
+  1936→                        const end = e.currentTarget.selectionEnd;
+  1937→                        const value = e.currentTarget.value;
+  1938→                        e.currentTarget.value =
+  1939→                          value.substring(0, start) + '    ' + value.substring(end);
+  1940→                        e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 4;
+  1941→                        handleContentChange(e.currentTarget.value);
+  1942→                      }
+  1943→                    }}
+  1944→                  />
+  1945→                </div>
+  1946→
+  1947→                {/* Terminal Output Panel - MAIN FEATURE */}
+  1948→                {showTerminal && (
+  1949→                  <div className="border-t bg-gray-900 text-gray-100 font-mono text-sm" style={{ height: showTerminal ? '320px' : 'auto', minHeight: '120px', maxHeight: '50vh' }}>
+  1950→                    {/* Terminal Header */}
+  1951→                    <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+  1952→                      <div className="flex items-center gap-2">
+  1953→                        <div className="w-3 h-3 rounded-full bg-red-500" />
+  1954→                        <div className="w-3 h-3 rounded-full bg-yellow-500" />
+  1955→                        <div className="w-3 h-3 rounded-full bg-green-500" />
+  1956→                        <span className="ml-2 text-xs text-gray-400">
+  1957→                          Terminal — {activeFile.language.toUpperCase()}
+  1958→                          {selectedHistoryId && ' (History)'}
+  1959→                        </span>
+  1960→                      </div>
+  1961→                      <div className="flex items-center gap-3">
+  1962→                        {/* Execution Stats */}
+  1963→                        {executionStats && (
+  1964→                          <span className="text-xs text-gray-400 flex items-center gap-3">
+  1965→                            <span className="flex items-center gap-1">
+  1966→                              <span className="text-gray-500">⏱</span>
+  1967→                              {(executionStats.duration / 1000).toFixed(2)}s
+  1968→                            </span>
+  1969→                            <span className="flex items-center gap-1">
+  1970→                              <span className="text-gray-500">💾</span>
+  1971→                              {executionStats.memory}
+  1972→                            </span>
+  1973→                            <span className={`flex items-center gap-1 ${executionStats.exitCode === 0 ? 'text-green-400' : 'text-red-400'}`}>
+  1974→                              <span>{executionStats.exitCode === 0 ? '✓' : '✗'}</span>
+  1975→                              Exit: {executionStats.exitCode}
+  1976→                            </span>
+  1977→                          </span>
+  1978→                        )}
+  1979→                        
+  1980→                        {/* Terminal Controls */}
+  1981→                        <button 
+  1982→                          onClick={handleClearTerminal} 
+  1983→                          className="text-xs text-gray-400 hover:text-white transition-colors"
+  1984→                        >
+  1985→                          Clear
+  1986→                        </button>
+  1987→                        <button 
+  1988→                          onClick={() => setShowTerminal(false)} 
+  1989→                          className="text-xs text-gray-400 hover:text-white transition-colors"
+  1990→                        >
+  1991→                          Minimize
+  1992→                        </button>
+  1993→                      </div>
+  1994→                    </div>
+  1995→                    
+  1996→                    {/* Terminal Body */}
+  1997→                    <div 
+  1998→                      ref={terminalRef}
+  1999→                      className="p-4 overflow-y-auto"
+  2000→                      style={{ height: 'calc(100% - 40px)' }}
+
+[showing lines 1-2000 of 2172; use offset=2001 with limit to continue reading]
