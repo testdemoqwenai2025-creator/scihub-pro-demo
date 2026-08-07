@@ -12,6 +12,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 
+// Force static generation for GitHub Pages compatibility
+export const dynamic = 'force-static';
+
 // ============================================================================
 // TYPES
 // ============================================================================

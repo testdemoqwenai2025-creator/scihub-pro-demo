@@ -1,21 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  output: "export",
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  trailingSlash: true,
+  basePath: process.env.NODE_ENV === 'production' ? '/scihub-pro-demo' : '',
   
-  // Enable server-side API routes
-  serverExternalPackages: [],
-  
-  // Image optimization enabled for dynamic mode
+  // Image optimization disabled for static export
   images: {
-    remotePatterns: [
-      { protocol: 'https', hostname: '**' },
-    ],
+    unoptimized: true,
   },
 };
 

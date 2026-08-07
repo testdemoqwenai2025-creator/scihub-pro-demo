@@ -6,6 +6,9 @@
 
 import { NextResponse } from 'next/server';
 
+// Force static generation for GitHub Pages compatibility
+export const dynamic = 'force-static';
+
 const FREE_APIS = [
   { id: 'crossref', name: 'CrossRef', url: 'https://api.crossref.org/works?rows=1' },
   { id: 'openalex', name: 'OpenAlex', url: 'https://api.openalex.org/works?per_page=1' },
