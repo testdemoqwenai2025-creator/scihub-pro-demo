@@ -15,6 +15,24 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
+
+  // Cache busting for GitHub Pages - ensure fresh deployments
+  generateEtags: false,
+  
+  // Headers to prevent caching issues during development
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;
