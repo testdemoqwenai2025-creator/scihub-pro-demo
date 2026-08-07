@@ -1,0 +1,780 @@
+     1→/**
+     2→ * SciHub Pro - Free-Tier Database Simulation Layer
+     3→ * 
+     4→ * Provides simulated database functionality for:
+     5→ * - DuckDB: In-process analytical SQL queries (free, embedded)
+     6→ * - PostgreSQL: Structured data storage (free tier via Supabase/Neon)
+     7→ * - SQLite: Local persistent storage (fully free)
+     8→ * 
+     9→ * This layer activates when:
+    10→ * 1. Data volume exceeds localStorage limits (>5MB)
+    11→ * 2. User explicitly requests database push
+    12→ * 3. Complex queries require SQL execution
+    13→ * 
+    14→ * Free Tier Limits (Real):
+    15→ * - DuckDB: Unlimited, in-process, no server needed
+    16→ * - Supabase (PostgreSQL): 500MB storage, 50K monthly active users
+    17→ * - Neon (PostgreSQL): 0.5GB storage, 1 compute hour/day
+    18→ * - PlanetScale (MySQL): 5GB storage, 1B row reads/month
+    19→ */
+    20→
+    21→// ============ TYPES ============
+    22→
+    23→export interface DatabaseProvider {
+    24→  id: string;
+    25→  name: string;
+    26→  type: 'analytical' | 'relational' | 'keyvalue' | 'document';
+    27→  freeTierLimits: FreeTierLimit;
+    28→  connectionConfig: ConnectionConfig;
+    29→  status: 'available' | 'configuring' | 'connected' | 'error';
+    30→}
+    31→
+    32→export interface FreeTierLimit {
+    33→  storageMB: number;
+    34→  maxRows: number;
+    35→  concurrentConnections: number;
+    36→  apiCallsPerMonth: number;
+    37→  features: string[];
+    38→  limitations: string[];
+    39→}
+    40→
+    41→export interface ConnectionConfig {
+    42→  endpoint?: string;
+    43→  apiKey?: string;
+    44→  databaseName: string;
+    45→  connectionString: string;
+    46→  poolSize: number;
+    47→}
+    48→
+    49→export interface QueryResult {
+    50→  columns: string[];
+    51→  rows: Record<string, any>[];
+    52→  executionTimeMs: number;
+    53→  rowsAffected: number;
+    54→  queryPlan?: QueryPlanStep[];
+    55→  fromCache: boolean;
+    56→  provider: string;
+    57→}
+    58→
+    59→export interface QueryPlanStep {
+    60→  step: number;
+    61→  operation: string;
+    62→  table?: string;
+    63→  estimatedRows?: number;
+    64→  actualRows?: number;
+    65→  timeMs: number;
+    66→}
+    67→
+    68→export interface TableSchema {
+    69→  name: string;
+    70→  columns: ColumnDef[];
+    71→  rowCount: number;
+    72→  sizeBytes: number;
+    73→  indexes: IndexDef[];
+    74→}
+    75→
+    76→export interface ColumnDef {
+    77→  name: string;
+    78→  type: 'integer' | 'float' | 'text' | 'boolean' | 'date' | 'json' | 'array';
+    79→  nullable: boolean;
+    80→  primaryKey: boolean;
+    81→  defaultValue?: any;
+    82→}
+    83→
+    84→export interface IndexDef {
+    85→  name: string;
+    86→  columns: string[];
+    87→  type: 'btree' | 'hash' | 'gist' | 'gin';
+    88→  unique: boolean;
+    89→}
+    90→
+    91→export interface BulkImportResult {
+    92→  success: boolean;
+    93→  rowsImported: number;
+    94→  errors: ImportError[];
+    95→  durationMs: number;
+    96→  tableName: string;
+    97→}
+    98→
+    99→export interface ImportError {
+   100→  row: number;
+   101→  column: string;
+   102→  value: any;
+   103→  error: string;
+   104→}
+   105→
+   106→// ============ DATABASE PROVIDER DEFINITIONS ============
+   107→
+   108→export const DATABASE_PROVIDERS: Record<string, DatabaseProvider> = {
+   109→  duckdb: {
+   110→    id: 'duckdb',
+   111→    name: 'DuckDB Embedded',
+   112→    type: 'analytical',
+   113→    status: 'available',
+   114→    freeTierLimits: {
+   115→      storageMB: Infinity, // Limited by disk space
+   116→      maxRows: Infinity,
+   117→      concurrentConnections: 1,
+   118→      apiCallsPerMonth: Infinity,
+   119→      features: [
+   120→        'Columnar storage',
+   121→        'Parallel query execution',
+   122→        'SQL compliant',
+   123→        'Direct Parquet/CSV reading',
+   124→        'Window functions',
+   125→        'JSON support',
+   126→      ],
+   127→      limitations: [
+   128→        'Single-writer concurrency',
+   129→        'No server mode (embedded only)',
+   130→        'In-memory or local file only',
+   131→      ],
+   132→    },
+   133→    connectionConfig: {
+   134→      databaseName: 'scihub_analytics.db',
+   135→      connectionString: ':memory:',
+   136→      poolSize: 1,
+   137→    },
+   138→  },
+   139→  postgresql_supabase: {
+   140→    id: 'postgresql_supabase',
+   141→    name: 'Supabase (PostgreSQL)',
+   142→    type: 'relational',
+   143→    status: 'available',
+   144→    freeTierLimits: {
+   145→      storageMB: 500,
+   146→      maxRows: 10000000,
+   147→      concurrentConnections: 60,
+   148→      apiCallsPerMonth: 50000000,
+   149→      features: [
+   150→        'Full PostgreSQL feature set',
+   151→        'Real-time subscriptions',
+   152→        'Row Level Security',
+   153→        'Database backups',
+   154→        'REST API auto-generated',
+   155→        'Auth integration',
+   156→        'Edge Functions',
+   157→      ],
+   158→      limitations: [
+   159→        '500MB database size',
+   160→        'Rate limiting on API',
+   161→        'Shared infrastructure',
+   162→        'No dedicated IP',
+   163→      ],
+   164→    },
+   165→    connectionConfig: {
+   166→      endpoint: 'https://your-project.supabase.co',
+   167→      databaseName: 'postgres',
+   168→      connectionString: 'postgresql://postgres:[YOUR-PASSWORD]@db.your-project.supabase.co:5432/postgres',
+   169→      poolSize: 10,
+   170→    },
+   171→  },
+   172→  postgresql_neon: {
+   173→    id: 'postgresql_neon',
+   174→    name: 'Neon Serverless Postgres',
+   175→    type: 'relational',
+   176→    status: 'available',
+   177→    freeTierLimits: {
+   178→      storageMB: 512,
+   179→      maxRows: 5000000,
+   180→      concurrentConnections: 50,
+   181→      apiCallsPerMonth: 10000000,
+   182→      features: [
+   183→        'Serverless scaling',
+   184→        'Branching (like Git)',
+   185→        'Auto-suspend/resume',
+   186→        'PgBouncer connection pooling',
+   187→        'Full PostgreSQL compatibility',
+   188→      ],
+   189→      limitations: [
+   190→        '0.5GB storage',
+   191→        '1 compute hour/day',
+   192→        'Cold start on resume',
+   193→        'No custom extensions',
+   194→      ],
+   195→    },
+   196→    connectionConfig: {
+   197→      endpoint: 'ep-xxx.us-east-2.aws.neon.tech',
+   198→      databaseName: 'neondb',
+   199→      connectionString: 'postgresql://[user]:[password]@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require',
+   200→      poolSize: 10,
+   201→    },
+   202→  },
+   203→  sqlite: {
+   204→    id: 'sqlite',
+   205→    name: 'SQLite (Local)',
+   206→    type: 'relational',
+   207→    status: 'available',
+   208→    freeTierLimits: {
+   209→      storageMB: Infinity,
+   210→      maxRows: 18446744073709551615, // Theoretical limit
+   211→      concurrentConnections: 1,
+   212→      apiCallsPerMonth: Infinity,
+   213→      features: [
+   214→        'Zero configuration',
+   215→        'Cross-platform',
+   216→        'ACID compliant',
+   217→        'Full-text search',
+   218→        'JSON extension',
+   219→        'WASM support (browser)',
+   220→      ],
+   221→      limitations: [
+   222→        'Single writer',
+   223→        'No built-in networking',
+   224→        'Limited ALTER TABLE support',
+   225→      ],
+   226→    },
+   227→    connectionConfig: {
+   228→      databaseName: 'scihub_local.db',
+   229→      connectionString: 'file:./scihub_local.db?mode=memory&cache=shared',
+   230→      poolSize: 1,
+   231→    },
+   232→  },
+   233→};
+   234→
+   235→// ============ MOCK TABLE SCHEMAS ============
+   236→
+   237→const MOCK_SCHEMAS: TableSchema[] = [
+   238→  {
+   239→    name: 'publications',
+   240→    columns: [
+   241→      { name: 'id', type: 'integer', nullable: false, primaryKey: true },
+   242→      { name: 'doi', type: 'text', nullable: false, primaryKey: false },
+   243→      { name: 'title', type: 'text', nullable: false, primaryKey: false },
+   244→      { name: 'authors', type: 'json', nullable: true, primaryKey: false },
+   245→      { name: 'abstract', type: 'text', nullable: true, primaryKey: false },
+   246→      { name: 'year', type: 'integer', nullable: true, primaryKey: false },
+   247→      { name: 'journal', type: 'text', nullable: true, primaryKey: false },
+   248→      { name: 'citations', type: 'integer', nullable: true, primaryKey: false },
+   249→      { name: 'field', type: 'text', nullable: true, primaryKey: false },
+   250→      { name: 'source', type: 'text', nullable: true, primaryKey: false },
+   251→      { name: 'created_at', type: 'date', nullable: true, primaryKey: false },
+   252→    ],
+   253→    rowCount: 2450000,
+   254→    sizeBytes: 892000000,
+   255→    indexes: [
+   256→      { name: 'idx_publications_doi', columns: ['doi'], type: 'btree', unique: true },
+   257→      { name: 'idx_publications_year', columns: ['year'], type: 'btree', unique: false },
+   258→      { name: 'idx_publications_citations', columns: ['citations'], type: 'btree', unique: false },
+   259→      { name: 'idx_publications_field', columns: ['field'], type: 'hash', unique: false },
+   260→    ],
+   261→  },
+   262→  {
+   263→    name: 'genomic_sequences',
+   264→    columns: [
+   265→      { name: 'id', type: 'integer', nullable: false, primaryKey: true },
+   266→      { name: 'accession', type: 'text', nullable: false, primaryKey: false },
+   267→      { name: 'organism', type: 'text', nullable: false, primaryKey: false },
+   268→      { name: 'gene_name', type: 'text', nullable: true, primaryKey: false },
+   269→      { name: 'sequence', type: 'text', nullable: true, primaryKey: false },
+   270→      { name: 'sequence_length', type: 'integer', nullable: true, primaryKey: false },
+   271→      { name: 'gc_content', type: 'float', nullable: true, primaryKey: false },
+   272→      { name: 'chromosome', type: 'text', nullable: true, primaryKey: false },
+   273→      { name: 'start_position', type: 'integer', nullable: true, primaryKey: false },
+   274→      { name: 'end_position', type: 'integer', nullable: true, primaryKey: false },
+   275→      { name: 'type', type: 'text', nullable: true, primaryKey: false },
+   276→    ],
+   277→    rowCount: 350000000,
+   278→    sizeBytes: 12000000000,
+   279→    indexes: [
+   280→      { name: 'idx_genomic_accession', columns: ['accession'], type: 'btree', unique: true },
+   281→      { name: 'idx_genomic_organism', columns: ['organism'], type: 'btree', unique: false },
+   282→      { name: 'idx_genomic_gene', columns: ['gene_name'], type: 'btree', unique: false },
+   283→    ],
+   284→  },
+   285→  {
+   286→    name: 'molecular_compounds',
+   287→    columns: [
+   288→      { name: 'id', type: 'integer', nullable: false, primaryKey: true },
+   289→      { name: 'name', type: 'text', nullable: false, primaryKey: false },
+   290→      { name: 'smiles', type: 'text', nullable: false, primaryKey: false },
+   291→      { name: 'molecular_weight', type: 'float', nullable: true, primaryKey: false },
+   292→      { name: 'formula', type: 'text', nullable: true, primaryKey: false },
+   293→      { name: 'iupac_name', type: 'text', nullable: true, primaryKey: false },
+   294→      { name: 'inchi', type: 'text', nullable: true, primaryKey: false },
+   295→      { name: 'inchi_key', type: 'text', nullable: true, primaryKey: false },
+   296→      { name: 'num_rotatable_bonds', type: 'integer', nullable: true, primaryKey: false },
+   297→      { name: 'logp', type: 'float', nullable: true, primaryKey: false },
+   298→      { name: 'created_at', type: 'date', nullable: true, primaryKey: false },
+   299→    ],
+   300→    rowCount: 111000000,
+   301→    sizeBytes: 45000000000,
+   302→    indexes: [
+   303→      { name: 'idx_compounds_smiles', columns: ['smiles'], type: 'hash', unique: true },
+   304→      { name: 'idx_compounds_inchikey', columns: ['inchi_key'], type: 'btree', unique: true },
+   305→      { name: 'idx_compounds_mw', columns: ['molecular_weight'], type: 'btree', unique: false },
+   306→    ],
+   307→  },
+   308→  {
+   309→    name: 'bioactivity_data',
+   310→    columns: [
+   311→      { name: 'id', type: 'integer', nullable: false, primaryKey: true },
+   312→      { name: 'compound_id', type: 'integer', nullable: false, primaryKey: false },
+   313→      { name: 'target_protein', type: 'text', nullable: false, primaryKey: false },
+   314→      { name: 'activity_type', type: 'text', nullable: true, primaryKey: false },
+   315→      { name: 'ic50_nm', type: 'float', nullable: true, primaryKey: false },
+   316→      { name: 'ki_nm', type: 'float', nullable: true, primaryKey: false },
+   317→      { name: 'ec50_nm', type: 'float', nullable: true, primaryKey: false },
+   318→      { name: 'assay_organism', type: 'text', nullable: true, primaryKey: false },
+   319→      { name: 'assay_type', type: 'text', nullable: true, primaryKey: false },
+   320→      { name: 'publication_doi', type: 'text', nullable: true, primaryKey: false },
+   321→    ],
+   322→    rowCount: 2400000,
+   323→    sizeBytes: 890000000,
+   324→    indexes: [
+   325→      { name: 'idx_bioact_compound', columns: ['compound_id'], type: 'btree', unique: false },
+   326→      { name: 'idx_bioact_target', columns: ['target_protein'], type: 'btree', unique: false },
+   327→      { name: 'idx_bioact_ic50', columns: ['ic50_nm'], type: 'btree', unique: false },
+   328→    ],
+   329→  },
+   330→  {
+   331→    name: 'users',
+   332→    columns: [
+   333→      { name: 'id', type: 'integer', nullable: false, primaryKey: true },
+   334→      { name: 'email', type: 'text', nullable: false, primaryKey: false },
+   335→      { name: 'display_name', type: 'text', nullable: true, primaryKey: false },
+   336→      { name: 'institution', type: 'text', nullable: true, primaryKey: false },
+   337→      { name: 'orcid', type: 'text', nullable: true, primaryKey: false },
+   338→      { name: 'role', type: 'text', nullable: true, primaryKey: false },
+   339→      { name: 'is_active', type: 'boolean', nullable: true, primaryKey: false, defaultValue: true },
+   340→      { name: 'last_login', type: 'date', nullable: true, primaryKey: false },
+   341→      { name: 'created_at', type: 'date', nullable: true, primaryKey: false },
+   342→    ],
+   343→    rowCount: 15420,
+   344→    sizeBytes: 4500000,
+   345→    indexes: [
+   346→      { name: 'idx_users_email', columns: ['email'], type: 'btree', unique: true },
+   347→      { name: 'idx_users_orcid', columns: ['orcid'], type: 'btree', unique: true },
+   348→    ],
+   349→  },
+   350→];
+   351→
+   352→// ============ QUERY SIMULATION ENGINE ============
+   353→
+   354→/**
+   355→ * Simulates SQL query execution with realistic timing and results
+   356→ */
+   357→export async function executeSimulatedQuery(
+   358→  sql: string,
+   359→  provider: string = 'duckdb'
+   360→): Promise<QueryResult> {
+   361→  const startTime = Date.now();
+   362→
+   363→  // Parse the query to determine what to return
+   364→  const sqlUpper = sql.toUpperCase().trim();
+   365→  
+   366→  // Determine query complexity and simulate appropriate delay
+   367→  let baseDelay = 50; // Base delay in ms
+   368→  
+   369→  if (sqlUpper.includes('JOIN')) baseDelay += 100;
+   370→  if (sqlUpper.includes('GROUP BY')) baseDelay += 80;
+   371→  if (sqlUpper.includes('ORDER BY')) baseDelay += 30;
+   372→  if (sqlUpper.includes('WHERE')) baseDelay += 50;
+   373→  if (sqlUpper.includes('COUNT(*)') || sqlUpper.includes('SUM(') || sqlUpper.includes('AVG(')) baseDelay += 40;
+   374→  if (sqlUpper.includes('WINDOW') || sqlUpper.includes('OVER(')) baseDelay += 150;
+   375→
+   376→  // Add randomness
+   377→  baseDelay += Math.random() * baseDelay * 0.5;
+   378→
+   379→  // Simulate network delay for remote providers
+   380→  if (provider !== 'duckdb' && provider !== 'sqlite') {
+   381→    baseDelay += 20 + Math.random() * 80;
+   382→  }
+   383→
+   384→  await new Promise((resolve) => setTimeout(resolve, baseDelay));
+   385→
+   386→  const executionTime = Date.now() - startTime;
+   387→
+   388→  // Generate mock results based on query pattern
+   389→  return generateMockResults(sql, executionTime, provider);
+   390→}
+   391→
+   392→function generateMockResults(sql: string, executionTime: number, provider: string): QueryResult {
+   393→  const sqlUpper = sql.toUpperCase();
+   394→
+   395→  // Detect target table
+   396→  let tableName = 'publications';
+   397→  if (sqlUpper.includes('GENOMIC') || sqlUpper.includes('SEQUENCE')) tableName = 'genomic_sequences';
+   398→  else if (sqlUpper.includes('COMPOUND') || sqlUpper.includes('MOLECULAR')) tableName = 'molecular_compounds';
+   399→  else if (sqlUpper.includes('BIOACTIVITY') || sqlUpper.includes('IC50')) tableName = 'bioactivity_data';
+   400→
+   401→  // Get schema for the table
+   402→  const schema = MOCK_SCHEMAS.find((s) => s.name === tableName) || MOCK_SCHEMAS[0];
+   403→
+   404→  // Determine which columns are selected
+   405→  const selectedColumns = detectSelectedColumns(sql, schema);
+   406→  
+   407→  // Generate rows based on LIMIT clause or default
+   408→  const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
+   409→  const limit = limitMatch ? parseInt(limitMatch[1]) : 20;
+   410→
+   411→  // Generate mock rows
+   412→  const rows = generateMockRows(selectedColumns, Math.min(limit, 100), tableName);
+   413→
+   414→  // Generate query plan
+   415→  const queryPlan = generateQueryPlan(sql, schema);
+   416→
+   417→  return {
+   418→    columns: selectedColumns.map((c) => c.name),
+   419→    rows,
+   420→    executionTimeMs: executionTime,
+   421→    rowsAffected: rows.length,
+   422→    queryPlan,
+   423→    fromCache: Math.random() > 0.7, // 30% cache hit rate simulation
+   424→    provider,
+   425→  };
+   426→}
+   427→
+   428→function detectSelectedColumns(sql: string, schema: TableSchema): ColumnDef[] {
+   429→  // Check for SELECT *
+   430→  if (/\*\s*FROM/i.test(sql)) {
+   431→    return schema.columns.filter(c => !c.name.toLowerCase().includes('sequence')); // Exclude large text fields
+   432→  }
+   433→
+   434→  // Try to extract specific columns
+   435→  const selectMatch = sql.match(/SELECT\s+(.*?)\s+FROM/i);
+   436→  if (selectMatch) {
+   437→    const columns = selectMatch[1].split(',').map((c) => c.trim().split(/\s+|\.|\(/)[0]);
+   438→    
+   439→    return columns
+   440→      .map((colName) => schema.columns.find((c) => c.name === colName))
+   441→      .filter(Boolean) as ColumnDef[];
+   442→  }
+   443→
+   444→  // Default: return first few columns
+   445→  return schema.columns.slice(0, 6);
+   446→}
+   447→
+   448→function generateMockRows(columns: ColumnDef[], count: number, tableName: string): Record<string, any>[] {
+   449→  const rows: Record<string, any>[] = [];
+   450→
+   451→  for (let i = 0; i < count; i++) {
+   452→    const row: Record<string, any> = {};
+   453→
+   454→    columns.forEach((col) => {
+   455→      switch (col.type) {
+   456→        case 'integer':
+   457→          row[col.name] = Math.floor(Math.random() * 100000);
+   458→          break;
+   459→        case 'float':
+   460→          row[col.name] = parseFloat((Math.random() * 1000).toFixed(3));
+   461→          break;
+   462→        case 'text':
+   463→          row[col.name] = generateMockTextValue(col.name, tableName, i);
+   464→          break;
+   465→        case 'boolean':
+   466→          row[col.name] = Math.random() > 0.5;
+   467→          break;
+   468→        case 'date':
+   469→          row[col.name] = new Date(Date.now() - Math.random() * 31536000000).toISOString().split('T')[0];
+   470→          break;
+   471→        case 'json':
+   472→          row[col.name] = JSON.stringify(generateMockJson(col.name));
+   473→          break;
+   474→        default:
+   475→          row[col.name] = `value_${i}`;
+   476→      }
+   477→    });
+   478→
+   479→    rows.push(row);
+   480→  }
+   481→
+   482→  return rows;
+   483→}
+   484→
+   485→function generateMockTextValue(columnName: string, tableName: string, index: number): string {
+   486→  const titles = [
+   487→    'Advances in Machine Learning for Drug Discovery',
+   488→    'Quantum Computing Applications in Molecular Simulation',
+   489→    'CRISPR-Cas9 Gene Editing: Recent Developments',
+   490→    'Deep Learning for Protein Structure Prediction',
+   491→    'Climate Change Impact on Biodiversity Patterns',
+   492→    'Novel Materials for Sustainable Energy Storage',
+   493→    'Single-Cell RNA Sequencing Analysis Methods',
+   494→    'Graph Neural Networks for Chemical Property Prediction',
+   495→    'Federated Learning in Healthcare Data Analysis',
+   496→    'Exoplanet Detection Using Deep Learning Methods',
+   497→  ];
+   498→
+   499→  const authors = [
+   500→    'Smith J, Johnson A, Williams M',
+   501→    'Brown K, Davis R, Miller S',
+   502→    'Wilson T, Moore C, Taylor L',
+   503→    'Anderson P, Thomas J, Jackson E',
+   504→    'White R, Harris D, Martin S',
+   505→  ];
+   506→
+   507→  const journals = [
+   508→    'Nature', 'Science', 'Cell', 'PNAS', 'Nature Methods',
+   509→    'Bioinformatics', 'J Chem Inf Model', 'Phys Rev Lett',
+   510→  ];
+   511→
+   512→  switch (columnName.toLowerCase()) {
+   513→    case 'title':
+   514→      return titles[index % titles.length];
+   515→    case 'authors':
+   516→      return authors[index % authors.length];
+   517→    case 'journal':
+   518→      return journals[index % journals.length];
+   519→    case 'doi':
+   520→      return `10.5555/${20240000 + index}`;
+   521→    case 'accession':
+   522→      return `NM_${String(1301700 + index).padStart(4, '0')}.${index % 10}`;
+   523→    case 'organism':
+   524→      return index % 2 === 0 ? 'Homo sapiens' : 'Mus musculus';
+   525→    case 'gene_name':
+   526→      return ['BRCA1', 'TP53', 'EGFR', 'MYC', 'APOE'][index % 5];
+   527→    case 'name':
+   528→      return ['Aspirin', 'Caffeine', 'Ibuprofen', 'Acetaminophen', 'Metformin'][index % 5];
+   529→    case 'smiles':
+   530→      return ['CC(=O)Oc1ccccc1C(=O)O', 'Cn1cnc2c1c(=O)n(c(=O)n2C)C'][index % 2];
+   531→    case 'target_protein':
+   532→      return ['EGFR Kinase', 'COX-2', 'ACE2', 'BRPF1', 'HDAC1'][index % 5];
+   533→    case 'field':
+   534→      return ['Bioinformatics', 'Genomics', 'Chemistry', 'Physics', 'CS'][index % 5];
+   535→    case 'email':
+   536→      return `researcher${index + 1}@institution.edu`;
+   537→    case 'display_name':
+   538→      return [`Dr. Researcher ${String.fromCharCode(65 + index)}`][0];
+   539→    case 'institution':
+   540→      return ['MIT', 'Stanford', 'Harvard', 'Caltech', 'Berkeley'][index % 5];
+   541→    default:
+   542→      return `${columnName}_${index}`;
+   543→  }
+   544→}
+   545→
+   546→function generateMockJson(columnName: string): any {
+   547→  if (columnName.toLowerCase().includes('author')) {
+   548→    return [{ given: 'John', family: 'Smith' }, { given: 'Jane', family: 'Doe' }];
+   549→  }
+   550→  return {};
+   551→}
+   552→
+   553→function generateQueryPlan(sql: string, schema: TableSchema): QueryPlanStep[] {
+   554→  const plan: QueryPlanStep[] = [];
+   555→  const sqlUpper = sql.toUpperCase();
+   556→  let stepNum = 1;
+   557→  let cumulativeTime = 0;
+   558→
+   559→  // Sequential Scan
+   560→  const scanTime = 5 + Math.random() * 15;
+   561→  plan.push({
+   562→    step: stepNum++,
+   563→    operation: 'Sequential Scan',
+   564→    table: schema.name,
+   565→    estimatedRows: schema.rowCount,
+   566→    actualRows: Math.floor(schema.rowCount * (0.01 + Math.random() * 0.1)),
+   567→    timeMs: scanTime,
+   568→  });
+   569→  cumulativeTime += scanTime;
+   570→
+   571→  // Filter (WHERE clause)
+   572→  if (sqlUpper.includes('WHERE')) {
+   573→    const filterTime = 2 + Math.random() * 8;
+   574→    plan.push({
+   575→      step: stepNum++,
+   576→      operation: 'Filter',
+   577→      estimatedRows: Math.floor(schema.rowCount * 0.05),
+   578→      actualRows: Math.floor(schema.rowCount * 0.02),
+   579→      timeMs: filterTime,
+   580→    });
+   581→    cumulativeTime += filterTime;
+   582→  }
+   583→
+   584→  // Aggregate (GROUP BY)
+   585→  if (sqlUpper.includes('GROUP BY')) {
+   586→    const aggTime = 3 + Math.random() * 10;
+   587→    plan.push({
+   588→      step: stepNum++,
+   589→      operation: 'Aggregate',
+   590→      estimatedRows: Math.floor(schema.rowCount * 0.001),
+   591→      actualRows: Math.floor(schema.rowCount * 0.0005),
+   592→      timeMs: aggTime,
+   593→    });
+   594→    cumulativeTime += aggTime;
+   595→  }
+   596→
+   597→  // Sort (ORDER BY)
+   598→  if (sqlUpper.includes('ORDER BY')) {
+   599→    const sortTime = 1 + Math.random() * 5;
+   600→    plan.push({
+   601→      step: stepNum++,
+   602→      operation: 'Sort',
+   603→      estimatedRows: 100,
+   604→      actualRows: 50,
+   605→      timeMs: sortTime,
+   606→    });
+   607→    cumulativeTime += sortTime;
+   608→  }
+   609→
+   610→  // Limit
+   611→  if (sqlUpper.includes('LIMIT')) {
+   612→    plan.push({
+   613→      step: stepNum++,
+   614→      operation: 'Limit',
+   615→      estimatedRows: 20,
+   616→      actualRows: 20,
+   617→      timeMs: 0.5,
+   618→    });
+   619→  }
+   620→
+   621→  return plan;
+   622→}
+   623→
+   624→// ============ BULK OPERATIONS ============
+   625→
+   626→/**
+   627→ * Simulates bulk data import into a table
+   628→ */
+   629→export async function simulateBulkImport(
+   630→  data: Record<string, any>[],
+   631→  tableName: string,
+   632→  provider: string = 'duckdb'
+   633→): Promise<BulkImportResult> {
+   634→  const startTime = Date.now();
+   635→
+   636→  // Validate data against schema
+   637→  const schema = MOCK_SCHEMAS.find((s) => s.name === tableName);
+   638→  const errors: ImportError[] = [];
+   639→
+   640→  if (schema) {
+   641→    data.forEach((row, rowIndex) => {
+   642→      schema.columns.forEach((col) => {
+   643→        if (!col.nullable && (row[col.name] === undefined || row[col.name] === null)) {
+   644→          errors.push({
+   645→            row: rowIndex,
+   646→            column: col.name,
+   647→            value: null,
+   648→            error: `NOT NULL constraint violated`,
+   649→          });
+   650→        }
+   651→      });
+   652→    });
+   653→  }
+   654→
+   655→  // Simulate processing delay based on data size
+   656→  const processingTime = Math.min(data.length * 0.5 + Math.random() * 500, 3000);
+   657→  await new Promise((resolve) => setTimeout(resolve, processingTime));
+   658→
+   659→  return {
+   660→    success: errors.length === 0,
+   661→    rowsImported: data.length - errors.length,
+   662→    errors,
+   663→    durationMs: Date.now() - startTime,
+   664→    tableName,
+   665→  };
+   666→}
+   667→
+   668→// ============ DATABASE HEALTH CHECK ============
+   669→
+   670→export interface DatabaseHealthStatus {
+   671→  provider: string;
+   672→  isHealthy: boolean;
+   673→  latencyMs: number;
+   674→  connectionsActive: number;
+   675→  storageUsedMB: number;
+   676→  storageTotalMB: number;
+   677→  lastBackup?: Date;
+   678→  tables: { name: string; rows: number }[];
+   679→}
+   680→
+   681→/**
+   682→ * Checks health of all configured database providers
+   683→ */
+   684→export async function checkDatabaseHealth(): Promise<DatabaseHealthStatus[]> {
+   685→  const results: DatabaseHealthStatus[] = [];
+   686→
+   687→  for (const [providerId, provider] of Object.entries(DATABASE_PROVIDERS)) {
+   688→    const startTime = Date.now();
+   689→
+   690→    try {
+   691→      // Simulate health check with variable latency
+   692→      const latency = providerId === 'duckdb' ? 2 + Math.random() * 5 :
+   693→                      providerId === 'sqlite' ? 1 + Math.random() * 3 :
+   694→                      20 + Math.random() * 100;
+   695→
+   696→      await new Promise((resolve) => setTimeout(resolve, latency));
+   697→
+   698→      results.push({
+   699→        provider: provider.name,
+   700→        isHealthy: Math.random() > 0.05, // 95% uptime simulation
+   701→        latencyMs: Date.now() - startTime,
+   702→        connectionsActive: Math.floor(Math.random() * provider.freeTierLimits.concurrentConnections * 0.3),
+   703→        storageUsedMB: Math.floor(provider.freeTierLimits.storageMB * (0.3 + Math.random() * 0.5)),
+   704→        storageTotalMB: provider.freeTierLimits.storageMB,
+   705→        lastBackup: new Date(Date.now() - Math.random() * 86400000),
+   706→        tables: MOCK_SCHEMAS.map(s => ({ name: s.name, rows: s.rowCount })),
+   707→      });
+   708→    } catch {
+   709→      results.push({
+   710→        provider: provider.name,
+   711→        isHealthy: false,
+   712→        latencyMs: Date.now() - startTime,
+   713→        connectionsActive: 0,
+   714→        storageUsedMB: 0,
+   715→        storageTotalMB: provider.freeTierLimits.storageMB,
+   716→        tables: [],
+   717→      });
+   718→    }
+   719→  }
+   720→
+   721→  return results;
+   722→}
+   723→
+   724→// ============ EXPORT UTILITIES ============
+   725→
+   726→/**
+   727→ * Converts query result to CSV format
+   728→ */
+   729→export function resultToCSV(result: QueryResult): string {
+   730→  const header = result.columns.join(',');
+   731→  const rows = result.rows.map(row =>
+   732→    result.columns.map(col => {
+   733→      const value = row[col];
+   734→      if (typeof value === 'string' && value.includes(',')) {
+   735→        return `"${value.replace(/"/g, '""')}"`;
+   736→      }
+   737→      return String(value ?? '');
+   738→    }).join(',')
+   739→  );
+   740→
+   741→  return [header, ...rows].join('\n');
+   742→}
+   743→
+   744→/**
+   745→ * Converts query result to JSON format
+   746→ */
+   747→export function resultToJSON(result: QueryResult): string {
+   748→  return JSON.stringify(result.rows, null, 2);
+   749→}
+   750→
+   751→// ============ EXPORT MOCK SCHEMAS FOR UI ============
+   752→
+   753→export { MOCK_SCHEMAS };
+   754→
+   755→// ============ FREE TIER INFO ============
+   756→
+   757→export function getFreeTierInfo(providerId: string): DatabaseProvider | undefined {
+   758→  return DATABASE_PROVIDERS[providerId];
+   759→}
+   760→
+   761→export function getAllProviders(): DatabaseProvider[] {
+   762→  return Object.values(DATABASE_PROVIDERS);
+   763→}
+   764→
+   765→export function getRecommendedProvider(dataSizeMB: number, useCase: 'analytics' | 'transactional'): DatabaseProvider {
+   766→  if (useCase === 'analytics') {
+   767→    // For analytics, always recommend DuckDB first
+   768→    return DATABASE_PROVIDERS.duckdb;
+   769→  }
+   770→
+   771→  // For transactional, recommend based on size
+   772→  if (dataSizeMB < 512) {
+   773→    return DATABASE_PROVIDERS.postgresql_neon;
+   774→  } else if (dataSizeMB < 1024) {
+   775→    return DATABASE_PROVIDERS.postgresql_supabase;
+   776→  }
+   777→
+   778→  return DATABASE_PROVIDERS.sqlite;
+   779→}
+   780→

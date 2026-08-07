@@ -1,0 +1,866 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * SciHub Pro - Connectors Page (Enhanced)
+     5→ * 
+     6→ * Shows all scientific data sources with:
+     7→ * - FREE tier: 12 APIs, no key required
+     8→ * - PREMIUM tier: Scopus, Web of Science, IEEE (subscription required)
+     9→ * - Subscription form when clicking premium features
+    10→ */
+    11→
+    12→import { useState, useEffect, useCallback } from 'react';
+    13→import { useTranslation } from '@/i18n/useTranslation';
+    14→import { useDynamicStore } from '@/store/useDynamicStore';
+    15→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    16→import { Badge } from '@/components/ui/badge';
+    17→import { Button } from '@/components/ui/button';
+    18→import { Input } from '@/components/ui/input';
+    19→import { Progress } from '@/components/ui/progress';
+    20→import { Switch } from '@/components/ui/switch';
+    21→import {
+    22→  Dialog,
+    23→  DialogContent,
+    24→  DialogDescription,
+    25→  DialogFooter,
+    26→  DialogHeader,
+    27→  DialogTitle,
+    28→  DialogTrigger,
+    29→} from '@/components/ui/dialog';
+    30→import {
+    31→  Select,
+    32→  SelectContent,
+    33→  SelectItem,
+    34→  SelectTrigger,
+    35→  SelectValue,
+    36→} from '@/components/ui/select';
+    37→import {
+    38→  Tabs,
+    39→  TabsContent,
+    40→  TabsList,
+    41→  TabsTrigger,
+    42→} from '@/components/ui/tabs';
+    43→
+    44→// ============ TYPES ============
+    45→
+    46→interface ConnectorCategory {
+    47→  value: string;
+    48→  label: string;
+    49→  icon: string;
+    50→}
+    51→
+    52→interface PremiumConnector {
+    53→  id: string;
+    54→  name: string;
+    55→  icon: string;
+    56→  description: string;
+    57→  price: string;
+    58→  features: string[];
+    59→}
+    60→
+    61→interface FormData {
+    62→  email: string;
+    63→  name: string;
+    64→  institution: string;
+    65→  role: string;
+    66→  useCase: string;
+    67→  message: string;
+    68→  agreeToTerms: boolean;
+    69→  newsletterOptIn: boolean;
+    70→}
+    71→
+    72→// ============ PREMIUM CONNECTORS ============
+    73→
+    74→const PREMIUM_CONNECTORS: PremiumConnector[] = [
+    75→  {
+    76→    id: 'scopus',
+    77→    name: 'Scopus (Elsevier)',
+    78→    icon: '📖',
+    79→    description: 'Largest abstract & citation database. Enhanced curation quality.',
+    80→    price: '$2,999/year',
+    81→    features: ['Enhanced citations', 'Author profiles', 'Plagiarism check', 'Journal metrics']
+    82→  },
+    83→  {
+    84→    id: 'web-of-science',
+    85→    name: 'Web of Science',
+    86→    icon: '🕸️',
+    87→    description: 'Premier citation network. Complete coverage across sciences.',
+    88→    price: '$5,000+/year',
+    89→    features: ['Citation network', 'Impact factor', 'H-index calc', 'Historical data']
+    90→  },
+    91→  {
+    92→    id: 'ieee-xplore',
+    93→    name: 'IEEE Xplore',
+    94→    icon: '⚡',
+    95→    description: 'Digital library for electrical engineering & CS.',
+    96→    price: '$1,500/year',
+    97→    features: ['Full-text PDF', 'Technical standards', 'E-learning courses']
+    98→  }
+    99→];
+   100→
+   101→// ============ CONNECTORS PAGE ============
+   102→
+   103→export default function ConnectorsPage() {
+   104→  const { t } = useTranslation();
+   105→  const {
+   106→    connectors,
+   107→    toggleConnector,
+   108→    updateConnectorApiKey,
+   109→    syncConnector,
+   110→    addActivity,
+   111→    createDynamicField,
+   112→  } = useDynamicStore();
+   113→
+   114→  // UI State
+   115→  const [searchQuery, setSearchQuery] = useState('');
+   116→  const [selectedCategory, setSelectedCategory] = useState('all');
+   117→  const [configuringConnector, setConfiguringConnector] = useState<string | null>(null);
+   118→  const [tempApiKey, setTempApiKey] = useState('');
+   119→  const [isSyncingAll, setIsSyncingAll] = useState(false);
+   120→  
+   121→  // Subscription form state
+   122→  const [showSubscriptionForm, setShowSubscriptionForm] = useState(false);
+   123→  const [selectedPremiumConnector, setSelectedPremiumConnector] = useState<PremiumConnector | null>(null);
+   124→  const [formData, setFormData] = useState<FormData>({
+   125→    email: '',
+   126→    name: '',
+   127→    institution: '',
+   128→    role: '',
+   129→    useCase: '',
+   130→    message: '',
+   131→    agreeToTerms: false,
+   132→    newsletterOptIn: true
+   133→  });
+   134→  const [isSubmitting, setIsSubmitting] = useState(false);
+   135→  const [submitSuccess, setSubmitSuccess] = useState(false);
+   136→
+   137→  // Filter sources based on search and category
+   138→  const filteredConnectors = connectors.filter(connector => {
+   139→    const matchesSearch = connector.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+   140→                           connector.id.toLowerCase().includes(searchQuery.toLowerCase());
+   141→    const matchesCategory = selectedCategory === 'all' || 
+   142→                            getConnectorCategory(connector.id) === selectedCategory;
+   143→    return matchesSearch && matchesCategory;
+   144→  });
+   145→
+   146→  // Get category for a connector ID
+   147→  function getConnectorCategory(id: string): string {
+   148→    if (['ncbi-genbank', 'rcsb-pdb', 'uniprot', 'geo'].includes(id)) return 'biological';
+   149→    if (['pubchem', 'chembl'].includes(id)) return 'chemical';
+   150→    if (['crossref', 'arxiv', 'openalex'].includes(id)) return 'literature';
+   151→    return 'repositories';
+   152→  }
+   153→
+   154→  const categories: ConnectorCategory[] = [
+   155→    { value: 'all', label: t('connectors.all_sources') || 'All Sources', icon: '🔗' },
+   156→    { value: 'biological', label: t('connectors.biological') || 'Biological Sciences', icon: '🧬' },
+   157→    { value: 'chemical', label: t('connectors.chemical') || 'Chemical Sciences', icon: '⚗️' },
+   158→    { value: 'literature', label: t('connectors.literature') || 'Academic Literature', icon: '📚' },
+   159→    { value: 'repositories', label: t('connectors.repositories') || 'Data Repositories', icon: '📦' },
+   160→  ];
+   161→
+   162→  // Handle connection toggle
+   163→  const handleToggleConnection = async (id: string) => {
+   164→    await toggleConnector(id);
+   165→  };
+   166→
+   167→  // Handle API key save
+   168→  const handleSaveApiKey = (id: string) => {
+   169→    updateConnectorApiKey(id, tempApiKey);
+   170→    setConfiguringConnector(null);
+   171→    setTempApiKey('');
+   172→    
+   173→    addActivity({
+   174→      type: 'update',
+   175→      message: createDynamicField(`Updated API key for ${connectors.find(c => c.id === id)?.name}`),
+   176→      icon: '🔑',
+   177→    });
+   178→  };
+   179→
+   180→  // Handle sync all connected connectors
+   181→  const handleSyncAll = async () => {
+   182→    setIsSyncingAll(true);
+   183→    
+   184→    const connectedIds = connectors
+   185→      .filter(c => c.isConnected.value)
+   186→      .map(c => c.id);
+   187→
+   188→    for (const id of connectedIds) {
+   189→      await syncConnector(id);
+   190→      await new Promise(resolve => setTimeout(resolve, 500));
+   191→    }
+   192→
+   193→    setIsSyncingAll(false);
+   194→    addActivity({
+   195→      type: 'sync',
+   196→      message: createDynamicField(`Synced ${connectedIds.length} connectors`),
+   197→      icon: '🔄',
+   198→    });
+   199→  };
+   200→
+   201→  // Handle premium connector click - show subscription form
+   202→  const handlePremiumClick = (connector: PremiumConnector) => {
+   203→    setSelectedPremiumConnector(connector);
+   204→    setShowSubscriptionForm(true);
+   205→  };
+   206→
+   207→  // Handle subscription form submission
+   208→  const handleSubscriptionSubmit = async () => {
+   209→    setIsSubmitting(true);
+   210→    
+   211→    try {
+   212→      const response = await fetch('/api/subscription', {
+   213→        method: 'POST',
+   214→        headers: { 'Content-Type': 'application/json' },
+   215→        body: JSON.stringify({
+   216→          ...formData,
+   217→          tier: 'pro',
+   218→          connectorId: selectedPremiumConnector?.id
+   219→        })
+   220→      });
+   221→
+   222→      const result = await response.json();
+   223→      
+   224→      if (result.success) {
+   225→        setSubmitSuccess(true);
+   226→        addActivity({
+   227→          type: 'create',
+   228→          message: createDynamicField(`Subscription request submitted for ${selectedPremiumConnector?.name}`),
+   229→          icon: '⭐',
+   230→        });
+   231→        
+   232→        // Reset after delay
+   233→        setTimeout(() => {
+   234→          setShowSubscriptionForm(false);
+   235→          setSubmitSuccess(false);
+   236→          setFormData({
+   237→            email: '', name: '', institution: '', role: '',
+   238→            useCase: '', message: '', agreeToTerms: false, newsletterOptIn: true
+   239→          });
+   240→        }, 3000);
+   241→      }
+   242→    } catch (error) {
+   243→      console.error('Submission error:', error);
+   244→    } finally {
+   245→      setIsSubmitting(false);
+   246→    }
+   247→  };
+   248→
+   249→  // Stats calculations
+   250→  const totalSources = connectors.length;
+   251→  const connectedCount = connectors.filter(c => c.isConnected.value).length;
+   252→
+   253→  return (
+   254→    <div className="min-h-screen bg-background p-6">
+   255→      {/* Header */}
+   256→      <div className="mb-8">
+   257→        <h1 className="text-3xl font-bold text-foreground">{t('connectors.title')}</h1>
+   258→        <p className="text-muted-foreground mt-1">{t('connectors.subtitle')}</p>
+   259→        <p className="text-sm text-muted-foreground mt-2">
+   260→          🆓 <strong>12 Free Scientific APIs</strong> available now • 
+   261→          <span className="text-purple-600 ml-1">3 Premium databases</span> require subscription
+   262→        </p>
+   263→      </div>
+   264→
+   265→      {/* Tabs for Free vs Premium */}
+   266→      <Tabs defaultValue="free" className="mb-8">
+   267→        <TabsList className="grid w-full max-w-md grid-cols-2">
+   268→          <TabsTrigger value="free" className="gap-2">
+   269→            🆓 Free APIs ({totalSources})
+   270→          </TabsTrigger>
+   271→          <TabsTrigger value="premium" className="gap-2">
+   272→            ⭐ Premium ({PREMIUM_CONNECTORS.length})
+   273→          </TabsTrigger>
+   274→        </TabsList>
+   275→
+   276→        {/* ============ FREE TIER TAB ============ */}
+   277→        <TabsContent value="free" className="space-y-6">
+   278→          {/* Controls */}
+   279→          <div className="flex flex-col md:flex-row gap-4 mb-6">
+   280→            <div className="flex-1">
+   281→              <Input
+   282→                placeholder={t('connectors.search_sources') || 'Search data sources...'}
+   283→                value={searchQuery}
+   284→                onChange={(e) => setSearchQuery(e.target.value)}
+   285→                className="max-w-md"
+   286→              />
+   287→            </div>
+   288→            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+   289→              <SelectTrigger className="w-[220px]">
+   290→                <SelectValue placeholder="Select category" />
+   291→              </SelectTrigger>
+   292→              <SelectContent>
+   293→                {categories.map(cat => (
+   294→                  <SelectItem key={cat.value} value={cat.value}>
+   295→                    {cat.icon} {cat.label}
+   296→                  </SelectItem>
+   297→                ))}
+   298→              </SelectContent>
+   299→            </Select>
+   300→            <Button 
+   301→              variant="outline" 
+   302→              onClick={handleSyncAll}
+   303→              disabled={isSyncingAll || connectedCount === 0}
+   304→            >
+   305→              {isSyncingAll ? '🔄 Syncing...' : `🔄 Sync All (${connectedCount})`}
+   306→            </Button>
+   307→          </div>
+   308→
+   309→          {/* Stats Bar */}
+   310→          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+   311→            <Card>
+   312→              <CardContent className="p-4 flex items-center gap-3">
+   313→                <span className="text-2xl">🔗</span>
+   314→                <div>
+   315→                  <p className="text-sm text-muted-foreground">Total Sources</p>
+   316→                  <p className="text-xl font-bold">{totalSources}</p>
+   317→                </div>
+   318→              </CardContent>
+   319→            </Card>
+   320→            <Card>
+   321→              <CardContent className="p-4 flex items-center gap-3">
+   322→                <span className="text-2xl">✅</span>
+   323→                <div>
+   324→                  <p className="text-sm text-muted-foreground">Connected</p>
+   325→                  <p className="text-xl font-bold text-green-500">{connectedCount}</p>
+   326→                </div>
+   327→              </CardContent>
+   328→            </Card>
+   329→            <Card>
+   330→              <CardContent className="p-4 flex items-center gap-3">
+   331→                <span className="text-2xl">🆓</span>
+   332→                <div>
+   333→                  <p className="text-sm text-muted-foreground">Free Tier</p>
+   334→                  <p className="text-xl font-bold text-blue-500">{totalSources}</p>
+   335→                </div>
+   336→              </CardContent>
+   337→            </Card>
+   338→            <Card>
+   339→              <CardContent className="p-4 flex items-center gap-3">
+   340→                <span className="text-2xl">⚡</span>
+   341→                <div>
+   342→                  <p className="text-sm text-muted-foreground">No API Key Needed</p>
+   343→                  <p className="text-xl font-bold text-green-500">{connectors.filter(c => !c.apiKey.value).length}</p>
+   344→                </div>
+   345→              </CardContent>
+   346→            </Card>
+   347→          </div>
+   348→
+   349→          {/* Data Sources Grid */}
+   350→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+   351→            {filteredConnectors.map((connector) => (
+   352→              <Card key={connector.id} className={`hover:shadow-lg transition-all duration-300 hover:-translate-y-1 ${
+   353→                configuringConnector === connector.id ? 'ring-2 ring-primary' : ''
+   354→              }`}>
+   355→                <CardHeader className="pb-3">
+   356→                  <div className="flex items-start justify-between">
+   357→                    <div className="flex items-center gap-3">
+   358→                      <span className="text-3xl">{getConnectorIcon(connector.id)}</span>
+   359→                      <div>
+   360→                        <CardTitle className="text-lg flex items-center gap-2">
+   361→                          {connector.name}
+   362→                          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+   363→                            FREE
+   364→                          </Badge>
+   365→                        </CardTitle>
+   366→                        <CardDescription className="text-xs mt-1 capitalize">
+   367→                          {getConnectorCategory(connector.id)}
+   368→                        </CardDescription>
+   369→                      </div>
+   370→                    </div>
+   371→                    <div className="flex items-center gap-2">
+   372→                      {getStatusBadge(connector.syncStatus)}
+   373→                    </div>
+   374→                  </div>
+   375→                </CardHeader>
+   376→                
+   377→                <CardContent className="space-y-4">
+   378→                  <p className="text-sm text-muted-foreground line-clamp-2">
+   379→                    {getConnectorDescription(connector.id)}
+   380→                  </p>
+   381→
+   382→                  <div className="grid grid-cols-2 gap-2 text-xs">
+   383→                    <div className="flex items-center gap-1">
+   384→                      <span>📊</span>
+   385→                      <span>{formatRecordCount(connector.recordCount.value)}</span>
+   386→                    </div>
+   387→                    <div className="flex items-center gap-1">
+   388→                      <span>⏱️</span>
+   389→                      <span>{connector.freeTierLimit > 0 ? `${connector.freeTierLimit}/s limit` : 'No limit'}</span>
+   390→                    </div>
+   391→                    <div className="flex items-center gap-1">
+   392→                      <span>🆓</span>
+   393→                      <span className="text-green-600">100% Free</span>
+   394→                    </div>
+   395→                    <div className="flex items-center gap-1">
+   396→                      <span>🔌</span>
+   397→                      <span>REST API</span>
+   398→                    </div>
+   399→                  </div>
+   400→
+   401→                  <div className="flex flex-wrap gap-1">
+   402→                    {connector.features.slice(0, 3).map((feature, idx) => (
+   403→                      <Badge key={idx} variant="outline" className="text-xs">
+   404→                        {feature}
+   405→                      </Badge>
+   406→                    ))}
+   407→                  </div>
+   408→
+   409→                  {/* API Key Configuration */}
+   410→                  {configuringConnector === connector.id && (
+   411→                    <div className="pt-3 border-t space-y-3 bg-muted/30 rounded-lg p-3">
+   412→                      <div>
+   413→                        <label className="text-xs font-medium text-muted-foreground">
+   414→                          API Key (Optional for enhanced limits)
+   415→                        </label>
+   416→                        <Input
+   417→                          type="password"
+   418→                          value={tempApiKey}
+   419→                          onChange={(e) => setTempApiKey(e.target.value)}
+   420→                          placeholder="Enter API key..."
+   421→                          className="mt-1 h-8 text-sm"
+   422→                        />
+   423→                      </div>
+   424→                      
+   425→                      <div className="flex gap-2">
+   426→                        <Button size="sm" onClick={() => handleSaveApiKey(connector.id)}>
+   427→                          Save Configuration
+   428→                        </Button>
+   429→                        <Button size="sm" variant="outline" onClick={() => setConfiguringConnector(null)}>
+   430→                          Cancel
+   431→                        </Button>
+   432→                      </div>
+   433→                    </div>
+   434→                  )}
+   435→
+   436→                  {/* Actions */}
+   437→                  <div className="flex gap-2 pt-2 border-t">
+   438→                    <Button
+   439→                      size="sm"
+   440→                      variant={connector.isConnected.value ? 'default' : 'outline'}
+   441→                      onClick={() => handleToggleConnection(connector.id)}
+   442→                      className="flex-1"
+   443→                      disabled={connector.syncStatus === 'syncing'}
+   444→                    >
+   445→                      {connector.syncStatus === 'syncing' 
+   446→                        ? '⏳ Connecting...'
+   447→                        : connector.isConnected.value 
+   448→                          ? `Connected ✅` 
+   449→                          : 'Connect'
+   450→                      }
+   451→                    </Button>
+   452→                    
+   453→                    {connector.isConnected.value && (
+   454→                      <Button
+   455→                        size="sm"
+   456→                        variant="outline"
+   457→                        onClick={() => syncConnector(connector.id)}
+   458→                        disabled={connector.syncStatus === 'syncing'}
+   459→                      >
+   460→                        🔄
+   461→                      </Button>
+   462→                    )}
+   463→                    
+   464→                    <Button size="sm" variant="outline" onClick={() => {
+   465→                      setConfiguringConnector(configuringConnector === connector.id ? null : connector.id);
+   466→                      setTempApiKey(connector.apiKey.value);
+   467→                    }}>
+   468→                      ⚙️
+   469→                    </Button>
+   470→                  </div>
+   471→                </CardContent>
+   472→              </Card>
+   473→            ))}
+   474→          </div>
+   475→        </TabsContent>
+   476→
+   477→        {/* ============ PREMIUM TIER TAB ============ */}
+   478→        <TabsContent value="premium" className="space-y-6">
+   479→          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950 dark:to-indigo-950 rounded-lg p-6 mb-6 border border-purple-200 dark:border-purple-800">
+   480→            <h2 className="text-xl font-semibold text-purple-900 dark:text-purple-100 mb-2">
+   481→              ⭐ Premium Scientific Databases
+   482→            </h2>
+   483→            <p className="text-purple-700 dark:text-purple-300 text-sm mb-4">
+   484→              Unlock access to subscription-based research databases with enhanced citation data, 
+   485→              full-text PDFs, and comprehensive coverage.
+   486→            </p>
+   487→            
+   488→            <div className="grid grid-cols-1 md:grid-3 gap-4 text-sm">
+   489→              <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3">
+   490→                <h3 className="font-medium text-purple-800 dark:text-purple-200">Pro Plan</h3>
+   491→                <p className="text-2xl font-bold text-purple-600">$9.99<span className="text-sm font-normal">/mo</span></p>
+   492→                <ul className="mt-2 space-y-1 text-xs text-purple-600 dark:text-purple-400">
+   493→                  <li>✓ All premium connectors</li>
+   494→                  <li>✓ Unlimited API requests</li>
+   495→                  <li>✓ Full-text PDF access</li>
+   496→                  <li>✓ Priority support</li>
+   497→                </ul>
+   498→              </div>
+   499→              
+   500→              <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3">
+   501→                <h3 className="font-medium text-purple-800 dark:text-purple-200">Enterprise</h3>
+   502→                <p className="text-2xl font-bold text-purple-600">Custom</p>
+   503→                <ul className="mt-2 space-y-1 text-xs text-purple-600 dark:text-purple-400">
+   504→                  <li>✓ Everything in Pro</li>
+   505→                  <li>✓ Unlimited everything</li>
+   506→                  <li>✓ Custom integrations</li>
+   507→                  <li>✓ Dedicated support</li>
+   508→                </ul>
+   509→              </div>
+   510→              
+   511→              <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3">
+   512→                <h3 className="font-medium text-purple-800 dark:text-purple-200">Free Alternative</h3>
+   513→                <p className="text-2xl font-bold text-green-600">$0</p>
+   514→                <ul className="mt-2 space-y-1 text-xs text-green-600 dark:text-green-400">
+   515→                  <li>✓ 12 free APIs included</li>
+   516→                  <li>✓ 1,000 requests/day</li>
+   517→                  <li>✓ Basic search & export</li>
+   518→                  <li>✓ Community support</li>
+   519→                </ul>
+   520→              </div>
+   521→            </div>
+   522→          </div>
+   523→
+   524→          {/* Premium Connectors Grid */}
+   525→          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+   526→            {PREMIUM_CONNECTORS.map((connector) => (
+   527→              <Card key={connector.id} className="relative overflow-hidden border-2 border-dashed border-purple-300 dark:border-purple-700">
+   528→                <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-500 to-transparent w-24 h-24 opacity-10"></div>
+   529→                
+   530→                <CardHeader className="pb-3">
+   531→                  <div className="flex items-start justify-between">
+   532→                    <div className="flex items-center gap-3">
+   533→                      <span className="text-3xl">{connector.icon}</span>
+   534→                      <div>
+   535→                        <CardTitle className="text-lg flex items-center gap-2">
+   536→                          {connector.name}
+   537→                          <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+   538→                            PREMIUM
+   539→                          </Badge>
+   540→                        </CardTitle>
+   541→                        <CardDescription className="text-xs mt-1">
+   542→                          {connector.price}
+   543→                        </CardDescription>
+   544→                      </div>
+   545→                    </div>
+   546→                  </div>
+   547→                </CardHeader>
+   548→                
+   549→                <CardContent className="space-y-4">
+   550→                  <p className="text-sm text-muted-foreground line-clamp-2">
+   551→                    {connector.description}
+   552→                  </p>
+   553→
+   554→                  <div className="space-y-2">
+   555→                    <p className="text-xs font-medium text-muted-foreground">Features:</p>
+   556→                    <ul className="space-y-1">
+   557→                      {connector.features.map((feature, idx) => (
+   558→                        <li key={idx} className="text-xs flex items-center gap-2">
+   559→                          <span className="text-purple-500">✦</span>
+   560→                          {feature}
+   561→                        </li>
+   562→                      ))}
+   563→                    </ul>
+   564→                  </div>
+   565→
+   566→                  <Button 
+   567→                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+   568→                    onClick={() => handlePremiumClick(connector)}
+   569→                  >
+   570→                    Request Access →
+   571→                  </Button>
+   572→                </CardContent>
+   573→              </Card>
+   574→            ))}
+   575→          </div>
+   576→        </TabsContent>
+   577→      </Tabs>
+   578→
+   579→      {/* ============ SUBSCRIPTION FORM DIALOG ============ */}
+   580→      <Dialog open={showSubscriptionForm} onOpenChange={setShowSubscriptionForm}>
+   581→        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+   582→          <DialogHeader>
+   583→            <DialogTitle className="flex items-center gap-2">
+   584→              ⭐ Request Access to {selectedPremiumConnector?.name}
+   585→            </DialogTitle>
+   586→            <DialogDescription>
+   587→              Fill out the form below and we'll get you set up within 24-48 hours.
+   588→              <br />
+   589→              <span className="text-sm text-muted-foreground mt-1 block">
+   590→                Or enjoy our <a href="#" className="text-green-600 underline">12 free scientific APIs</a> immediately!
+   591→              </span>
+   592→            </DialogDescription>
+   593→          </DialogHeader>
+   594→
+   595→          {!submitSuccess ? (
+   596→            <div className="space-y-4 py-4">
+   597→              <div className="grid grid-cols-2 gap-4">
+   598→                <div className="space-y-2">
+   599→                  <label className="text-sm font-medium">Email Address *</label>
+   600→                  <Input
+   601→                    type="email"
+   602→                    placeholder="your@institution.edu"
+   603→                    value={formData.email}
+   604→                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+   605→                    required
+   606→                  />
+   607→                </div>
+   608→                <div className="space-y-2">
+   609→                  <label className="text-sm font-medium">Full Name</label>
+   610→                  <Input
+   611→                    placeholder="Dr. Jane Smith"
+   612→                    value={formData.name}
+   613→                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+   614→                  />
+   615→                </div>
+   616→              </div>
+   617→
+   618→              <div className="grid grid-cols-2 gap-4">
+   619→                <div className="space-y-2">
+   620→                  <label className="text-sm font-medium">Institution/Organization *</label>
+   621→                  <Input
+   622→                    placeholder="MIT, Stanford, NIH..."
+   623→                    value={formData.institution}
+   624→                    onChange={(e) => setFormData({...formData, institution: e.target.value})}
+   625→                    required
+   626→                  />
+   627→                </div>
+   628→                <div className="space-y-2">
+   629→                  <label className="text-sm font-medium">Your Role *</label>
+   630→                  <Select value={formData.role} onValueChange={(value) => setFormData({...formData, role: value})}>
+   631→                    <SelectTrigger>
+   632→                      <SelectValue placeholder="Select role..." />
+   633→                    </SelectTrigger>
+   634→                    <SelectContent>
+   635→                      <SelectItem value="undergraduate">Undergraduate Student</SelectItem>
+   636→                      <SelectItem value="masters">Graduate Student (Masters)</SelectItem>
+   637→                      <SelectItem value="phd">Graduate Student (PhD)</SelectItem>
+   638→                      <SelectItem value="postdoc">Postdoctoral Researcher</SelectItem>
+   639→                      <SelectItem value="faculty">Faculty/Professor</SelectItem>
+   640→                      <SelectItem value="researcher">Research Scientist</SelectItem>
+   641→                      <SelectItem value="industry">Industry R&D</SelectItem>
+   642→                      <SelectItem value="datascientist">Data Scientist</SelectItem>
+   643→                      <SelectItem value="librarian">Librarian</SelectItem>
+   644→                      <SelectItem value="other">Other</SelectItem>
+   645→                    </SelectContent>
+   646→                  </Select>
+   647→                </div>
+   648→              </div>
+   649→
+   650→              <div className="space-y-2">
+   651→                <label className="text-sm font-medium">Intended Use Case *</label>
+   652→                <textarea
+   653→                  className="w-full min-h-[80px] px-3 py-2 text-sm border rounded-md bg-background"
+   654→                  placeholder="Describe how you plan to use SciHub Pro in your research..."
+   655→                  value={formData.useCase}
+   656→                  onChange={(e) => setFormData({...formData, useCase: e.target.value})}
+   657→                  required
+   658→                />
+   659→              </div>
+   660→
+   661→              <div className="space-y-2">
+   662→                <label className="text-sm font-medium">Additional Requirements</label>
+   663→                <textarea
+   664→                  className="w-full min-h-[60px] px-3 py-2 text-sm border rounded-md bg-background"
+   665→                  placeholder="Any specific features, integrations, or questions..."
+   666→                  value={formData.message}
+   667→                  onChange={(e) => setFormData({...formData, message: e.target.value})}
+   668→                />
+   669→              </div>
+   670→
+   671→              <div className="flex items-center gap-4 text-sm">
+   672→                <label className="flex items-center gap-2 cursor-pointer">
+   673→                  <input
+   674→                    type="checkbox"
+   675→                    checked={formData.newsletterOptIn}
+   676→                    onChange={(e) => setFormData({...formData, newsletterOptIn: e.target.checked})}
+   677→                    className="rounded"
+   678→                  />
+   679→                  Receive weekly research tips & updates
+   680→                </label>
+   681→              </div>
+   682→
+   683→              <div className="flex items-start gap-2 text-sm bg-yellow-50 dark:bg-yellow-950 p-3 rounded-lg">
+   684→                <input
+   685→                  type="checkbox"
+   686→                  checked={formData.agreeToTerms}
+   687→                  onChange={(e) => setFormData({...formData, agreeToTerms: e.target.checked})}
+   688→                  className="rounded mt-0.5"
+   689→                  required
+   690→                />
+   691→                <span>
+   692→                  I agree to the{' '}
+   693→                  <a href="#" className="underline text-primary">Terms of Service</a>
+   694→                  {' '}and{' '}
+   695→                  <a href="#" className="underline text-primary">Privacy Policy</a> *
+   696→                </span>
+   697→              </div>
+   698→
+   699→              <DialogFooter className="gap-2 pt-4 border-t">
+   700→                <Button variant="outline" onClick={() => setShowSubscriptionForm(false)}>
+   701→                  Cancel
+   702→                </Button>
+   703→                <Button 
+   704→                  onClick={handleSubscriptionSubmit}
+   705→                  disabled={!formData.agreeToTerms || !formData.email || !formData.institution || !formData.useCase || isSubmitting}
+   706→                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+   707→                >
+   708→                  {isSubmitting ? '⏳ Submitting...' : 'Submit Request →'}
+   709→                </Button>
+   710→              </DialogFooter>
+   711→            </div>
+   712→          ) : (
+   713→            <div className="py-8 text-center">
+   714→              <div className="text-5xl mb-4">🎉</div>
+   715→              <h3 className="text-xl font-semibold text-green-600 mb-2">Request Submitted!</h3>
+   716→              <p className="text-muted-foreground mb-4">
+   717→                We'll be in touch within 24-48 hours at <strong>{formData.email}</strong>
+   718→              </p>
+   719→              <p className="text-sm text-muted-foreground">
+   720→                In the meantime, enjoy full access to our 12 free scientific APIs! 🚀
+   721→              </p>
+   722→              <Button 
+   723→                variant="outline" 
+   724→                className="mt-4"
+   725→                onClick={() => setShowSubscriptionForm(false)}
+   726→              >
+   727→                Back to Connectors
+   728→              </Button>
+   729→            </div>
+   730→          )}
+   731→        </DialogContent>
+   732→      </Dialog>
+   733→
+   734→      {/* Free Tier Info Panel */}
+   735→      <Card className="mt-8">
+   736→        <CardHeader>
+   737→          <CardTitle className="text-base flex items-center gap-2">
+   738→            🆓 Free Tier Information
+   739→          </CardTitle>
+   740→        </CardHeader>
+   741→        <CardContent>
+   742→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+   743→            <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
+   744→              <h4 className="font-medium text-green-800 dark:text-green-200 mb-1">CrossRef</h4>
+   745→              <p className="text-green-700 dark:text-green-300 text-xs">
+   746→                50 req/s • No key needed • Full metadata access
+   747→              </p>
+   748→            </div>
+   749→            <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+   750→              <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-1">OpenAlex</h4>
+   751→              <p className="text-blue-700 dark:text-blue-300 text-xs">
+   752→                10 req/s • Optional key for higher limits • Complete catalog
+   753→              </p>
+   754→            </div>
+   755→            <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800">
+   756→              <h4 className="font-medium text-purple-800 dark:text-purple-200 mb-1">NCBI E-utilities</h4>
+   757→              <p className="text-purple-700 dark:text-purple-300 text-xs">
+   758→                3 req/s without key • 10 req/s with API key • PubMed/GenBank
+   759→              </p>
+   760→            </div>
+   761→            <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800">
+   762→              <h4 className="font-medium text-orange-800 dark:text-orange-200 mb-1">PubChem PUG REST</h4>
+   763→              <p className="text-orange-700 dark:text-orange-300 text-xs">
+   764→                5 req/s • Compound/bioassay data • Structure search
+   765→              </p>
+   766→            </div>
+   767→            <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
+   768→              <h4 className="font-medium text-red-800 dark:text-red-200 mb-1">arXiv API</h4>
+   769→              <p className="text-red-700 dark:text-red-300 text-xs">
+   770→                Unknown limit • Be polite • Preprint access
+   771→              </p>
+   772→            </div>
+   773→            <div className="p-3 rounded-lg bg-cyan-50 dark:bg-cyan-950 border border-cyan-200 dark:border-cyan-800">
+   774→              <h4 className="font-medium text-cyan-800 dark:text-cyan-200 mb-1">UniProt REST</h4>
+   775→              <p className="text-cyan-700 dark:text-cyan-300 text-xs">
+   776→                15 req/s • Protein sequences • Batch retrieval
+   777→              </p>
+   778→            </div>
+   779→          </div>
+   780→          
+   781→          <div className="mt-4 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
+   782→            💡 <strong>Tip:</strong> All free tiers provide sufficient access for research purposes. 
+   783→            API keys unlock higher rate limits but are not required for basic functionality.
+   784→          </div>
+   785→        </CardContent>
+   786→      </Card>
+   787→    </div>
+   788→  );
+   789→}
+   790→
+   791→// ============ HELPER FUNCTIONS ============
+   792→
+   793→function getStatusBadge(status: string) {
+   794→  switch (status) {
+   795→    case 'success':
+   796→      return <Badge className="bg-green-500">Connected</Badge>;
+   797→    case 'syncing':
+   798→      return <Badge className="bg-yellow-500 animate-pulse">Connecting...</Badge>;
+   799→    case 'error':
+   800→      return <Badge variant="destructive">Error</Badge>;
+   801→    default:
+   802→      return <Badge variant="secondary">Available</Badge>;
+   803→  }
+   804→}
+   805→
+   806→function getConnectorIcon(id: string): string {
+   807→  const icons: Record<string, string> = {
+   808→    'ncbi-genbank': '🧬',
+   809→    'rcsb-pdb': '🔷',
+   810→    'uniprot': '🔄',
+   811→    'geo': '📊',
+   812→    'pubchem': '⚗️',
+   813→    'chembl': '💊',
+   814→    'crossref': '📚',
+   815→    'arxiv': '📄',
+   816→    'openalex': '🌐',
+   817→    'zenodo': '🏛️',
+   818→    'figshare': '📦',
+   819→    'kaggle': '🎯',
+   820→  };
+   821→  return icons[id] || '🔗';
+   822→}
+   823→
+   824→function getConnectorUrl(id: string): string {
+   825→  const urls: Record<string, string> = {
+   826→    'ncbi-genbank': 'https://www.ncbi.nlm.nih.gov/genbank/',
+   827→    'rcsb-pdb': 'https://www.rcsb.org/',
+   828→    'uniprot': 'https://www.uniprot.org/',
+   829→    'geo': 'https://www.ncbi.nlm.nih.gov/geo/',
+   830→    'pubchem': 'https://pubchem.ncbi.nlm.nih.gov/',
+   831→    'chembl': 'https://www.ebi.ac.uk/chembl/',
+   832→    'crossref': 'https://www.crossref.org/',
+   833→    'arxiv': 'https://arxiv.org/',
+   834→    'openalex': 'https://openalex.org/',
+   835→    'zenodo': 'https://zenodo.org/',
+   836→    'figshare': 'https://figshare.com/',
+   837→    'kaggle': 'https://www.kaggle.com/datasets',
+   838→  };
+   839→  return urls[id] || '#';
+   840→}
+   841→
+   842→function getConnectorDescription(id: string): string {
+   843→  const descriptions: Record<string, string> = {
+   844→    'ncbi-genbank': 'Comprehensive public database of nucleotide sequences and supporting bibliographic and biological annotation',
+   845→    'rcsb-pdb': 'Protein Data Bank - archive for 3D structural data of large biological molecules',
+   846→    'uniprot': 'Comprehensive resource for protein sequence and functional information',
+   847→    'geo': 'Gene Expression Omnibus - public repository for high-throughput genomics data',
+   848→    'pubchem': "World's largest collection of freely accessible chemical information",
+   849→    'chembl': 'Database of bioactive drug-like molecules with drug-like properties',
+   850→    'crossref': 'Scholarly research metadata from thousands of publishers worldwide',
+   851→    'arxiv': 'Open access archive for scholarly articles in physics, mathematics, CS, and more',
+   852→    'openalex': 'Open catalog of the global research system - a free alternative to subscription services',
+   853→    'zenodo': 'Open-access repository for research artifacts across all disciplines',
+   854→    'figshare': 'Repository where researchers can make all of their research outputs available',
+   855→    'kaggle': 'Data science platform with public datasets and competitions',
+   856→  };
+   857→  return descriptions[id] || 'Scientific data source';
+   858→}
+   859→
+   860→function formatRecordCount(count: number): string {
+   861→  if (count >= 1000000000) return `${(count / 1000000000).toFixed(1)}B+`;
+   862→  if (count >= 1000000) return `${(count / 1000000).toFixed(0)}M+`;
+   863→  if (count >= 1000) return `${(count / 1000).toFixed(0)}K+`;
+   864→  return String(count);
+   865→}
+   866→

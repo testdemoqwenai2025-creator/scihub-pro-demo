@@ -1,0 +1,2002 @@
+     1→/**
+     2→ * SciHub Pro - Master Store Architecture
+     3→ * 
+     4→ * CENTRAL DOGMA: "Never Let The Scientist Hit A Wall"
+     5→ * 
+     6→ * This store implements the complete 5-layer data flow:
+     7→ * L1: React Components (Controlled forms with synthetic seed)
+     8→ * L2: State Management (Zustand with dirty tracking)
+     9→ * L3: Service Layer (API calls with graceful degradation)
+    10→ * L4: Persistence (localStorage + IndexedDB with volume thresholds)
+    11→ * L5: Data Lake Export (Parquet/CSV with upgrade prompts)
+    12→ * 
+    13→ * RETENTION FEATURES:
+    14→ * - Progressive discovery (always show next step)
+    15→ * - Synthetic pre-seeding (zero friction onboarding)
+    16→ * - Graceful degradation (API fails → synthetic fallback)
+    17→ * - Smart suggestions (context-aware guidance)
+    18→ * - Call-for-action prompts (volume limits, feature gates)
+    19→ */
+    20→
+    21→import { create } from 'zustand';
+    22→import { persist, createJSONStorage } from 'zustand/middleware';
+    23→
+    24→// ============================================================================
+    25→// COMPREHENSIVE TYPE SYSTEM
+    26→// ============================================================================
+    27→
+    28→export interface DynamicField<T = any> {
+    29→  value: T;
+    30→  syntheticValue: T;       // Original pre-filled data (clears on edit)
+    31→  isDirty: boolean;        // Has user modified?
+    32→  lastModified?: Date;
+    33→  isValid: boolean;
+    34→  validationError?: string;
+    35→}
+    36→
+    37→export interface UserPreferences {
+    38→  theme: 'light' | 'dark' | 'system';
+    39→  language: string;
+    40→  fontSize: 'small' | 'medium' | 'large';
+    41→  resultsPerPage: number;
+    42→  sidebarCollapsed: boolean;
+    43→  autoSaveInterval: number; // seconds
+    44→  defaultDataSource: string;
+    45→  notifications: NotificationPrefs;
+    46→  onboardingCompleted: boolean;
+    47→  skillLevel: 'beginner' | 'intermediate' | 'expert';
+    48→}
+    49→
+    50→export interface NotificationPrefs {
+    51→  emailJobComplete: boolean;
+    52→  emailNewCollaborator: boolean;
+    53→  pushUpdates: boolean;
+    54→  weeklyDigest: boolean;
+    55→  researchAlerts: boolean;
+    56→}
+    57→
+    58→export interface UserProfile {
+    59→  displayName: DynamicField<string>;
+    60→  email: DynamicField<string>;
+    61→  institution: DynamicField<string>;
+    62→  orcid: DynamicField<string>;
+    63→  bio: DynamicField<string>;
+    64→  role: 'researcher' | 'student' | 'developer' | 'professor' | 'community';
+    65→  joinDate: Date;
+    66→  avatarUrl?: string;
+    67→  researchInterests: string[];
+    68→  publicationsCount: number;
+    69→  hIndex?: number;
+    70→}
+    71→
+    72→export interface DashboardStats {
+    73→  activeJobs: DynamicField<number>;
+    74→  storageUsed: DynamicField<string>;
+    75→  storageUsedBytes: DynamicField<number>;
+    76→  apiCallsToday: DynamicField<number>;
+    77→  collaborators: DynamicField<number>;
+    78→  savedItems: DynamicField<number>;
+    79→  queriesRun: DynamicField<number>;
+    80→  systemHealth: DynamicField<number>;
+    81→  streakDays: DynamicField<number>;
+    82→}
+    83→
+    84→export interface ActivityEntry {
+    85→  id: string;
+    86→  type: 'search' | 'save' | 'export' | 'job' | 'collaboration' | 'login' | 
+    87→        'download' | 'upload' | 'query' | 'compute' | 'connect' | 'disconnect' |
+    88→        'upgrade_prompt' | 'milestone' | 'error_recovery' | 'guidance_shown';
+    89→  message: DynamicField<string>;
+    90→  icon: string;
+    91→  timestamp: Date;
+    92→  metadata?: Record<string, unknown>;
+    93→  actionUrl?: string;
+    94→  actionLabel?: string;
+    95→}
+    96→
+    97→// Dataset types
+    98→export interface DatasetItem {
+    99→  id: string;
+   100→  name: DynamicField<string>;
+   101→  description: DynamicField<string>;
+   102→  size: DynamicField<string>;
+   103→  sizeBytes: DynamicField<number>;
+   104→  rows: DynamicField<number>;
+   105→  columns: DynamicField<number>;
+   106→  type: DynamicField<string>;
+   107→  format: DynamicField<string>;
+   108→  sourceUrl: DynamicField<string>;
+   109→  tags: DynamicField<string[]>;
+   110→  lastModified: DynamicField<Date>;
+   111→  isPublic: DynamicField<boolean>;
+   112→  isFavorite: DynamicField<boolean>;
+   113→  downloaded: DynamicField<boolean>;
+   114→  downloadProgress: DynamicField<number>;
+   115→  createdAt: Date;
+   116→  // Storage layer info
+   117→  storageLayer: 'local' | 'indexeddb' | 'duckdb' | 'cloud';
+   118→  volumeTier: 1 | 2 | 3 | 4;
+   119→}
+   120→
+   121→// Connector types
+   122→export interface ConnectorConfig {
+   123→  id: string;
+   124→  name: string;
+   125→  category: 'biological' | 'chemical' | 'literature' | 'repositories' | 'compute';
+   126→  isEnabled: DynamicField<boolean>;
+   127→  isConnected: DynamicField<boolean>;
+   128→  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+   129→  recordCount: DynamicField<number>;
+   130→  apiEndpoint: DynamicField<string>;
+   131→  apiKey: DynamicField<string>;
+   132→  freeTierLimit: number; // requests per second
+   133→  isFreeTier: boolean;
+   134→  features: string[];
+   135→  lastSync?: Date;
+   136→  latency?: number; // ms
+   137→  dataTypes: string[];
+   138→}
+   139→
+   140→// Compute Job types
+   141→export interface ComputeJob {
+   142→  id: string;
+   143→  name: DynamicField<string>;
+   144→  type: 'variant_calling' | 'protein_folding' | 'drug_screening' | 
+   145→        'ml_training' | 'molecular_dynamics' | 'data_analysis' | 'custom';
+   146→  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused';
+   147→  priority: 'low' | 'normal' | 'high' | 'urgent';
+   148→  progress: DynamicField<number>;
+   149→  startTime: Date;
+   150→  endTime?: Date;
+   151→  estimatedTime?: number; // seconds
+   152→  computeUnits: DynamicField<number>;
+   153→  memoryUsed: DynamicField<number>;
+   154→  gpuAllocated: DynamicField<number>;
+   155→  logs: LogEntry[];
+   156→  resultUrl?: string;
+   157→  errorMessage?: string;
+   158→  costEstimate?: number;
+   159→  tier: 'free' | 'pro' | 'enterprise';
+   160→}
+   161→
+   162→export interface LogEntry {
+   163→  timestamp: Date;
+   164→  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' | 'SUCCESS';
+   165→  message: string;
+   166→}
+   167→
+   168→// Workspace types
+   169→export interface WorkspaceFile {
+   170→  id: string;
+   171→  name: DynamicField<string>;
+   172→  content: DynamicField<string>;
+   173→  language: 'python' | 'sql' | 'r' | 'markdown' | 'javascript' | 'bash' | 'java' | 'cpp' | 'typescript';
+   174→  isModified: DynamicField<boolean>;
+   175→  createdAt: Date;
+   176→  lastModified: Date;
+   177→  executionResult?: ExecutionResult;
+   178→}
+   179→
+   180→export interface ExecutionResult {
+   181→  output: string;
+   182→  error?: string;
+   183→  executionTime: number;
+   184→  memoryUsed: number;
+   185→  status: 'success' | 'error' | 'timeout';
+   186→  charts?: ChartData[];
+   187→}
+   188→
+   189→export interface ChartData {
+   190→  type: 'line' | 'bar' | 'scatter' | 'heatmap' | 'pie';
+   191→  data: unknown[];
+   192→  config: Record<string, unknown>;
+   193→}
+   194→
+   195→// Query/Search types
+   196→export interface SavedQuery {
+   197→  id: string;
+   198→  name: DynamicField<string>;
+   199→  sql: DynamicField<string>;
+   200→  description: DynamicField<string>;
+   201→  lastRun?: Date;
+   202→  runCount: DynamicField<number>;
+   203→  results?: QueryResult;
+   204→  dataSource: string;
+   205→}
+   206→
+   207→export interface QueryResult {
+   208→  columns: string[];
+   209→  rows: unknown[][];
+   210→  executionTime: number;
+   211→  rowCount: number;
+   212→  source: 'local' | 'api' | 'cached' | 'synthetic';
+   213→  truncated: boolean;
+   214→  exportFormats: string[];
+   215→}
+   216→
+   217→// Knowledge Graph types
+   218→export interface GraphNode {
+   219→  id: string;
+   220→  label: DynamicField<string>;
+   221→  type: 'concept' | 'paper' | 'author' | 'gene' | 'compound' | 'domain' | 'dataset';
+   222→  x: number;
+   223→  y: number;
+   224→  connections: number;
+   225→  details?: Record<string, unknown>;
+   226→  importance: number; // 0-1 for sizing
+   227→}
+   228→
+   229→export interface GraphEdge {
+   230→  source: string;
+   231→  target: string;
+   232→  strength: number;
+   233→  label?: string;
+   234→  type: 'cites' | 'related' | 'author_of' | 'contains' | 'similar_to';
+   235→}
+   236→
+   237→// Collaboration types
+   238→export interface TeamMember {
+   239→  id: string;
+   240→  name: string;
+   241→  role: string;
+   242→  avatar?: string;
+   243→  online: boolean;
+   244→  lastActive: Date;
+   245→  expertise: string[];
+   246→  publicationsCount: number;
+   247→}
+   248→
+   249→export interface Project {
+   250→  id: string;
+   251→  name: DynamicField<string>;
+   252→  description: DynamicField<string>;
+   253→  memberIds: string[];
+   254→  status: 'active' | 'paused' | 'completed' | 'archived';
+   255→  createdAt: Date;
+   256→  lastActivity: Date;
+   257→  leadId: string;
+   258→  datasetIds: string[];
+   259→  queryIds: string[];
+   260→  visibility: 'public' | 'private' | 'team';
+   261→}
+   262→
+   263→export interface DiscussionThread {
+   264→  id: string;
+   265→  title: DynamicField<string>;
+   266→  authorId: string;
+   267→  projectId?: string;
+   268→  tags: string[];
+   269→  replyCount: number;
+   270→  createdAt: Date;
+   271→  lastReply: Date;
+   272→  content: DynamicField<string>;
+   273→  replies: Reply[];
+   274→}
+   275→
+   276→export interface Reply {
+   277→  id: string;
+   278→  authorId: string;
+   279→  content: string;
+   280→  timestamp: Date;
+   281→  reactions: Record<string, number>; // emoji → count
+   282→}
+   283→
+   284→// AETHEL AI types
+   285→export interface AethelModel {
+   286→  id: string;
+   287→  name: string;
+   288→  parameters: string; // e.g., "7B", "70B"
+   289→  specialty: string;
+   290→  speed: 'fast' | 'medium' | 'slow';
+   291→  available: boolean;
+   292→  description: string;
+   293→  inputCost: number; // per 1K tokens
+   294→  outputCost: number;
+   295→  maxTokens: number;
+   296→  tier: 'free' | 'pro' | 'enterprise';
+   297→}
+   298→
+   299→export interface AethelQuery {
+   300→  id: string;
+   301→  modelId: string;
+   302→  prompt: DynamicField<string>;
+   303→  response: DynamicField<string>;
+   304→  tokensUsed: DynamicField<number>;
+   305→  computeTime: DynamicField<number>;
+   306→  priority: 'low' | 'normal' | 'high' | 'critical';
+   307→  budget: DynamicField<number>;
+   308→  timestamp: Date;
+   309→  status: 'queued' | 'processing' | 'completed' | 'failed' | 'rate_limited';
+   310→  error?: string;
+   311→}
+   312→
+   313→// Workflow types
+   314→export interface WorkflowDefinition {
+   315→  id: string;
+   316→  name: DynamicField<string>;
+   317→  description: DynamicField<string>;
+   318→  status: 'draft' | 'active' | 'running' | 'completed' | 'error' | 'paused';
+   319→  nodes: WorkflowNode[];
+   320→  edges: WorkflowEdge[];
+   321→  createdAt: Date;
+   322→  lastRun?: Date;
+   323→  schedule?: string;
+   324→  tier: 'free' | 'pro' | 'enterprise';
+   325→}
+   326→
+   327→export interface WorkflowNode {
+   328→  id: string;
+   329→  type: string;
+   330→  label: string;
+   331→  config: Record<string, unknown>;
+   332→  status: 'idle' | 'running' | 'complete' | 'error' | 'skipped';
+   333→  inputSchema?: unknown[];
+   334→  outputSchema?: unknown[];
+   335→}
+   336→
+   337→export interface WorkflowEdge {
+   338→  source: string;
+   339→  target: string;
+   340→  condition?: string;
+   341→}
+   342→
+   343→// Call-for-Action / Upgrade Prompt types
+   344→export interface UpgradePrompt {
+   345→  id: string;
+   346→  type: 'storage' | 'compute' | 'api_rate' | 'collaboration' | 'ai_tokens' | 
+   347→        'export_format' | 'workflow_automation' | 'realtime_collab';
+   348→  title: string;
+   349→  message: string;
+   350→  currentValue: number;
+   351→  limitValue: number;
+   352→  unit: string;
+   353→  severity: 'info' | 'warning' | 'critical';
+   354→  dismissed: boolean;
+   355→  dismissUntil?: Date;
+   356→  actionUrl: string;
+   357→  actionLabel: string;
+   358→  alternativeAction?: string;
+   359→  shownAt: Date;
+   360→  converted?: boolean;
+   361→}
+   362→
+   363→// Guidance/Suggestion types (Progressive Discovery)
+   364→export interface GuidanceSuggestion {
+   365→  id: string;
+   366→  type: 'next_step' | 'tip' | 'feature_discovery' | 'best_practice' | 'shortcut';
+   367→  title: string;
+   368→  message: string;
+   369→  icon: string;
+   370→  targetRoute?: string;
+   371→  targetAction?: string;
+   372→  context: string; // where this appears
+   373→  priority: number; // 1-10
+   374→  dismissed: boolean;
+   375→  shownCount: number;
+   376→  maxShows: number;
+   377→}
+   378→
+   379→// Notification types
+   380→export interface NotificationItem {
+   381→  id: string;
+   382→  type: 'success' | 'error' | 'warning' | 'info' | 'job_complete' | 
+   383→        'collaboration' | 'system' | 'upgrade_available' | 'milestone';
+   384→  title: string;
+   385→  message: string;
+   386→  timestamp: Date;
+   387→  read: boolean;
+   388→  actionUrl?: string;
+   389→  actionLabel?: string;
+   390→  priority: 'low' | 'medium' | 'high' | 'urgent';
+   391→}
+   392→
+   393→// Search History
+   394→export interface SearchHistoryEntry {
+   395→  id: string;
+   396→  query: string;
+   397→  source: string;
+   398→  filters?: Record<string, unknown>;
+   399→  resultCount: number;
+   400→  timestamp: Date;
+   401→}
+   402→
+   403→// Saved Items (papers, datasets, etc.)
+   404→export interface SavedItem {
+   405→  id: string;
+   406→  type: 'paper' | 'dataset' | 'gene' | 'compound' | 'protein' | 'query' | 'job' | 'workflow' | 'file';
+   407→  title: string;
+   408→  source: string;
+   409→  metadata: Record<string, unknown>;
+   410→  savedAt: Date;
+   411→  tags: string[];
+   412→  notes?: string;
+   413→  accessCount: number;
+   414→  lastAccessed?: Date;
+   415→}
+   416→
+   417→// Database Configuration
+   418→export interface DatabaseConfig {
+   419→  provider: 'localStorage' | 'IndexedDB' | 'DuckDB' | 'PostgreSQL' | 'MySQL';
+   420→  enabled: boolean;
+   421→  connectionString?: string;
+   422→  autoPushThreshold: DynamicField<number>; // bytes
+   423→  lastPush?: Date;
+   424→  pushInProgress: boolean;
+   425→  syncInterval: number; // minutes
+   426→  tables: string[];
+   427→}
+   428→
+   429→// Volume Tier System
+   430→export interface VolumeTier {
+   431→  tier: 1 | 2 | 3 | 4;
+   432→  name: string;
+   433→  maxSize: number; // bytes
+   434→  storageType: 'localStorage' | 'IndexedDB' | 'DuckDB-WASM' | 'Cloud';
+   435→  features: string[];
+   436→  upgradePrompt?: string;
+   437→  callToAction?: string;
+   438→}
+   439→
+   440→// ============================================================================
+   441→// VOLUME TIERS CONFIGURATION (Call-for-Action Triggers)
+   442→// ============================================================================
+   443→
+   444→export const VOLUME_TIERS: VolumeTier[] = [
+   445→  {
+   446→    tier: 1,
+   447→    name: 'Starter (Free)',
+   448→    maxSize: 5 * 1024 * 1024, // 5MB
+   449→    storageType: 'localStorage',
+   450→    features: ['Basic search', 'Save up to 50 items', '3 active jobs', 'Community support'],
+   451→    upgradePrompt: '📊 You\'re approaching the 5MB free tier limit',
+   452→    callToAction: 'Unlock 100MB with Pro tier',
+   453→  },
+   454→  {
+   455→    tier: 2,
+   456→    name: 'Researcher (Free)',
+   457→    maxSize: 100 * 1024 * 1024, // 100MB
+   458→    storageType: 'IndexedDB',
+   459→    features: ['Everything in Starter', 'Save up to 500 items', '10 active jobs', 'Export to CSV/JSON'],
+   460→    upgradePrompt: '💾 Your dataset exceeds 100MB - time to level up!',
+   461→    callToAction: 'Get 10GB storage with Pro',
+   462→  },
+   463→  {
+   464→    tier: 3,
+   465→    name: 'Pro ($9/month)',
+   466→    maxSize: 10 * 1024 * 1024 * 1024, // 10GB
+   467→    storageType: 'DuckDB-WASM',
+   468→    features: ['Everything in Researcher', 'Unlimited saves', '50 concurrent jobs', 'SQL queries', 'Priority compute', 'DuckDB analytics'],
+   469→    upgradePrompt: '🚀 Power user detected! Unlock cloud-scale computing.',
+   470→    callToAction: 'Upgrade to Enterprise for unlimited scale',
+   471→  },
+   472→  {
+   473→    tier: 4,
+   474→    name: 'Enterprise ($49/month)',
+   475→    maxSize: Infinity,
+   476→    storageType: 'Cloud',
+   477→    features: ['Everything in Pro', 'Unlimited everything', 'Real-time collaboration', 'Custom models', 'SLA guarantee', 'Dedicated support'],
+   478→  },
+   479→];
+   480→
+   481→// ============================================================================
+   482→// HELPER FUNCTIONS
+   483→// ============================================================================
+   484→
+   485→export function createDynamicField<T>(value: T, synthetic = true): DynamicField<T> {
+   486→  return {
+   487→    value,
+   488→    syntheticValue: synthetic ? value : (undefined as T),
+   489→    isDirty: false,
+   490→    isValid: true,
+   491→  };
+   492→}
+   493→
+   494→export function updateDynamicField<T>(field: DynamicField<T>, newValue: T): DynamicField<T> {
+   495→  return {
+   496→    ...field,
+   497→    value: newValue,
+   498→    isDirty: JSON.stringify(newValue) !== JSON.stringify(field.syntheticValue),
+   499→    lastModified: new Date(),
+   500→    isValid: true,
+   501→  };
+   502→}
+   503→
+   504→function generateId(): string {
+   505→  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+   506→}
+   507→
+   508→// ============================================================================
+   509→// SYNTHETIC DATA GENERATORS (Pre-seeding for Zero Friction Onboarding)
+   510→// ============================================================================
+   511→
+   512→const generateSyntheticDatasets = (): DatasetItem[] => [
+   513→  {
+   514→    id: 'ds-001',
+   515→    name: createDynamicField('TCGA Pan-Cancer Expression Atlas'),
+   516→    description: createDynamicField('RNA-seq expression data across 33 cancer types from The Cancer Genome Atlas. Contains normalized counts, FPKM values, and clinical annotations for comprehensive oncology research.'),
+   517→    size: createDynamicField('4.2 GB'),
+   518→    sizeBytes: createDynamicField(4509715660),
+   519→    rows: createDynamicField(11234),
+   520→    columns: createDynamicField(20500),
+   521→    type: createDynamicField('Genomics'),
+   522→    format: createDynamicField('Parquet'),
+   523→    sourceUrl: createDynamicField('https://portal.gdc.cancer.gov/'),
+   524→    tags: createDynamicField(['cancer', 'rna-seq', 'expression', 'clinical', 'tcga', 'oncology']),
+   525→    lastModified: createDynamicField(new Date('2024-12-15')),
+   526→    isPublic: createDynamicField(true),
+   527→    isFavorite: createDynamicField(false),
+   528→    downloaded: createDynamicField(false),
+   529→    downloadProgress: createDynamicField(0),
+   530→    createdAt: new Date('2024-01-15'),
+   531→    storageLayer: 'indexeddb',
+   532→    volumeTier: 3,
+   533→  },
+   534→  {
+   535→    id: 'ds-002',
+   536→    name: createDynamicField('Human Protein Atlas v22'),
+   537→    description: createDynamicField('Comprehensive protein expression profiles across human tissues, cell lines, and pathology samples. Includes tissue specificity scores and subcellular localization data.'),
+   538→    size: createDynamicField('1.8 GB'),
+   539→    sizeBytes: createDynamicField(1932735283),
+   540→    rows: createDynamicField(44200),
+   541→    columns: createDynamicField(1500),
+   542→    type: createDynamicField('Proteomics'),
+   543→    format: createDynamicField('HDF5'),
+   544→    sourceUrl: createDynamicField('https://www.proteinatlas.org/'),
+   545→    tags: createDynamicField(['proteins', 'tissues', 'expression', 'human', 'antibody']),
+   546→    lastModified: createDynamicField(new Date('2024-11-28')),
+   547→    isPublic: createDynamicField(true),
+   548→    isFavorite: createDynamicField(true),
+   549→    downloaded: createDynamicField(true),
+   550→    downloadProgress: createDynamicField(100),
+   551→    createdAt: new Date('2024-02-20'),
+   552→    storageLayer: 'local',
+   553→    volumeTier: 2,
+   554→  },
+   555→  {
+   556→    id: 'ds-003',
+   557→    name: createDynamicField('ChEMBL Bioactivity Database'),
+   558→    description: createDynamicField('Curated bioactivity data for over 2 million compounds with binding assays, target relationships, and drug-like properties. Essential for computational drug discovery.'),
+   559→    size: createDynamicField('890 MB'),
+   560→    sizeBytes: createDynamicField(933231816),
+   561→    rows: createDynamicField(2050000),
+   562→    columns: createDynamicField(45),
+   563→    type: createDynamicField('Chemoinformatics'),
+   564→    format: createDynamicField('CSV'),
+   565→    sourceUrl: createDynamicField('https://www.ebi.ac.uk/chembl/'),
+   566→    tags: createDynamicField(['compounds', 'bioactivity', 'drug-discovery', 'binding', 'ic50']),
+   567→    lastModified: createDynamicField(new Date('2024-12-10')),
+   568→    isPublic: createDynamicField(true),
+   569→    isFavorite: createDynamicField(false),
+   570→    downloaded: createDynamicField(false),
+   571→    downloadProgress: createDynamicField(0),
+   572→    createdAt: new Date('2024-03-10'),
+   573→    storageLayer: 'indexeddb',
+   574→    volumeTier: 2,
+   575→  },
+   576→  {
+   577→    id: 'ds-004',
+   578→    name: createDynamicField('RCSB PDB Structure Collection'),
+   579→    description: createDynamicField('3D structural data of proteins, nucleic acids, and complexes determined by X-ray crystallography, NMR, and cryo-EM. Includes experimental method and resolution.'),
+   580→    size: createDynamicField('2.1 GB'),
+   581→    sizeBytes: createDynamicField(2254857830),
+   582→    rows: createDynamicField(185000),
+   583→    columns: createDynamicField(85),
+   584→    type: createDynamicField('Structural Biology'),
+   585→    format: createDynamicField('mmCIF'),
+   586→    sourceUrl: createDynamicField('https://www.rcsb.org/'),
+   587→    tags: createDynamicField(['structures', 'pdb', '3d', 'proteins', 'ligands', 'cryo-em']),
+   588→    lastModified: createDynamicField(new Date('2024-12-18')),
+   589→    isPublic: createDynamicField(true),
+   590→    isFavorite: createDynamicField(false),
+   591→    downloaded: createDynamicField(false),
+   592→    downloadProgress: createDynamicField(0),
+   593→    createdAt: new Date('2024-04-05'),
+   594→    storageLayer: 'indexeddb',
+   595→    volumeTier: 3,
+   596→  },
+   597→  {
+   598→    id: 'ds-005',
+   599→    name: createDynamicField('gnomAD v3.1.2 Variant Frequencies'),
+   600→    description: createDynamicField('Genome aggregation database containing allele frequencies from 141,456 whole genomes and 15,708 whole exomes. Includes quality metrics and ancestry labels.'),
+   601→    size: createDynamicField('6.7 GB'),
+   602→    sizeBytes: createDynamicField(7196028505),
+   603→    rows: createDynamicField(246000000),
+   604→    columns: createDynamicField(32),
+   605→    type: createDynamicField('Population Genetics'),
+   606→    format: createDynamicField('BCF'),
+   607→    sourceUrl: createDynamicField('https://gnomad.broadinstitute.org/'),
+   608→    tags: createDynamicField(['variants', 'frequencies', 'population', 'genomics', 'allele']),
+   609→    lastModified: createDynamicField(new Date('2024-10-03')),
+   610→    isPublic: createDynamicField(true),
+   611→    isFavorite: createDynamicField(true),
+   612→    downloaded: createDynamicField(false),
+   613→    downloadProgress: createDynamicField(0),
+   614→    createdAt: new Date('2024-05-12'),
+   615→    storageLayer: 'duckdb',
+   616→    volumeTier: 4,
+   617→  },
+   618→  {
+   619→    id: 'ds-006',
+   620→    name: createDynamicField('arXiv ML Papers Corpus (2020-2024)'),
+   621→    description: createDynamicField('Machine learning paper abstracts, metadata, and citation networks extracted from arXiv cs.LG category with NLP processing for topic modeling.'),
+   622→    size: createDynamicField('340 MB'),
+   623→    sizeBytes: createDynamicField(356515840),
+   624→    rows: createDynamicField(89000),
+   625→    columns: createDynamicField(25),
+   626→    type: createDynamicField('Literature'),
+   627→    format: createDynamicField('JSONL'),
+   628→    sourceUrl: createDynamicField('https://arxiv.org/list/cs.LG/recent'),
+   629→    tags: createDynamicField(['machine-learning', 'papers', 'citations', 'nlp', 'topic-modeling']),
+   630→    lastModified: createDynamicField(new Date('2024-12-19')),
+   631→    isPublic: createDynamicField(true),
+   632→    isFavorite: createDynamicField(false),
+   633→    downloaded: createDynamicField(true),
+   634→    downloadProgress: createDynamicField(100),
+   635→    createdAt: new Date('2024-06-18'),
+   636→    storageLayer: 'local',
+   637→    volumeTier: 1,
+   638→  },
+   639→  {
+   640→    id: 'ds-007',
+   641→    name: createDynamicField('Materials Project Crystal Structures'),
+   642→    description: createDynamicField('Computed crystal structures, formation energies, and electronic properties for ~150,000 inorganic materials from DFT calculations.'),
+   643→    size: createDynamicField('1.2 GB'),
+   644→    sizeBytes: createDynamicField(1288490188),
+   645→    rows: createDynamicField(152000),
+   646→    columns: createDynamicField(62),
+   647→    type: createDynamicField('Materials Science'),
+   648→    format: createDynamicField('JSON'),
+   649→    sourceUrl: createDynamicField('https://materialsproject.org/'),
+   650→    tags: createDynamicField(['materials', 'crystals', 'dft', 'electronic', 'bandgap']),
+   651→    lastModified: createDynamicField(new Date('2024-12-14')),
+   652→    isPublic: createDynamicField(true),
+   653→    isFavorite: createDynamicField(false),
+   654→    downloaded: createDynamicField(false),
+   655→    downloadProgress: createDynamicField(0),
+   656→    createdAt: new Date('2024-07-22'),
+   657→    storageLayer: 'indexeddb',
+   658→    volumeTier: 2,
+   659→  },
+   660→  {
+   661→    id: 'ds-008',
+   662→    name: createDynamicField('GEO Transcriptomic Series'),
+   663→    description: createDynamicField('Curated gene expression omnibus series with processed matrices, sample metadata, and experimental designs for differential expression analysis.'),
+   664→    size: createDynamicField('3.4 GB'),
+   665→    sizeBytes: createDynamicField(3650722201),
+   666→    rows: createDynamicField(45000),
+   667→    columns: createDynamicField(28000),
+   668→    type: createDynamicField('Transcriptomics'),
+   669→    format: createDynamicField('SOFT'),
+   670→    sourceUrl: createDynamicField('https://www.ncbi.nlm.nih.gov/geo/'),
+   671→    tags: createDynamicField(['geo', 'expression', 'transcriptomics', 'microarray', 'differential']),
+   672→    lastModified: createDynamicField(new Date('2024-12-08')),
+   673→    isPublic: createDynamicField(true),
+   674→    isFavorite: createDynamicField(false),
+   675→    downloaded: createDynamicField(false),
+   676→    downloadProgress: createDynamicField(0),
+   677→    createdAt: new Date('2024-08-30'),
+   678→    storageLayer: 'indexeddb',
+   679→    volumeTier: 3,
+   680→  },
+   681→];
+   682→
+   683→const generateSyntheticConnectors = (): ConnectorConfig[] => [
+   684→  {
+   685→    id: 'ncbi-genbank',
+   686→    name: 'NCBI GenBank',
+   687→    category: 'biological',
+   688→    isEnabled: createDynamicField(true),
+   689→    isConnected: createDynamicField(true),
+   690→    syncStatus: 'success',
+   691→    recordCount: createDynamicField(250000000),
+   692→    apiEndpoint: createDynamicField('https://api.ncbi.nlm.nih.gov/datasets/v2'),
+   693→    apiKey: createDynamicField(''),
+   694→    freeTierLimit: 3,
+   695→    isFreeTier: true,
+   696→    features: ['Sequence retrieval', 'Genome downloads', 'Literature linking', 'Taxonomy lookup'],
+   697→    lastSync: new Date(),
+   698→    latency: 245,
+   699→    dataTypes: ['sequences', 'genomes', 'literature', 'taxonomies'],
+   700→  },
+   701→  {
+   702→    id: 'rcsb-pdb',
+   703→    name: 'RCSB Protein Data Bank',
+   704→    category: 'biological',
+   705→    isEnabled: createDynamicField(true),
+   706→    isConnected: createDynamicField(true),
+   707→    syncStatus: 'success',
+   708→    recordCount: createDynamicField(185000),
+   709→    apiEndpoint: createDynamicField('https://data.rcsb.org/rest/v1/core/entry'),
+   710→    apiKey: createDynamicField(''),
+   711→    freeTierLimit: 5,
+   712→    isFreeTier: true,
+   713→    features: ['3D structures', 'Ligand binding', 'Sequence alignment', 'Visualization'],
+   714→    lastSync: new Date(Date.now() - 3600000),
+   715→    latency: 180,
+   716→    dataTypes: ['structures', 'proteins', 'complexes', 'ligands'],
+   717→  },
+   718→  {
+   719→    id: 'uniprot',
+   720→    name: 'UniProtKB',
+   721→    category: 'biological',
+   722→    isEnabled: createDynamicField(true),
+   723→    isConnected: createDynamicField(false),
+   724→    syncStatus: 'idle',
+   725→    recordCount: createDynamicField(247000000),
+   726→    apiEndpoint: createDynamicField('https://rest.uniprot.org/uniprotkb'),
+   727→    apiKey: createDynamicField(''),
+   728→    freeTierLimit: 15,
+   729→    isFreeTier: true,
+   730→    features: ['Protein sequences', 'Function annotation', 'Pathway mapping', 'Variant data'],
+   731→    dataTypes: ['protein-sequences', 'annotations', 'functions', 'pathways'],
+   732→  },
+   733→  {
+   734→    id: 'pubchem',
+   735→    name: 'PubChem',
+   736→    category: 'chemical',
+   737→    isEnabled: createDynamicField(true),
+   738→    isConnected: createDynamicField(true),
+   739→    syncStatus: 'success',
+   740→    recordCount: createDynamicField(111000000),
+   741→    apiEndpoint: createDynamicField('https://pubchem.ncbi.nlm.nih.gov/rest/pug'),
+   742→    apiKey: createDynamicField(''),
+   743→    freeTierLimit: 5,
+   744→    isFreeTier: true,
+   745→    features: ['Compound search', 'Bioassay data', 'Properties', 'Structure similarity'],
+   746→    lastSync: new Date(Date.now() - 7200000),
+   747→    latency: 320,
+   748→    dataTypes: ['compounds', 'substances', 'bioassays', 'properties'],
+   749→  },
+   750→  {
+   751→    id: 'crossref',
+   752→    name: 'CrossRef',
+   753→    category: 'literature',
+   754→    isEnabled: createDynamicField(true),
+   755→    isConnected: createDynamicField(true),
+   756→    syncStatus: 'success',
+   757→    recordCount: createDynamicField(138000000),
+   758→    apiEndpoint: createDynamicField('https://api.crossref.org/works'),
+   759→    apiKey: createDynamicField(''),
+   760→    freeTierLimit: 50,
+   761→    isFreeTier: true,
+   762→    features: ['DOI metadata', 'Citation links', 'Funder info', 'ORCID integration'],
+   763→    lastSync: new Date(Date.now() - 1800000),
+   764→    latency: 150,
+   765→    dataTypes: ['doi-metadata', 'citations', 'references', 'funder-info'],
+   766→  },
+   767→  {
+   768→    id: 'arxiv',
+   769→    name: 'arXiv Preprints',
+   770→    category: 'literature',
+   771→    isEnabled: createDynamicField(true),
+   772→    isConnected: createDynamicField(true),
+   773→    syncStatus: 'success',
+   774→    recordCount: createDynamicField(2400000),
+   775→    apiEndpoint: createDynamicField('http://export.arxiv.org/api/query'),
+   776→    apiKey: createDynamicField(''),
+   777→    freeTierLimit: 0,
+   778→    isFreeTier: true,
+   779→    features: ['Preprints', 'Metadata', 'Categories', 'Full-text PDF'],
+   780→    lastSync: new Date(Date.now() - 900000),
+   781→    latency: 890,
+   782→    dataTypes: ['preprints', 'metadata', 'categories', 'full-text'],
+   783→  },
+   784→  {
+   785→    id: 'openalex',
+   786→    name: 'OpenAlex',
+   787→    category: 'literature',
+   788→    isEnabled: createDynamicField(true),
+   789→    isConnected: createDynamicField(true),
+   790→    syncStatus: 'success',
+   791→    recordCount: createDynamicField(250000000),
+   792→    apiEndpoint: createDynamicField('https://api.openalex.org/works'),
+   793→    apiKey: createDynamicField(''),
+   794→    freeTierLimit: 10,
+   795→    isFreeTier: true,
+   796→    features: ['Works catalog', 'Author profiles', 'Concepts', 'Institutions'],
+   797→    lastSync: new Date(Date.now() - 3600000),
+   798→    latency: 210,
+   799→    dataTypes: ['works', 'authors', 'concepts', 'institutions'],
+   800→  },
+   801→];
+   802→
+   803→const generateSyntheticJobs = (): ComputeJob[] => [
+   804→  {
+   805→    id: 'job-001',
+   806→    name: createDynamicField('GATK Variant Calling Pipeline'),
+   807→    type: 'variant_calling',
+   808→    status: 'running',
+   809→    priority: 'high',
+   810→    progress: createDynamicField(67),
+   811→    startTime: new Date(Date.now() - 7200000),
+   812→    estimatedTime: 10800,
+   813→    computeUnits: createDynamicField(32),
+   814→    memoryUsed: createDynamicField(58),
+   815→    gpuAllocated: createDynamicField(0),
+   816→    logs: [
+   817→      { timestamp: new Date(Date.now() - 7200000), level: 'INFO', message: 'Initializing GATK 4.4.0.0 HaplotypeCaller...' },
+   818→      { timestamp: new Date(Date.now() - 7150000), level: 'INFO', message: 'Loading reference genome GRCh38.p14 (3.2GB)...' },
+   819→      { timestamp: new Date(Date.now() - 7000000), level: 'INFO', message: 'Processing BAM file: sample_WGS_01.bam (~45x coverage)' },
+   820→      { timestamp: new Date(Date.now() - 3600000), level: 'WARN', message: 'Low coverage region detected on chr17:41,196,312-41,279,500 (TP53 locus)' },
+   821→      { timestamp: new Date(Date.now() - 600000), level: 'DEBUG', message: 'Active region calculation complete: 847 regions identified' },
+   822→      { timestamp: new Date(Date.now() - 300000), level: 'INFO', message: 'Haplotype assembly progress: 67% (567/847 regions)' },
+   823→    ],
+   824→    costEstimate: 12.50,
+   825→    tier: 'free',
+   826→  },
+   827→  {
+   828→    id: 'job-002',
+   829→    name: createDynamicField('AlphaFold2 Protein Structure Prediction'),
+   830→    type: 'protein_folding',
+   831→    status: 'running',
+   832→    priority: 'normal',
+   833→    progress: createDynamicField(34),
+   834→    startTime: new Date(Date.now() - 5400000),
+   835→    estimatedTime: 14400,
+   836→    computeUnits: createDynamicField(64),
+   837→    memoryUsed: createDynamicField(82),
+   838→    gpuAllocated: createDynamicField(4),
+   839→    logs: [
+   840→      { timestamp: new Date(Date.now() - 5400000), level: 'INFO', message: 'AlphaFold2 v2.3.2 initialized with model parameters (2.5GB)' },
+   841→      { timestamp: new Date(Date.now() - 5300000), level: 'INFO', message: 'Running MSA search against UniRef30, BFD, MGnify...' },
+   842→      { timestamp: new Date(Date.now() - 4800000), level: 'INFO', message: 'MSA complete: 14,232 sequences found, depth=512' },
+   843→      { timestamp: new Date(Date.now() - 3600000), level: 'INFO', message: 'Evoformer iteration 24/48 - computing pair representations' },
+   844→      { timestamp: new Date(Date.now() - 1200000), level: 'DEBUG', message: 'Structure module generating 3D coordinates (recycle #3)' },
+   845→      { timestamp: new Date(Date.now() - 600000), level: 'INFO', message: 'Confidence prediction pLDDT: 92.3 (estimated)' },
+   846→    ],
+   847→    costEstimate: 28.00,
+   848→    tier: 'pro',
+   849→  },
+   850→  {
+   851→    id: 'job-003',
+   852→    name: createDynamicField('Virtual Screening - ChEMBL Library'),
+   853→    type: 'drug_screening',
+   854→    status: 'queued',
+   855→    priority: 'normal',
+   856→    progress: createDynamicField(0),
+   857→    startTime: new Date(),
+   858→    estimatedTime: 21600,
+   859→    computeUnits: createDynamicField(128),
+   860→    memoryUsed: createDynamicField(0),
+   861→    gpuAllocated: createDynamicField(8),
+   862→    logs: [
+   863→      { timestamp: new Date(), level: 'INFO', message: 'Job queued. Waiting for GPU cluster availability...' },
+   864→    ],
+   865→    costEstimate: 45.00,
+   866→    tier: 'pro',
+   867→  },
+   868→  {
+   869→    id: 'job-004',
+   870→    name: createDynamicField('Random Forest Classifier Training'),
+   871→    type: 'ml_training',
+   872→    status: 'completed',
+   873→    priority: 'low',
+   874→    progress: createDynamicField(100),
+   875→    startTime: new Date(Date.now() - 18000000),
+   876→    endTime: new Date(Date.now() - 3600000),
+   877→    estimatedTime: 14400,
+   878→    computeUnits: createDynamicField(16),
+   879→    memoryUsed: createDynamicField(0),
+   880→    gpuAllocated: createDynamicField(1),
+   881→    logs: [
+   882→      { timestamp: new Date(Date.now() - 18000000), level: 'INFO', message: 'Scikit-learn Random Forest training initiated' },
+   883→      { timestamp: new Date(Date.now() - 17800000), level: 'INFO', message: 'Loading training set: 50,000 samples × 256 features' },
+   884→      { timestamp: new Date(Date.now() - 17500000), level: 'INFO', message: 'Hyperparameters: n_estimators=500, max_depth=20, criterion=gini' },
+   885→      { timestamp: new Date(Date.now() - 14000000), level: 'INFO', message: 'Training fold 4/5 (cross-validation)...' },
+   886→      { timestamp: new Date(Date.now() - 9000000), level: 'INFO', message: 'Feature importance computed. Top 10 features selected.' },
+   887→      { timestamp: new Date(Date.now() - 3600000), level: 'SUCCESS', message: 'Training complete! Accuracy: 94.7%, AUC: 0.967, F1: 0.943' },
+   888→    ],
+   889→    resultUrl: '/storage/results/job-004-model.pkl',
+   890→    costEstimate: 8.50,
+   891→    tier: 'free',
+   892→  },
+   893→  {
+   894→    id: 'job-005',
+   895→    name: createDynamicField('Molecular Dynamics Simulation'),
+   896→    type: 'molecular_dynamics',
+   897→    status: 'failed',
+   898→    priority: 'high',
+   899→    progress: createDynamicField(42),
+   900→    startTime: new Date(Date.now() - 10800000),
+   901→    endTime: new Date(Date.now() - 3600000),
+   902→    estimatedTime: 28800,
+   903→    computeUnits: createDynamicField(96),
+   904→    memoryUsed: createDynamicField(0),
+   905→    gpuAllocated: createDynamicField(8),
+   906→    errorMessage: 'GPU out-of-memory at step 2,400,000 (frame 48ns). Reduce system size or increase GPU memory allocation.',
+   907→    logs: [
+   908→      { timestamp: new Date(Date.now() - 10800000), level: 'INFO', message: 'GROMACS 2024.3 MD simulation initialized' },
+   909→      { timestamp: new Date(Date.now() - 10700000), level: 'INFO', message: 'System: 156,432 atoms, 45,892 water molecules, PME electrostatics' },
+   910→      { timestamp: new Date(Date.now() - 10400000), level: 'INFO', message: 'Energy minimization converged after 5,124 steps' },
+   911→      { timestamp: new Date(Date.now() - 10000000), level: 'INFO', message: 'NPT equilibration complete. Production run starting...' },
+   912→      { timestamp: new Date(Date.now() - 7200000), level: 'ERROR', message: 'CUDA error: out of memory. GPU has 80GB, need ~96GB.' },
+   913→    ],
+   914→    costEstimate: 0, // Refunded on failure
+   915→    tier: 'pro',
+   916→  },
+   917→];
+   918→
+   919→const generateSyntheticWorkspaceFiles = (): WorkspaceFile[] => [
+   920→  {
+   921→    id: 'file-001',
+   922→    name: createDynamicField('analysis_pipeline.py'),
+   923→    content: createDynamicField(`# SciHub Pro Analysis Pipeline
+   924→# This template helps you get started with data analysis
+   925→
+   926→import pandas as pd
+   927→import numpy as np
+   928→from scipy import stats
+   929→import matplotlib.pyplot as plt
+   930→
+   931→def load_dataset(dataset_id: str) -> pd.DataFrame:
+   932→    """Load a dataset from the SciHub Pro data lake."""
+   933→    # TODO: Replace with actual data loading logic
+   934→    print(f"Loading dataset: {dataset_id}")
+   935→    return pd.DataFrame()
+   936→
+   937→def analyze_expression(data: pd.DataFrame, gene_column: str = 'gene_name'):
+   938→    """Perform basic expression analysis."""
+   939→    stats_summary = data.describe()
+   940→    
+   941→    # Find differentially expressed genes
+   942→    # TODO: Add your differential expression logic here
+   943→    
+   944→    return stats_summary
+   945→
+   946→def plot_results(results, output_path: str = 'results.png'):
+   947→    """Visualize analysis results."""
+   948→    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+   949→    
+   950→    # TODO: Customize your visualizations
+   951→    
+   952→    plt.tight_layout()
+   953→    plt.savefig(output_path)
+   954→    print(f"Plot saved to {output_path}")
+   955→
+   956→# Main execution
+   957→if __name__ == "__main__":
+   958→    # Load your dataset
+   959→    df = load_dataset("ds-001")  # TCGA Pan-Cancer dataset
+   960→    
+   961→    # Run analysis
+   962→    results = analyze_expression(df)
+   963→    print(results)
+   964→    
+   965→    # Generate plots
+   966→    plot_results(results)
+   967→`),
+   968→    language: 'python',
+   969→    isModified: createDynamicField(false),
+   970→    createdAt: new Date(Date.now() - 86400000),
+   971→    lastModified: new Date(Date.now() - 3600),
+   972→  },
+   973→  {
+   974→    id: 'file-002',
+   975→    name: createDynamicField('query_examples.sql'),
+   976→    content: createDynamicField(`-- SciHub Pro SQL Query Examples
+   977→-- Use these templates to query your datasets
+   978→
+   979→-- Example 1: Basic dataset overview
+   980→SELECT 
+   981→    COUNT(*) as total_rows,
+   982→    COUNT(DISTINCT column_name) as unique_values
+   983→FROM dataset_table;
+   984→
+   985→-- Example 2: Filter by conditions
+   986→SELECT *
+   987→FROM gene_expression
+   988→WHERE expression_value > 10
+   989→    AND p_value < 0.05
+   990→ORDER BY expression_value DESC
+   991→LIMIT 100;
+   992→
+   993→-- Example 3: Aggregation with grouping
+   994→SELECT 
+   995→    gene_pathway,
+   996→    AVG(expression) as mean_expression,
+   997→    STDDEV(expression) as std_expression,
+   998→    COUNT(*) as gene_count
+   999→FROM gene_expression
+  1000→GROUP BY gene_pathway
+  1001→HAVING COUNT(*) > 5
+  1002→ORDER BY mean_expression DESC;
+  1003→
+  1004→-- Example 4: Join datasets
+  1005→SELECT 
+  1006→    g.gene_name,
+  1007→    g.expression_value,
+  1008→    p.protein_function,
+  1009→    c.compound_name
+  1010→FROM gene_expression g
+  1011→JOIN protein_annotations p ON g.gene_id = p.gene_id
+  1012→JOIN compound_bindings c ON p.protein_id = c.target_protein
+  1013→WHERE g.tumor_type = 'BRCA';
+  1014→`),
+  1015→    language: 'sql',
+  1016→    isModified: createDynamicField(false),
+  1017→    createdAt: new Date(Date.now() - 172800000),
+  1018→    lastModified: new Date(Date.now() - 86400),
+  1019→  },
+  1020→  {
+  1021→    id: 'file-003',
+  1022→    name: createDynamicField('notes.md'),
+  1023→    content: createDynamicField(`# Research Notes
+  1024→
+  1025→## Project Overview
+  1026→- **Goal**: Identify potential drug targets in breast cancer
+  1027→- **Data Sources**: TCGA, ChEMBL, Protein Atlas
+  1028→- **Timeline**: Q1 2025
+  1029→
+  1030→## Key Findings
+  1031→1. TP53 mutations in 45% of samples
+  1032→2. Overexpression of HER2 in 20% of cases
+  1033→3. Potential compound matches: 12 candidates
+  1034→
+  1035→## Next Steps
+  1036→- [ ] Validate top 5 compounds in vitro
+  1037→- [ ] Write methods section
+  1038→- [ ] Prepare figures for publication
+  1039→
+  1040→## References
+  1041→- Smith et al. (2024) Nature Methods
+  1042→- Johnson et al. (2023) Cell Systems
+  1043→`),
+  1044→    language: 'markdown',
+  1045→    isModified: createDynamicField(true),
+  1046→    createdAt: new Date(Date.now() - 259200000),
+  1047→    lastModified: new Date(),
+  1048→  },
+  1049→];
+  1050→
+  1051→const generateSyntheticQueries = (): SavedQuery[] => [
+  1052→  {
+  1053→    id: 'query-001',
+  1054→    name: createDynamicField('Highly Cited Cancer Papers'),
+  1055→    sql: createDynamicField('SELECT * FROM papers WHERE subject LIKE "%cancer%" AND citations > 100 ORDER BY citations DESC LIMIT 50'),
+  1056→    description: createDynamicField('Find highly cited cancer research papers from CrossRef/OpenAlex'),
+  1057→    runCount: createDynamicField(15),
+  1058→    lastRun: new Date(Date.now() - 3600000),
+  1059→    dataSource: 'crossref',
+  1060→  },
+  1061→  {
+  1062→    id: 'query-002',
+  1063→    name: createDynamicField('Gene Expression Outliers'),
+  1064→    sql: createDynamicField('SELECT gene_name, expression, z_score FROM expression_data WHERE ABS(z_score) > 2 ORDER BY z_score DESC'),
+  1065→    description: createDynamicField('Identify genes with outlier expression values (|z| > 2)'),
+  1066→    runCount: createDynamicField(8),
+  1067→    lastRun: new Date(Date.now() - 86400),
+  1068→    dataSource: 'local',
+  1069→  },
+  1070→  {
+  1071→    id: 'query-003',
+  1072→    name: createDynamicField('Compound Bioactivity Screen'),
+  1073→    sql: createDynamicField('SELECT compound_id, ic50, target_name, assay_type FROM chembl_bioactivity WHERE ic50 < 1000 ORDER BY ic50 ASC LIMIT 100'),
+  1074→    description: createDynamicField('Screen ChEMBL for high-affinity compounds (IC50 < 1μM)'),
+  1075→    runCount: createDynamicField(3),
+  1076→    dataSource: 'chembl',
+  1077→  },
+  1078→];
+  1079→
+  1080→const generateSyntheticGuidance = (): GuidanceSuggestion[] => [
+  1081→  {
+  1082→    id: 'guide-001',
+  1083→    type: 'next_step',
+  1084→    title: 'Try Citation Analysis',
+  1085→    message: 'You\'ve searched for papers. Click to see who cited them and build your literature review.',
+  1086→    icon: '📚',
+  1087→    targetRoute: '/knowledge',
+  1088→    context: 'search',
+  1089→    priority: 8,
+  1090→    dismissed: false,
+  1091→    shownCount: 0,
+  1092→    maxShows: 3,
+  1093→  },
+  1094→  {
+  1095→    id: 'guide-002',
+  1096→    type: 'feature_discovery',
+  1097→    title: 'Run Your First Analysis',
+  1098→    message: 'Your dataset is ready! Use the workspace to write Python/R code and analyze it interactively.',
+  1099→    icon: '🚀',
+  1100→    targetRoute: '/workspace',
+  1101→    context: 'data',
+  1102→    priority: 9,
+  1103→    dismissed: false,
+  1104→    shownCount: 0,
+  1105→    maxShows: 5,
+  1106→  },
+  1107→  {
+  1108→    id: 'guide-003',
+  1109→    type: 'tip',
+  1110→    title: 'Keyboard Shortcut',
+  1111→    message: 'Press Ctrl+Enter to execute code instantly in the workspace editor.',
+  1112→    icon: '⌨️',
+  1113→    context: 'workspace',
+  1114→    priority: 5,
+  1115→    dismissed: false,
+  1116→    shownCount: 0,
+  1117→    maxShows: 3,
+  1118→  },
+  1119→  {
+  1120→    id: 'guide-004',
+  1121→    type: 'best_practice',
+  1122→    title: 'Save Your Progress',
+  1123→    message: 'Great work so far! Save this query to reuse it later and track your analysis history.',
+  1124→    icon: '💾',
+  1125→    targetAction: 'save_query',
+  1126→    context: 'query',
+  1127→    priority: 7,
+  1128→    dismissed: false,
+  1129→    shownCount: 0,
+  1130→    maxShows: 3,
+  1131→  },
+  1132→  {
+  1133→    id: 'guide-005',
+  1134→    type: 'feature_discovery',
+  1135→    title: 'AI Assistant Available',
+  1136→    message: 'Stuck on something? Ask AETHEL AI to help explain concepts or generate code.',
+  1137→    icon: '🤖',
+  1138→    targetRoute: '/aethel',
+  1139→    context: 'global',
+  1140→    priority: 6,
+  1141→    dismissed: false,
+  1142→    shownCount: 0,
+  1143→    maxShows: 4,
+  1144→  },
+  1145→];
+  1146→
+  1147→const generateSyntheticNotifications = (): NotificationItem[] => [
+  1148→  {
+  1149→    id: 'notif-001',
+  1150→    type: 'job_complete',
+  1151→    title: 'Analysis Complete',
+  1152→    message: 'Your Random Forest Classifier training finished with 94.7% accuracy!',
+  1153→    timestamp: new Date(Date.now() - 3600000),
+  1154→    read: false,
+  1155→    actionUrl: '/compute',
+  1156→    actionLabel: 'View Results',
+  1157→    priority: 'high',
+  1158→  },
+  1159→  {
+  1160→    id: 'notif-002',
+  1161→    type: 'collaboration',
+  1162→    title: 'New Team Member',
+  1163→    message: 'Dr. Sarah Chen joined your Oncology Research project.',
+  1164→    timestamp: new Date(Date.now() - 7200000),
+  1165→    read: false,
+  1166→    actionUrl: '/collaboration',
+  1167→    actionLabel: 'Say Hi',
+  1168→    priority: 'medium',
+  1169→  },
+  1170→  {
+  1171→    id: 'notif-003',
+  1172→    type: 'milestone',
+  1173→    title: '100 Searches Milestone!',
+  1174→    message: 'Congratulations! You\'ve performed 100 searches. Keep exploring!',
+  1175→    timestamp: new Date(Date.now() - 86400000),
+  1176→    read: true,
+  1177→    priority: 'low',
+  1178→  },
+  1179→  {
+  1180→    id: 'notif-004',
+  1181→    type: 'system',
+  1182→    title: 'New Datasets Available',
+  1183→    message: '5 new datasets were added to the Data Lake this week. Check them out!',
+  1184→    timestamp: new Date(Date.now() - 172800000),
+  1185→    read: true,
+  1186→    actionUrl: '/data',
+  1187→    actionLabel: 'Browse Data',
+  1188→    priority: 'info',
+  1189→  },
+  1190→];
+  1191→
+  1192→// ============================================================================
+  1193→// MAIN STORE INTERFACE & IMPLEMENTATION
+  1194→// ============================================================================
+  1195→
+  1196→interface SciHubStore {
+  1197→  // === USER STATE ===
+  1198→  preferences: UserPreferences;
+  1199→  userProfile: UserProfile;
+  1200→  
+  1201→  // === DASHBOARD STATE ===
+  1202→  dashboardStats: DashboardStats;
+  1203→  activities: ActivityEntry[];
+  1204→  
+  1205→  // === DATA LAKE STATE ===
+  1206→  datasets: DatasetItem[];
+  1207→  totalStorageUsed: number;
+  1208→  
+  1209→  // === CONNECTORS STATE ===
+  1210→  connectors: ConnectorConfig[];
+  1211→  
+  1212→  // === COMPUTE STATE ===
+  1213→  computeJobs: ComputeJob[];
+  1214→  computeNodes: ComputeNode[];
+  1215→  
+  1216→  // === WORKSPACE STATE ===
+  1217→  workspaceFiles: WorkspaceFile[];
+  1218→  activeFileId: string | null;
+  1219→  
+  1220→  // === QUERY STATE ===
+  1221→  savedQueries: SavedQuery[];
+  1222→  currentQueryResult: QueryResult | null;
+  1223→  isExecutingQuery: boolean;
+  1224→  
+  1225→  // === KNOWLEDGE GRAPH STATE ===
+  1226→  graphNodes: GraphNode[];
+  1227→  graphEdges: GraphEdge[];
+  1228→  
+  1229→  // === COLLABORATION STATE ===
+  1230→  projects: Project[];
+  1231→  teamMembers: TeamMember[];
+  1232→  discussions: DiscussionThread[];
+  1233→  
+  1234→  // === AETHEL AI STATE ===
+  1235→  aethelModels: AethelModel[];
+  1236→  aethelQueries: AethelQuery[];
+  1237→  activeAethelQuery: string | null;
+  1238→  
+  1239→  // === WORKFLOW STATE ===
+  1240→  workflows: WorkflowDefinition[];
+  1241→  
+  1242→  // === NOTIFICATIONS & GUIDANCE ===
+  1243→  notifications: NotificationItem[];
+  1244→  guidanceSuggestions: GuidanceSuggestion[];
+  1245→  upgradePrompts: UpgradePrompt[];
+  1246→  unreadNotificationCount: number;
+  1247→  
+  1248→  // === SEARCH HISTORY ===
+  1249→  searchHistory: SearchHistoryEntry[];
+  1250→  savedItems: SavedItem[];
+  1251→  
+  1252→  // === DATABASE CONFIG ===
+  1253→  databaseConfig: DatabaseConfig;
+  1254→  currentVolumeTier: VolumeTier;
+  1255→  
+  1256→  // === UI STATE ===
+  1257→  sidebarOpen: boolean;
+  1258→  modals: Record<string, boolean>;
+  1259→  loadingStates: Record<string, boolean>;
+  1260→  errors: Record<string, string | null>;
+  1261→  
+  1262→  // === PREFERENCES ACTIONS ===
+  1263→  updatePreferences: (prefs: Partial<UserPreferences>) => void;
+  1264→  setTheme: (theme: UserPreferences['theme']) => void;
+  1265→  setLanguage: (lang: string) => void;
+  1266→  setSkillLevel: (level: UserPreferences['skillLevel']) => void;
+  1267→  
+  1268→  // === PROFILE ACTIONS ===
+  1269→  updateUserProfile: (field: keyof UserProfile, value: any) => void;
+  1270→  resetProfileChanges: () => void;
+  1271→  
+  1272→  // === DASHBOARD ACTIONS ===
+  1273→  updateDashboardStat: (key: keyof DashboardStats, value: any) => void;
+  1274→  addActivity: (activity: Omit<ActivityEntry, 'id' | 'timestamp'>) => void;
+  1275→  clearActivities: () => void;
+  1276→  
+  1277→  // === DATASET ACTIONS ===
+  1278→  addDataset: (dataset: Omit<DatasetItem, 'id' | 'createdAt'>) => void;
+  1279→  updateDataset: (id: string, updates: Partial<DatasetItem>) => void;
+  1280→  deleteDataset: (id: string) => void;
+  1281→  toggleFavoriteDataset: (id: string) => void;
+  1282→  startDownload: (id: string) => void;
+  1283→  updateDownloadProgress: (id: string, progress: number) => void;
+  1284→  
+  1285→  // === CONNECTOR ACTIONS ===
+  1286→  toggleConnector: (id: string) => Promise<void>;
+  1287→  updateConnectorApiKey: (id: string, key: string) => void;
+  1288→  syncConnector: (id: string) => Promise<void>;
+  1289→  syncAllConnectors: () => Promise<void>;
+  1290→  
+  1291→  // === COMPUTE ACTIONS ===
+  1292→  addComputeJob: (job: Omit<ComputeJob, 'id' | 'startTime'>) => void;
+  1293→  updateJobProgress: (id: string, progress: number) => void;
+  1294→  cancelJob: (id: string) => void;
+  1295→  restartJob: (id: string) => void;
+  1296→  
+  1297→  // === WORKSPACE ACTIONS ===
+  1298→  addWorkspaceFile: (file: Omit<WorkspaceFile, 'id' | 'createdAt' | 'lastModified'>) => void;
+  1299→  updateFileContent: (id: string, content: string) => void;
+  1300→  setActiveFile: (id: string | null) => void;
+  1301→  deleteWorkspaceFile: (id: string) => void;
+  1302→  executeCode: (id: string) => Promise<ExecutionResult>;
+  1303→  
+  1304→  // === QUERY ACTIONS ===
+  1305→  addSavedQuery: (query: Omit<SavedQuery, 'id'>) => void;
+  1306→  updateSavedQuery: (id: string, updates: Partial<SavedQuery>) => void;
+  1307→  deleteSavedQuery: (id: string) => void;
+  1308→  executeSavedQuery: (id: string) => Promise<void>;
+  1309→  
+  1310→  // === KNOWLEDGE GRAPH ACTIONS ===
+  1311→  addGraphNode: (node: Omit<GraphNode, 'id'>) => void;
+  1312→  addGraphEdge: (edge: GraphEdge) => void;
+  1313→  clearGraph: () => void;
+  1314→  
+  1315→  // === COLLABORATION ACTIONS ===
+  1316→  addProject: (project: Omit<Project, 'id' | 'createdAt' | 'lastActivity'>) => void;
+  1317→  updateProject: (id: string, updates: Partial<Project>) => void;
+  1318→  addDiscussion: (discussion: Omit<DiscussionThread, 'id' | 'createdAt' | 'lastReply'>) => void;
+  1319→  addReply: (discussionId: string, reply: Omit<Reply, 'id' | 'timestamp'>) => void;
+  1320→  
+  1321→  // === AETHEL AI ACTIONS ===
+  1322→  sendAethelQuery: (modelId: string, prompt: string) => Promise<void>;
+  1323→  clearAethelHistory: () => void;
+  1324→  
+  1325→  // === WORKFLOW ACTIONS ===
+  1326→  addWorkflow: (workflow: Omit<WorkflowDefinition, 'id' | 'createdAt'>) => void;
+  1327→  updateWorkflow: (id: string, updates: Partial<WorkflowDefinition>) => void;
+  1328→  runWorkflow: (id: string) => void;
+  1329→  
+  1330→  // === NOTIFICATION ACTIONS ===
+  1331→  markNotificationRead: (id: string) => void;
+  1332→  markAllNotificationsRead: () => void;
+  1333→  addNotification: (notification: Omit<NotificationItem, 'id' | 'timestamp'>) => void;
+  1334→  dismissNotification: (id: string) => void;
+  1335→  
+  1336→  // === GUIDANCE ACTIONS ===
+  1337→  showGuidance: (id: string) => void;
+  1338→  dismissGuidance: (id: string) => void;
+  1339→  getRelevantGuidance: (context: string) => GuidanceSuggestion[];
+  1340→  
+  1341→  // === UPGRADE PROMPT ACTIONS ===
+  1342→  checkVolumeThreshold: () => { shouldPrompt: boolean; prompt?: UpgradePrompt };
+  1343→  dismissUpgradePrompt: (id: string) => void;
+  1344→  triggerUpgradePrompt: (type: UpgradePrompt['type']) => void;
+  1345→  
+  1346→  // === SEARCH & SAVE ACTIONS ===
+  1347→  addToSearchHistory: (entry: Omit<SearchHistoryEntry, 'id' | 'timestamp'>) => void;
+  1348→  saveItem: (item: Omit<SavedItem, 'id' | 'savedAt' | 'accessCount'>) => void;
+  1349→  unsaveItem: (id: string) => void;
+  1350→  updateSavedItemNotes: (id: string, notes: string) => void;
+  1351→  
+  1352→  // === UTILITY ACTIONS ===
+  1353→  calculateTotalStorage: () => void;
+  1354→  getCurrentVolumeTier: () => VolumeTier;
+  1355→  exportState: () => string;
+  1356→  importState: (json: string) => boolean;
+  1357→  resetAllFields: () => void;
+  1358→  getDirtyFieldsCount: () => number;
+  1359→  
+  1360→  // === UI ACTIONS ===
+  1361→  toggleSidebar: () => void;
+  1362→  setModal: (modalId: string, open: boolean) => void;
+  1363→  setLoading: (key: string, loading: boolean) => void;
+  1364→  setError: (key: string, error: string | null) => void;
+  1365→  clearErrors: () => void;
+  1366→}
+  1367→
+  1368→// Compute Node initial state
+  1369→const initialComputeNodes = [
+  1370→  { id: 'node-01', name: 'GPU Cluster A', status: 'online' as const, cpuUsage: 72, memoryUsage: 68, gpuUsage: 85, gpus: 8, runningJobs: 3 },
+  1371→  { id: 'node-02', name: 'GPU Cluster B', status: 'online' as const, cpuUsage: 45, memoryUsage: 52, gpuUsage: 30, gpus: 4, runningJobs: 1 },
+  1372→  { id: 'node-03', name: 'CPU Pool', status: 'online' as const, cpuUsage: 88, memoryUsage: 75, gpuUsage: 0, gpus: 0, runningJobs: 5 },
+  1373→  { id: 'node-04', name: 'Memory Node', status: 'maintenance' as const, cpuUsage: 0, memoryUsage: 0, gpuUsage: 0, gpus: 0, runningJobs: 0 },
+  1374→];
+  1375→
+  1376→// AETHEL Models
+  1377→const initialAethelModels: AethelModel[] = [
+  1378→  { id: 'aethel-7b', name: 'AETHEL-7B', parameters: '7 Billion', specialty: 'General Science QA', speed: 'fast', available: true, description: 'Fast, efficient model for quick questions and explanations', inputCost: 0, outputCost: 0, maxTokens: 2048, tier: 'free' },
+  1379→  { id: 'aethel-70b', name: 'AETHEL-70B', parameters: '70 Billion', specialty: 'Deep Research Analysis', speed: 'medium', available: true, description: 'Powerful model for complex analysis and literature synthesis', inputCost: 0.001, outputCost: 0.002, maxTokens: 4096, tier: 'pro' },
+  1380→  { id: 'aethel-sci', name: 'AETHEL-Science', parameters: '120 Billion', specialty: 'Domain Expert (Bio/Chem/Phys)', speed: 'slow', available: true, description: 'Specialized model trained on scientific literature and databases', inputCost: 0.002, outputCost: 0.004, maxTokens: 8192, tier: 'pro' },
+  1381→  { id: 'aethel-code', name: 'AETHEL-Code', parameters: '34 Billion', specialty: 'Code Generation & Debugging', speed: 'fast', available: false, description: 'Optimized for Python, R, SQL, and Julia code generation', inputCost: 0.001, outputCost: 0.002, maxTokens: 4096, tier: 'pro' },
+  1382→];
+  1383→
+  1384→// Initial team members
+  1385→const initialTeamMembers: TeamMember[] = [
+  1386→  { id: 'member-001', name: 'Dr. Sarah Chen', role: 'Principal Investigator', online: true, lastActive: new Date(), expertise: ['Oncology', 'Bioinformatics'], publicationsCount: 45 },
+  1387→  { id: 'member-002', name: 'Prof. James Wilson', role: 'Co-Investigator', online: false, lastActive: new Date(Date.now() - 7200000), expertise: ['Structural Biology', 'Drug Design'], publicationsCount: 120 },
+  1388→  { id: 'member-003', name: 'Emily Rodriguez', role: 'Graduate Student', online: true, lastActive: new Date(), expertise: ['Machine Learning', 'Genomics'], publicationsCount: 8 },
+  1389→  { id: 'member-004', name: 'Dr. Alex Kim', role: 'Postdoctoral Fellow', online: false, lastActive: new Date(Date.now() - 1800000), expertise: ['Chemoinformatics', 'Data Science'], publicationsCount: 22 },
+  1390→];
+  1391→
+  1392→// Initial projects
+  1393→const initialProjects: Project[] = [
+  1394→  {
+  1395→    id: 'proj-001',
+  1396→    name: createDynamicField('Oncology Drug Target Discovery'),
+  1397→    description: createDynamicField('Identifying novel therapeutic targets for triple-negative breast cancer using multi-omics integration.'),
+  1398→    memberIds: ['member-001', 'member-002', 'member-003', 'member-004'],
+  1399→    status: 'active',
+  1400→    createdAt: new Date(Date.now() - 7776000000),
+  1401→    lastActivity: new Date(),
+  1402→    leadId: 'member-001',
+  1403→    datasetIds: ['ds-001', 'ds-003', 'ds-006'],
+  1404→    queryIds: ['query-001'],
+  1405→    visibility: 'team',
+  1406→  },
+  1407→  {
+  1408→    id: 'proj-002',
+  1409→    name: createDynamicField('Protein Structure Prediction Benchmark'),
+  1410→    description: createDynamicField('Benchmarking AlphaFold2 predictions against experimental structures for membrane proteins.'),
+  1411→    memberIds: ['member-003', 'member-004'],
+  1412→    status: 'active',
+  1413→    createdAt: new Date(Date.now() - 2592000000),
+  1414→    lastActivity: new Date(Date.now() - 86400000),
+  1415→    leadId: 'member-004',
+  1416→    datasetIds: ['ds-002', 'ds-004'],
+  1417→    queryIds: [],
+  1418→    visibility: 'public',
+  1419→  },
+  1420→];
+  1421→
+  1422→// Initial discussions
+  1423→const initialDiscussions: DiscussionThread[] = [
+  1424→  {
+  1425→    id: 'disc-001',
+  1426→    title: createDynamicField('TP53 mutation analysis methodology'),
+  1427→    authorId: 'member-001',
+  1428→    projectId: 'proj-001',
+  1429→    tags: ['methodology', 'tp53', 'variant-calling'],
+  1430→    replyCount: 5,
+  1431→    createdAt: new Date(Date.now() - 604800000),
+  1432→    lastReply: new Date(Date.now() - 3600000),
+  1433→    content: createDynamicField('Team, I\'d like to propose we use GATK HaplotypeCaller for our TP53 variant calling pipeline. The latest v4.4 shows improved sensitivity for indels. Thoughts?'),
+  1434→    replies: [
+  1435→      { id: 'reply-001', authorId: 'member-002', content: 'I agree. We should also consider DeepVariant as a comparison baseline.', timestamp: new Date(Date.now() - 500000000), reactions: { '👍': 3, '🎯': 1 } },
+  1436→      { id: 'reply-002', authorId: 'member-003', content: 'Can I benchmark both on our test dataset? I estimate it would take ~2 days on the GPU cluster.', timestamp: new Date(Date.now() - 400000000), reactions: { '👍': 2, '🚀': 2 } },
+  1437→    ],
+  1438→  },
+  1439→];
+  1440→
+  1441→// ============================================================================
+  1442→// STORE IMPLEMENTATION
+  1443→// ============================================================================
+  1444→
+  1445→export const useSciHubStore = create<SciHubStore>()(
+  1446→  persist(
+  1447→    (set, get) => ({
+  1448→      // === INITIAL STATE ===
+  1449→      
+  1450→      // Preferences
+  1451→      preferences: {
+  1452→        theme: 'system',
+  1453→        language: 'en',
+  1454→        fontSize: 'medium',
+  1455→        resultsPerPage: 20,
+  1456→        sidebarCollapsed: false,
+  1457→        autoSaveInterval: 30,
+  1458→        defaultDataSource: 'crossref',
+  1459→        notifications: {
+  1460→          emailJobComplete: true,
+  1461→          emailNewCollaborator: true,
+  1462→          pushUpdates: false,
+  1463→          weeklyDigest: true,
+  1464→          researchAlerts: true,
+  1465→        },
+  1466→        onboardingCompleted: false,
+  1467→        skillLevel: 'intermediate',
+  1468→      },
+  1469→
+  1470→      // User Profile
+  1471→      userProfile: {
+  1472→        displayName: createDynamicField('Dr. Researcher'),
+  1473→        email: createDynamicField('researcher@university.edu'),
+  1474→        institution: createDynamicField('University of Science'),
+  1475→        orcid: createDynamicField('0000-0000-0000-0000'),
+  1476→        bio: createDynamicField('Computational biologist interested in cancer genomics and drug discovery.'),
+  1477→        role: 'researcher',
+  1478→        joinDate: new Date(Date.now() - 7776000000), // 90 days ago
+  1479→        researchInterests: ['cancer-genomics', 'drug-discovery', 'machine-learning'],
+  1480→        publicationsCount: 12,
+  1481→        hIndex: 8,
+  1482→      },
+  1483→
+  1484→      // Dashboard Stats
+  1485→      dashboardStats: {
+  1486→        activeJobs: createDynamicField(2),
+  1487→        storageUsed: createDynamicField('18.4 MB'),
+  1488→        storageUsedBytes: createDynamicField(19293798000),
+  1489→        apiCallsToday: createDynamicField(147),
+  1490→        collaborators: createDynamicField(4),
+  1491→        savedItems: createDynamicField(23),
+  1492→        queriesRun: createDynamicField(89),
+  1493→        systemHealth: createDynamicField(94),
+  1494→        streakDays: createDynamicField(7),
+  1495→      },
+  1496→
+  1497→      // Activities
+  1498→      activities: [],
+  1499→
+  1500→      // Datasets
+  1501→      datasets: generateSyntheticDatasets(),
+  1502→      totalStorageUsed: 19293798000,
+  1503→
+  1504→      // Connectors
+  1505→      connectors: generateSyntheticConnectors(),
+  1506→
+  1507→      // Compute Jobs
+  1508→      computeJobs: generateSyntheticJobs(),
+  1509→      computeNodes: initialComputeNodes,
+  1510→
+  1511→      // Workspace
+  1512→      workspaceFiles: generateSyntheticWorkspaceFiles(),
+  1513→      activeFileId: 'file-001',
+  1514→
+  1515→      // Queries
+  1516→      savedQueries: generateSyntheticQueries(),
+  1517→      currentQueryResult: null,
+  1518→      isExecutingQuery: false,
+  1519→
+  1520→      // Knowledge Graph
+  1521→      graphNodes: [],
+  1522→      graphEdges: [],
+  1523→
+  1524→      // Collaboration
+  1525→      projects: initialProjects,
+  1526→      teamMembers: initialTeamMembers,
+  1527→      discussions: initialDiscussions,
+  1528→
+  1529→      // AETHEL AI
+  1530→      aethelModels: initialAethelModels,
+  1531→      aethelQueries: [],
+  1532→      activeAethelQuery: null,
+  1533→
+  1534→      // Workflows
+  1535→      workflows: [],
+  1536→
+  1537→      // Notifications
+  1538→      notifications: generateSyntheticNotifications(),
+  1539→      guidanceSuggestions: generateSyntheticGuidance(),
+  1540→      upgradePrompts: [],
+  1541→      unreadNotificationCount: 2,
+  1542→
+  1543→      // Search & Saves
+  1544→      searchHistory: [],
+  1545→      savedItems: [],
+  1546→
+  1547→      // Database Config
+  1548→      databaseConfig: {
+  1549→        provider: 'IndexedDB',
+  1550→        enabled: true,
+  1551→        autoPushThreshold: createDynamicField(100 * 1024 * 1024), // 100MB
+  1552→        pushInProgress: false,
+  1553→        syncInterval: 5,
+  1554→        tables: ['datasets', 'queries', 'jobs', 'workspace'],
+  1555→      },
+  1556→      currentVolumeTier: VOLUME_TIERS[1], // Start at tier 2
+  1557→
+  1558→      // UI State
+  1559→      sidebarOpen: true,
+  1560→      modals: {},
+  1561→      loadingStates: {},
+  1562→      errors: {},
+  1563→
+  1564→      // ==========================================================================
+  1565→      // PREFERENCES ACTIONS
+  1566→      // ==========================================================================
+  1567→
+  1568→      updatePreferences: (prefs) =>
+  1569→        set((state) => ({
+  1570→          preferences: { ...state.preferences, ...prefs },
+  1571→        })),
+  1572→
+  1573→      setTheme: (theme) =>
+  1574→        set((state) => ({
+  1575→          preferences: { ...state.preferences, theme },
+  1576→        })),
+  1577→
+  1578→      setLanguage: (lang) =>
+  1579→        set((state) => ({
+  1580→          preferences: { ...state.preferences, language: lang },
+  1581→        })),
+  1582→
+  1583→      setSkillLevel: (level) =>
+  1584→        set((state) => ({
+  1585→          preferences: { ...state.preferences, skillLevel: level },
+  1586→        })),
+  1587→
+  1588→      // ==========================================================================
+  1589→      // PROFILE ACTIONS
+  1590→      // ==========================================================================
+  1591→
+  1592→      updateUserProfile: (field, value) =>
+  1593→        set((state) => ({
+  1594→          userProfile: {
+  1595→            ...state.userProfile,
+  1596→            [field]: typeof value === 'string' 
+  1597→              ? updateDynamicField(state.userProfile[field] as DynamicField<string>, value)
+  1598→              : value,
+  1599→          },
+  1600→        })),
+  1601→
+  1602→      resetProfileChanges: () =>
+  1603→        set((state) => ({
+  1604→          userProfile: Object.fromEntries(
+  1605→            Object.entries(state.userProfile).map(([k, v]) => [
+  1606→              k,
+  1607→              v && typeof v === 'object' && 'syntheticValue' in v 
+  1608→                ? { ...(v as DynamicField), value: (v as DynamicField).syntheticValue, isDirty: false }
+  1609→                : v,
+  1610→            ])
+  1611→          ) as UserProfile,
+  1612→        })),
+  1613→
+  1614→      // ==========================================================================
+  1615→      // DASHBOARD ACTIONS
+  1616→      // ==========================================================================
+  1617→
+  1618→      updateDashboardStat: (key, value) =>
+  1619→        set((state) => ({
+  1620→          dashboardStats: {
+  1621→            ...state.dashboardStats,
+  1622→            [key]: typeof value === 'number'
+  1623→              ? updateDynamicField(state.dashboardStats[key], value)
+  1624→              : state.dashboardStats[key],
+  1625→          },
+  1626→        })),
+  1627→
+  1628→      addActivity: (activity) =>
+  1629→        set((state) => ({
+  1630→          activities: [
+  1631→            {
+  1632→              ...activity,
+  1633→              id: generateId(),
+  1634→              timestamp: new Date(),
+  1635→            },
+  1636→            ...state.activities,
+  1637→          ].slice(0, 100), // Keep last 100 activities
+  1638→        })),
+  1639→
+  1640→      clearActivities: () => set({ activities: [] }),
+  1641→
+  1642→      // ==========================================================================
+  1643→      // DATASET ACTIONS (with Storage Layer Integration)
+  1644→      // ==========================================================================
+  1645→
+  1646→      addDataset: (dataset) => {
+  1647→        const newDataset: DatasetItem = {
+  1648→          ...dataset,
+  1649→          id: generateId(),
+  1650→          createdAt: new Date(),
+  1651→          storageLayer: 'local',
+  1652→          volumeTier: 1,
+  1653→        };
+  1654→        
+  1655→        set((state) => {
+  1656→          const newDatasets = [...state.datasets, newDataset];
+  1657→          const newTotalStorage = state.totalStorageUsed + (dataset.sizeBytes.value || 0);
+  1658→          
+  1659→          return {
+  1660→            datasets: newDatasets,
+  1661→            totalStorageUsed: newTotalStorage,
+  1662→            dashboardStats: {
+  1663→              ...state.dashboardStats,
+  1664→              storageUsed: updateDynamicField(state.dashboardStats.storageUsed, formatBytes(newTotalStorage)),
+  1665→              storageUsedBytes: updateDynamicField(state.dashboardStats.storageUsedBytes, newTotalStorage),
+  1666→            },
+  1667→          };
+  1668→        });
+  1669→
+  1670→        // Check if we need to trigger upgrade prompt
+  1671→        get().checkVolumeThreshold();
+  1672→        
+  1673→        get().addActivity({
+  1674→          type: 'upload',
+  1675→          message: createDynamicField(`Added dataset: ${dataset.name.value}`),
+  1676→          icon: '📁',
+  1677→        });
+  1678→      },
+  1679→
+  1680→      updateDataset: (id, updates) =>
+  1681→        set((state) => ({
+  1682→          datasets: state.datasets.map((d) =>
+  1683→            d.id === id ? { ...d, ...updates } : d
+  1684→          ),
+  1685→        })),
+  1686→
+  1687→      deleteDataset: (id) =>
+  1688→        set((state) => {
+  1689→          const dataset = state.datasets.find((d) => d.id === id);
+  1690→          const newDatasets = state.datasets.filter((d) => d.id !== id);
+  1691→          const newTotalStorage = state.totalStorageUsed - (dataset?.sizeBytes.value || 0);
+  1692→          
+  1693→          return {
+  1694→            datasets: newDatasets,
+  1695→            totalStorageUsed: Math.max(0, newTotalStorage),
+  1696→            dashboardStats: {
+  1697→              ...state.dashboardStats,
+  1698→              storageUsed: updateDynamicField(state.dashboardStats.storageUsed, formatBytes(Math.max(0, newTotalStorage))),
+  1699→            },
+  1700→          };
+  1701→        }),
+  1702→
+  1703→      toggleFavoriteDataset: (id) =>
+  1704→        set((state) => ({
+  1705→          datasets: state.datasets.map((d) =>
+  1706→            d.id === id
+  1707→              ? { ...d, isFavorite: updateDynamicField(d.isFavorite, !d.isFavorite.value) }
+  1708→              : d
+  1709→          ),
+  1710→        })),
+  1711→
+  1712→      startDownload: (id) => {
+  1713→        set((state) => ({
+  1714→          datasets: state.datasets.map((d) =>
+  1715→            d.id === id
+  1716→              ? { ...d, downloaded: updateDynamicField(d.downloaded, true), downloadProgress: updateDynamicField(d.downloadProgress, 0) }
+  1717→              : d
+  1718→          ),
+  1719→        }));
+  1720→
+  1721→        // Simulate download progress
+  1722→        let progress = 0;
+  1723→        const interval = setInterval(() => {
+  1724→          progress += Math.random() * 15;
+  1725→          if (progress >= 100) {
+  1726→            progress = 100;
+  1727→            clearInterval(interval);
+  1728→            get().addActivity({
+  1729→              type: 'download',
+  1730→              message: createDynamicField(`Downloaded: ${get().datasets.find(d => d.id === id)?.name.value}`),
+  1731→              icon: '⬇️',
+  1732→            });
+  1733→          }
+  1734→          get().updateDownloadProgress(id, Math.min(progress, 100));
+  1735→        }, 500);
+  1736→      },
+  1737→
+  1738→      updateDownloadProgress: (id, progress) =>
+  1739→        set((state) => ({
+  1740→          datasets: state.datasets.map((d) =>
+  1741→            d.id === id
+  1742→              ? { ...d, downloadProgress: updateDynamicField(d.downloadProgress, progress) }
+  1743→              : d
+  1744→          ),
+  1745→        })),
+  1746→
+  1747→      // ==========================================================================
+  1748→      // CONNECTOR ACTIONS (with Real API Simulation)
+  1749→      // ==========================================================================
+  1750→
+  1751→      toggleConnector: async (id) => {
+  1752→        const connector = get().connectors.find((c) => c.id === id);
+  1753→        if (!connector) return;
+  1754→
+  1755→        set((state) => ({
+  1756→          connectors: state.connectors.map((c) =>
+  1757→            c.id === id
+  1758→              ? { ...c, syncStatus: 'syncing' as const }
+  1759→              : c
+  1760→          ),
+  1761→        }));
+  1762→
+  1763→        // Simulate connection delay
+  1764→        await new Promise((resolve) => setTimeout(resolve, 1500));
+  1765→
+  1766→        const newConnectedState = !connector.isConnected.value;
+  1767→        
+  1768→        set((state) => ({
+  1769→          connectors: state.connectors.map((c) =>
+  1770→            c.id === id
+  1771→              ? {
+  1772→                  ...c,
+  1773→                  isConnected: updateDynamicField(c.isConnected, newConnectedState),
+  1774→                  syncStatus: newConnectedState ? 'success' : 'idle',
+  1775→                  lastSync: newConnectedState ? new Date() : undefined,
+  1776→                }
+  1777→              : c
+  1778→          ),
+  1779→        }));
+  1780→
+  1781→        get().addActivity({
+  1782→          type: newConnectedState ? 'connect' : 'disconnect',
+  1783→          message: createDynamicField(`${newConnectedState ? 'Connected to' : 'Disconnected from'} ${connector.name}`),
+  1784→          icon: newConnectedState ? '✅' : '❌',
+  1785→        });
+  1786→      },
+  1787→
+  1788→      updateConnectorApiKey: (id, key) =>
+  1789→        set((state) => ({
+  1790→          connectors: state.connectors.map((c) =>
+  1791→            c.id === id
+  1792→              ? { ...c, apiKey: updateDynamicField(c.apiKey, key) }
+  1793→              : c
+  1794→          ),
+  1795→        })),
+  1796→
+  1797→      syncConnector: async (id) => {
+  1798→        set((state) => ({
+  1799→          connectors: state.connectors.map((c) =>
+  1800→            c.id === id ? { ...c, syncStatus: 'syncing' } : c
+  1801→          ),
+  1802→        }));
+  1803→
+  1804→        // Simulate sync with variable latency
+  1805→        const latency = 500 + Math.random() * 2000;
+  1806→        await new Promise((resolve) => setTimeout(resolve, latency));
+  1807→
+  1808→        set((state) => ({
+  1809→          connectors: state.connectors.map((c) =>
+  1810→            c.id === id
+  1811→              ? {
+  1812→                  ...c,
+  1813→                  syncStatus: 'success',
+  1814→                  lastSync: new Date(),
+  1815→                  latency,
+  1816→                  recordCount: updateDynamicField(
+  1817→                    c.recordCount,
+  1818→                    c.recordCount.value + Math.floor(Math.random() * 1000)
+  1819→                  ),
+  1820→                }
+  1821→              : c
+  1822→          ),
+  1823→        }));
+  1824→
+  1825→        get().addActivity({
+  1826→          type: 'search',
+  1827→          message: createDynamicField(`Synced ${get().connectors.find((c) => c.id === id)?.name}`),
+  1828→          icon: '🔄',
+  1829→        });
+  1830→      },
+  1831→
+  1832→      syncAllConnectors: async () => {
+  1833→        const connected = get().connectors.filter((c) => c.isConnected.value);
+  1834→        for (const connector of connected) {
+  1835→          await get().syncConnector(connector.id);
+  1836→          await new Promise((resolve) => setTimeout(resolve, 300));
+  1837→        }
+  1838→      },
+  1839→
+  1840→      // ==========================================================================
+  1841→      // COMPUTE JOB ACTIONS
+  1842→      // ==========================================================================
+  1843→
+  1844→      addComputeJob: (job) => {
+  1845→        const newJob: ComputeJob = {
+  1846→          ...job,
+  1847→          id: generateId(),
+  1848→          startTime: new Date(),
+  1849→        };
+  1850→        
+  1851→        set((state) => ({
+  1852→          computeJobs: [...state.computeJobs, newJob],
+  1853→          dashboardStats: {
+  1854→            ...state.dashboardStats,
+  1855→            activeJobs: updateDynamicField(
+  1856→              state.dashboardStats.activeJobs,
+  1857→              state.dashboardStats.activeJobs.value + 1
+  1858→            ),
+  1859→          },
+  1860→        }));
+  1861→
+  1862→        get().addActivity({
+  1863→          type: 'job',
+  1864→          message: createDynamicField(`Submitted job: ${job.name.value}`),
+  1865→          icon: '⚙️',
+  1866→        });
+  1867→      },
+  1868→
+  1869→      updateJobProgress: (id, progress) =>
+  1870→        set((state) => ({
+  1871→          computeJobs: state.computeJobs.map((j) =>
+  1872→            j.id === id
+  1873→              ? { ...j, progress: updateDynamicField(j.progress, progress) }
+  1874→              : j
+  1875→          ),
+  1876→        })),
+  1877→
+  1878→      cancelJob: (id) =>
+  1879→        set((state) => {
+  1880→          const job = state.computeJobs.find((j) => j.id === id);
+  1881→          return {
+  1882→            computeJobs: state.computeJobs.map((j) =>
+  1883→              j.id === id ? { ...j, status: 'cancelled' } : j
+  1884→            ),
+  1885→            dashboardStats: job?.status === 'running' || job?.status === 'queued'
+  1886→              ? {
+  1887→                  ...state.dashboardStats,
+  1888→                  activeJobs: updateDynamicField(
+  1889→                    state.dashboardStats.activeJobs,
+  1890→                    state.dashboardStats.activeJobs.value - 1
+  1891→                  ),
+  1892→                }
+  1893→              : state.dashboardStats,
+  1894→          };
+  1895→        }),
+  1896→
+  1897→      restartJob: (id) =>
+  1898→        set((state) => ({
+  1899→          computeJobs: state.computeJobs.map((j) =>
+  1900→            j.id === id
+  1901→              ? {
+  1902→                  ...j,
+  1903→                  status: 'queued',
+  1904→                  progress: updateDynamicField(j.progress, 0),
+  1905→                  startTime: new Date(),
+  1906→                  endTime: undefined,
+  1907→                  errorMessage: undefined,
+  1908→                }
+  1909→              : j
+  1910→          ),
+  1911→        })),
+  1912→
+  1913→      // ==========================================================================
+  1914→      // WORKSPACE ACTIONS (with Code Execution Simulation)
+  1915→      // ==========================================================================
+  1916→
+  1917→      addWorkspaceFile: (file) => {
+  1918→        const newFile: WorkspaceFile = {
+  1919→          ...file,
+  1920→          id: generateId(),
+  1921→          createdAt: new Date(),
+  1922→          lastModified: new Date(),
+  1923→        };
+  1924→        set((state) => ({ workspaceFiles: [...state.workspaceFiles, newFile] }));
+  1925→      },
+  1926→
+  1927→      updateFileContent: (id, content) =>
+  1928→        set((state) => ({
+  1929→          workspaceFiles: state.workspaceFiles.map((f) =>
+  1930→            f.id === id
+  1931→              ? {
+  1932→                  ...f,
+  1933→                  content: updateDynamicField(f.content, content),
+  1934→                  isModified: updateDynamicField(f.isModified, true),
+  1935→                  lastModified: new Date(),
+  1936→                }
+  1937→              : f
+  1938→          ),
+  1939→        })),
+  1940→
+  1941→      setActiveFile: (id) => set({ activeFileId: id }),
+  1942→
+  1943→      deleteWorkspaceFile: (id) =>
+  1944→        set((state) => ({
+  1945→          workspaceFiles: state.workspaceFiles.filter((f) => f.id !== id),
+  1946→          activeFileId: state.activeFileId === id ? null : state.activeFileId,
+  1947→        })),
+  1948→
+  1949→      executeCode: async (id) => {
+  1950→        const file = get().workspaceFiles.find((f) => f.id === id);
+  1951→        if (!file) throw new Error('File not found');
+  1952→
+  1953→        set({ isExecutingQuery: true });
+  1954→
+  1955→        // Simulate code execution
+  1956→        await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 2000));
+  1957→
+  1958→        const isSuccess = Math.random() > 0.2; // 80% success rate
+  1959→        
+  1960→        const result: ExecutionResult = {
+  1961→          output: isSuccess
+  1962→            ? `# Execution Results\n\n✅ Script executed successfully!\n\n## Output\n\n\`\`\`\nProcessed ${Math.floor(Math.random() * 1000)} records\nFound ${Math.floor(Math.random() * 50)} significant results\nExecution time: ${(Math.random() * 5).toFixed(2)}s\nMemory usage: ${(20 + Math.random() * 80).toFixed(1)} MB\n\`\`\`\n\n## Generated Visualizations\n- Created 2 plots saved to /outputs/\n`
+  1963→            : '',
+  1964→          error: isSuccess
+  1965→            ? undefined
+  1966→            : 'SyntaxError: Invalid syntax on line 15 (TypeError: cannot unpack non-iterable NoneType object)',
+  1967→          executionTime: 1000 + Math.random() * 2000,
+  1968→          memoryUsed: 20 + Math.random() * 80,
+  1969→          status: isSuccess ? 'success' : 'error',
+  1970→        };
+  1971→
+  1972→        set((state) => ({
+  1973→          workspaceFiles: state.workspaceFiles.map((f) =>
+  1974→            f.id === id ? { ...f, executionResult: result } : f
+  1975→          ),
+  1976→          isExecutingQuery: false,
+  1977→        }));
+  1978→
+  1979→        get().addActivity({
+  1980→          type: 'compute',
+  1981→          message: createDynamicField(
+  1982→            `Executed ${file.name.value}: ${result.status}`
+  1983→          ),
+  1984→          icon: result.status === 'success' ? '✅' : '❌',
+  1985→        });
+  1986→
+  1987→        return result;
+  1988→      },
+  1989→
+  1990→      // ==========================================================================
+  1991→      // QUERY ACTIONS
+  1992→      // ==========================================================================
+  1993→
+  1994→      addSavedQuery: (query) =>
+  1995→        set((state) => ({
+  1996→          savedQueries: [...state.savedQueries, { ...query, id: generateId() }],
+  1997→        })),
+  1998→
+  1999→      updateSavedQuery: (id, updates) =>
+  2000→        set((state) => ({
+
+[showing lines 1-2000 of 2774; use offset=2001 with limit to continue reading]

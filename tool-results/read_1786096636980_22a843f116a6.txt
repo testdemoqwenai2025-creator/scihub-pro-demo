@@ -1,0 +1,678 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * SciHub Pro - Knowledge Graph Page
+     5→ * 
+     6→ * Interactive knowledge visualization with:
+     7→ * - Node/edge graph rendering (simulated D3-force)
+     8→ * - Multiple entity types (papers, genes, compounds, authors)
+     9→ * - Relationship exploration
+    10→ * - Data persistence to store
+    11→ * - Call-for-action for advanced features
+    12→ */
+    13→
+    14→import { useState, useEffect, useCallback, useRef } from 'react';
+    15→import { useTranslation } from '@/i18n/useTranslation';
+    16→import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+    17→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    18→import { Badge } from '@/components/ui/badge';
+    19→import { Button } from '@/components/ui/button';
+    20→import { Input } from '@/components/ui/input';
+    21→import {
+    22→  Select,
+    23→  SelectContent,
+    24→  SelectItem,
+    25→  SelectTrigger,
+    26→  SelectValue,
+    27→} from '@/components/ui/select';
+    28→
+    29→// ============ TYPES ============
+    30→
+    31→interface GraphViewSettings {
+    32→  showLabels: boolean;
+    33→  showEdges: boolean;
+    34→  nodeSizeBy: 'connections' | 'importance' | 'uniform';
+    35→  layout: 'force' | 'circular' | 'hierarchical';
+    36→  filterType: string;
+    37→}
+    38→
+    39→// ============ SYNTHETIC GRAPH DATA ============
+    40→
+    41→const generateSampleGraph = () => {
+    42→  const nodes = [
+    43→    // Papers
+    44→    { id: 'paper-1', label: createDynamicField('CRISPR-Cas9 Gene Editing Review'), type: 'paper' as const, x: 400, y: 200, connections: 8, importance: 0.9 },
+    45→    { id: 'paper-2', label: createDynamicField('Machine Learning in Drug Discovery'), type: 'paper' as const, x: 600, y: 150, connections: 6, importance: 0.75 },
+    46→    { id: 'paper-3', label: createDynamicField('AlphaFold Protein Structure Prediction'), type: 'paper' as const, x: 500, y: 350, connections: 10, importance: 0.95 },
+    47→    { id: 'paper-4', label: createDynamicField('Single-Cell RNA Sequencing Methods'), type: 'paper' as const, x: 300, y: 300, connections: 5, importance: 0.7 },
+    48→    { id: 'paper-5', label: createDynamicField('Climate Change Impact on Biodiversity'), type: 'paper' as const, x: 700, y: 300, connections: 4, importance: 0.6 },
+    49→    
+    50→    // Genes
+    51→    { id: 'gene-1', label: createDynamicField('TP53'), type: 'gene' as const, x: 200, y: 150, connections: 12, importance: 1.0 },
+    52→    { id: 'gene-2', label: createDynamicField('BRCA1'), type: 'gene' as const, x: 250, y: 400, connections: 9, importance: 0.85 },
+    53→    { id: 'gene-3', label: createDynamicField('EGFR'), type: 'gene' as const, x: 650, y: 450, connections: 7, importance: 0.72 },
+    54→    { id: 'gene-4', label: createDynamicField('MYC'), type: 'gene' as const, x: 450, y: 100, connections: 6, importance: 0.65 },
+    55→    
+    56→    // Compounds
+    57→    { id: 'compound-1', label: createDynamicField('Aspirin'), type: 'compound' as const, x: 100, y: 280, connections: 4, importance: 0.55 },
+    58→    { id: 'compound-2', label: createDynamicField('Paclitaxel'), type: 'compound' as const, x: 750, y: 180, connections: 3, importance: 0.5 },
+    59→    { id: 'compound-3', label: createDynamicField('Doxorubicin'), type: 'compound' as const, x: 550, y: 500, connections: 5, importance: 0.58 },
+    60→    
+    61→    // Authors
+    62→    { id: 'author-1', label: createDynamicField('Dr. Jennifer Doudna'), type: 'author' as const, x: 350, y: 50, connections: 7, importance: 0.88 },
+    63→    { id: 'author-2', label: createDynamicField('Prof. Demis Hassabis'), type: 'author' as const, x: 600, y: 550, connections: 6, importance: 0.82 },
+    64→    
+    65→    // Domains/Concepts
+    66→    { id: 'domain-1', label: createDynamicField('Oncology'), type: 'domain' as const, x: 150, y: 480, connections: 11, importance: 0.92 },
+    67→    { id: 'domain-2', label: createDynamicField('Bioinformatics'), type: 'domain' as const, x: 800, y: 380, connections: 9, importance: 0.85 },
+    68→    { id: 'domain-3', label: createDynamicField('Structural Biology'), type: 'domain' as const, x: 420, y: 250, connections: 8, importance: 0.78 },
+    69→  ];
+    70→
+    71→  const edges = [
+    72→    // Paper citations
+    73→    { source: 'paper-1', target: 'paper-4', strength: 0.8, label: 'cites', type: 'cites' as const },
+    74→    { source: 'paper-2', target: 'paper-3', strength: 0.6, label: 'related_to', type: 'similar_to' as const },
+    75→    { source: 'paper-3', target: 'paper-1', strength: 0.4, label: 'references', type: 'cites' as const },
+    76→    
+    77→    // Paper-Gene relationships
+    78→    { source: 'paper-1', target: 'gene-1', strength: 0.9, label: 'studies', type: 'contains' as const },
+    79→    { source: 'paper-1', target: 'gene-2', strength: 0.85, label: 'studies', type: 'contains' as const },
+    80→    { source: 'paper-4', target: 'gene-1', strength: 0.7, label: 'analyzes', type: 'contains' as const },
+    81→    { source: 'paper-4', target: 'gene-4', strength: 0.65, label: 'analyzes', type: 'contains' as const },
+    82→    { source: 'paper-2', target: 'gene-3', strength: 0.55, label: 'targets', type: 'contains' as const },
+    83→    
+    84→    // Paper-Compound relationships
+    85→    { source: 'paper-2', target: 'compound-1', strength: 0.5, label: 'mentions', type: 'contains' as const },
+    86→    { source: 'paper-1', target: 'compound-2', strength: 0.45, label: 'discusses', type: 'contains' as const },
+    87→    { source: 'paper-4', target: 'compound-3', strength: 0.6, label: 'evaluates', type: 'contains' as const },
+    88→    
+    89→    // Author-Paper relationships
+    90→    { source: 'author-1', target: 'paper-1', strength: 0.95, label: 'authored', type: 'author_of' as const },
+    91→    { source: 'author-2', target: 'paper-3', strength: 0.9, label: 'authored', type: 'author_of' as const },
+    92→    { source: 'author-1', target: 'paper-4', strength: 0.4, label: 'co-authored', type: 'author_of' as const },
+    93→    
+    94→    // Domain relationships
+    95→    { source: 'domain-1', target: 'gene-1', strength: 0.95, label: 'includes', type: 'contains' as const },
+    96→    { source: 'domain-1', target: 'gene-2', strength: 0.92, label: 'includes', type: 'contains' as const },
+    97→    { source: 'domain-1', target: 'compound-3', strength: 0.88, label: 'treats_with', type: 'contains' as const },
+    98→    { source: 'domain-1', target: 'paper-1', strength: 0.85, label: 'field_of', type: 'contains' as const },
+    99→    { source: 'domain-1', target: 'paper-4', strength: 0.82, label: 'field_of', type: 'contains' as const },
+   100→    { source: 'domain-2', target: 'paper-2', strength: 0.9, label: 'field_of', type: 'contains' as const },
+   101→    { source: 'domain-2', target: 'paper-3', strength: 0.87, label: 'uses', type: 'contains' as const },
+   102→    { source: 'domain-2', target: 'author-2', strength: 0.78, label: 'practices', type: 'contains' as const },
+   103→    { source: 'domain-3', target: 'paper-3', strength: 0.95, label: 'field_of', type: 'contains' as const },
+   104→    { source: 'domain-3', target: 'gene-2', strength: 0.7, label: 'studies_structure', type: 'contains' as const },
+   105→    
+   106→    // Gene-Compound interactions
+   107→    { source: 'gene-1', target: 'compound-3', strength: 0.75, label: 'targeted_by', type: 'similar_to' as const },
+   108→    { source: 'gene-2', target: 'compound-2', strength: 0.68, label: 'treated_by', type: 'similar_to' as const },
+   109→    { source: 'gene-3', target: 'compound-1', strength: 0.55, label: 'affected_by', type: 'similar_to' as const },
+   110→    
+   111→    // Gene-Gene interactions
+   112→    { source: 'gene-1', target: 'gene-2', strength: 0.72, label: 'interacts_with', type: 'similar_to' as const },
+   113→    { source: 'gene-1', target: 'gene-4', strength: 0.65, label: 'regulates', type: 'similar_to' as const },
+   114→    { source: 'gene-2', target: 'gene-4', strength: 0.58, label: 'co-expressed', type: 'similar_to' as const },
+   115→  ];
+   116→
+   117→  return { nodes, edges };
+   118→};
+   119→
+   120→// ============ KNOWLEDGE GRAPH PAGE COMPONENT ============
+   121→
+   122→export default function KnowledgePage() {
+   123→  const { t } = useTranslation();
+   124→  const store = useSciHubStore();
+   125→  
+   126→  const {
+   127→    graphNodes,
+   128→    graphEdges,
+   129→    addGraphNode,
+   130→    addGraphEdge,
+   131→    clearGraph,
+   132→    activities,
+   133→    addActivity,
+   134→    savedItems,
+   135→    saveItem,
+   136→  } = store;
+   137→
+   138→  // UI State
+   139→  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+   140→  const [searchQuery, setSearchQuery] = useState('');
+   141→  const [settings, setSettings] = useState<GraphViewSettings>({
+   142→    showLabels: true,
+   143→    showEdges: true,
+   144→    nodeSizeBy: 'connections',
+   145→    layout: 'force',
+   146→    filterType: 'all',
+   147→  });
+   148→  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+   149→  const [showDetailsPanel, setShowDetailsPanel] = useState(true);
+   150→  const canvasRef = useRef<HTMLCanvasElement>(null);
+   151→  const [isInitialized, setIsInitialized] = useState(false);
+   152→
+   153→  // Initialize with sample data on first load
+   154→  useEffect(() => {
+   155→    if (!isInitialized && graphNodes.length === 0) {
+   156→      const sampleData = generateSampleGraph();
+   157→      sampleData.nodes.forEach(node => addGraphNode(node));
+   158→      sampleData.edges.forEach(edge => addGraphEdge(edge));
+   159→      setIsInitialized(true);
+   160→      
+   161→      addActivity({
+   162→        type: 'query',
+   163→        message: createDynamicField('Loaded sample knowledge graph (17 nodes, 35 edges)'),
+   164→        icon: '🕸️',
+   165→      });
+   166→    }
+   167→  }, []);
+   168→
+   169→  // Filter nodes based on settings
+   170→  const filteredNodes = graphNodes.filter(
+   171→    node => settings.filterType === 'all' || node.type === settings.filterType
+   172→  );
+   173→
+   174→  const filteredEdges = graphEdges.filter(
+   175→    edge => 
+   176→      filteredNodes.some(n => n.id === edge.source) &&
+   177→      filteredNodes.some(n => n.id === edge.target)
+   178→  );
+   179→
+   180→  // Get selected node details
+   181→  const selectedNodeData = graphNodes.find(n => n.id === selectedNode);
+   182→  const connectedEdges = graphEdges.filter(
+   183→    e => e.source === selectedNode || e.target === selectedNode
+   184→  );
+   185→  const connectedNodeIds = connectedEdges.flatMap(e => [e.source, e.target]);
+   186→  const connectedNodes = graphNodes.filter(n => connectedNodeIds.includes(n.id) && n.id !== selectedNode);
+   187→
+   188→  // Node type colors
+   189→  const getNodeColor = (type: string): string => {
+   190→    const colors: Record<string, string> = {
+   191→      paper: '#3b82f6',   // blue
+   192→      gene: '#22c55e',    // green
+   193→      compound: '#f59e0b', // orange
+   194→      author: '#a855f7',  // purple
+   195→      domain: '#ef4444',  // red
+   196→      dataset: '#06b6d4', // cyan
+   197→      concept: '#84cc16', // lime
+   198→    };
+   199→    return colors[type] || '#6b7280'; // gray default
+   200→  };
+   201→
+   202→  const getNodeIcon = (type: string): string => {
+   203→    const icons: Record<string, string> = {
+   204→      paper: '📄',
+   205→      gene: '🧬',
+   206→      compound: '⚗️',
+   207→      author: '👤',
+   208→      domain: '🏷️',
+   209→      dataset: '📊',
+   210→      concept: '💡',
+   211→    };
+   212→    return icons[type] || '📍';
+   213→  };
+   214→
+   215→  // Draw graph on canvas
+   216→  useEffect(() => {
+   217→    const canvas = canvasRef.current;
+   218→    if (!canvas) return;
+   219→
+   220→    const ctx = canvas.getContext('2d');
+   221→    if (!ctx) return;
+   222→
+   223→    // Set canvas size
+   224→    const rect = canvas.parentElement?.getBoundingClientRect();
+   225→    if (rect) {
+   226→      canvas.width = rect.width;
+   227→      canvas.height = rect.height;
+   228→    }
+   229→
+   230→    // Clear canvas
+   231→    ctx.fillStyle = '#ffffff';
+   232→    ctx.fillRect(0, 0, canvas.width, canvas.height);
+   233→
+   234→    if (settings.layout === 'force') {
+   235→      // Simple force-directed simulation
+   236→      const centerX = canvas.width / 2;
+   237→      const centerY = canvas.height / 2;
+   238→      
+   239→      // Draw edges first (behind nodes)
+   240→      if (settings.showEdges) {
+   241→        filteredEdges.forEach(edge => {
+   242→          const sourceNode = filteredNodes.find(n => n.id === edge.source);
+   243→          const targetNode = filteredNodes.find(n => n.id === edge.target);
+   244→          
+   245→          if (sourceNode && targetNode) {
+   246→            ctx.beginPath();
+   247→            ctx.moveTo(sourceNode.x, sourceNode.y);
+   248→            ctx.lineTo(targetNode.x, targetNode.y);
+   249→            ctx.strokeStyle = `${edge.strength < 0.5 ? '#d1d5db' : '#9ca3af'}${Math.floor(edge.strength * 255).toString(16).padStart(2, '0')}`;
+   250→            ctx.lineWidth = edge.strength * 3;
+   251→            ctx.stroke();
+   252→          }
+   253→        });
+   254→      }
+   255→
+   256→      // Draw nodes
+   257→      filteredNodes.forEach(node => {
+   258→        const isSelected = node.id === selectedNode;
+   259→        const isHovered = node.id === hoveredNode;
+   260→        const baseSize = settings.nodeSizeBy === 'connections' ? Math.max(15, node.connections * 3) :
+   261→                        settings.nodeSizeBy === 'importance' ? 20 + node.importance * 30 : 25;
+   262→        const size = baseSize * (isSelected || isHovered ? 1.3 : 1);
+   263→        
+   264→        // Node circle
+   265→        ctx.beginPath();
+   266→        ctx.arc(node.x, node.y, size, 0, Math.PI * 2);
+   267→        ctx.fillStyle = getNodeColor(node.type);
+   268→        ctx.fill();
+   269→        
+   270→        if (isSelected) {
+   271→          ctx.strokeStyle = '#000000';
+   272→          ctx.lineWidth = 3;
+   273→          ctx.stroke();
+   274→        } else if (isHovered) {
+   275→          ctx.strokeStyle = '#374151';
+   276→          ctx.lineWidth = 2;
+   277→          ctx.stroke();
+   278→        }
+   279→
+   280→        // Node label
+   281→        if (settings.showLabels) {
+   282→          ctx.font = isSelected ? 'bold 12px sans-serif' : '11px sans-serif';
+   283→          ctx.fillStyle = '#1f2937';
+   284→          ctx.textAlign = 'center';
+   285→          const labelText = node.label.value.length > 20 
+   286→            ? node.label.value.substring(0, 18) + '...' 
+   287→            : node.label.value;
+   288→          ctx.fillText(labelText, node.x, node.y + size + 16);
+   289→        }
+   290→      });
+   291→    } else if (settings.layout === 'circular') {
+   292→      const centerX = canvas.width / 2;
+   293→      const centerY = canvas.height / 2;
+   294→      const radius = Math.min(centerX, centerY) - 60;
+   295→
+   296→      // Position nodes in circle
+   297→      filteredNodes.forEach((node, i) => {
+   298→        const angle = (i / filteredNodes.length) * Math.PI * 2 - Math.PI / 2;
+   299→        node.x = centerX + radius * Math.cos(angle);
+   300→        node.y = centerY + radius * Math.sin(angle);
+   301→      });
+   302→
+   303→      // Redraw with new positions
+   304→      // ... (same drawing logic as force layout)
+   305→    }
+   306→  }, [graphNodes, graphEdges, settings, selectedNode, hoveredNode]);
+   307→
+   308→  // Handle canvas click for node selection
+   309→  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+   310→    const canvas = canvasRef.current;
+   311→    if (!canvas) return;
+   312→
+   313→    const rect = canvas.getBoundingClientRect();
+   314→    const x = e.clientX - rect.left;
+   315→    const y = e.clientY - rect.top;
+   316→
+   317→    // Find clicked node
+   318→    const clickedNode = filteredNodes.find(node => {
+   319→      const dx = node.x - x;
+   320→      const dy = node.y - y;
+   321→      return Math.sqrt(dx * dx + dy * dy) < 25;
+   322→    });
+   323→
+   324→    if (clickedNode) {
+   325→      setSelectedNode(clickedNode.id);
+   326→      addActivity({
+   327→        type: 'query',
+   328→        message: createDynamicField(`Selected node: ${clickedNode.label.value}`),
+   329→        icon: getNodeIcon(clickedNode.type),
+   330→      });
+   331→    } else {
+   332→      setSelectedNode(null);
+   333→    }
+   334→  };
+   335→
+   336→  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+   337→    const canvas = canvasRef.current;
+   338→    if (!canvas) return;
+   339→
+   340→    const rect = canvas.getBoundingClientRect();
+   341→    const x = e.clientX - rect.left;
+   342→    const y = e.clientY - rect.top;
+   343→
+   344→    const hovered = filteredNodes.find(node => {
+   345→      const dx = node.x - x;
+   346→      const dy = node.y - y;
+   347→      return Math.sqrt(dx * dx + dy * dy) < 25;
+   348→    });
+   349→
+   350→    setHoveredNode(hovered?.id || null);
+   351→  };
+   352→
+   353→  // Save current graph state
+   354→  const handleSaveGraph = () => {
+   355→    saveItem({
+   356→      type: 'query',
+   357→      title: `Knowledge Graph (${filteredNodes.length} nodes)`,
+   358→      source: 'knowledge-graph',
+   359→      metadata: {
+   360→        nodeCount: filteredNodes.length,
+   361→        edgeCount: filteredEdges.length,
+   362→        nodeTypes: [...new Set(filteredNodes.map(n => n.type))],
+   363→      },
+   364→      tags: ['knowledge-graph', 'visualization'],
+   365→    });
+   366→
+   367→    addActivity({
+   368→      type: 'save',
+   369→      message: createDynamicField(`Saved graph snapshot: ${filteredNodes.length} nodes, ${filteredEdges.length} edges`),
+   370→      icon: '🕸️',
+   371→    });
+   372→  };
+   373→
+   374→  return (
+   375→    <div className="min-h-screen bg-background p-6">
+   376→      {/* Header */}
+   377→      <div className="mb-6">
+   378→        <h1 className="text-3xl font-bold text-foreground">
+   379→          🕸️ {t('knowledge.title') || 'Knowledge Graph'}
+   380→        </h1>
+   381→        <p className="text-muted-foreground mt-1">
+   382→          Explore relationships between papers, genes, compounds, and researchers
+   383→        </p>
+   384→
+   385→        {/* Stats */}
+   386→        <div className="flex items-center gap-4 mt-3">
+   387→          <Badge variant="secondary">
+   388→            {filteredNodes.length} nodes
+   389→          </Badge>
+   390→          <Badge variant="secondary">
+   391→            {filteredEdges.length} edges
+   392→          </Badge>
+   393→          <Badge variant="secondary">
+   394→            {[...new Set(filteredNodes.map(n => n.type))].length} types
+   395→          </Badge>
+   396→        </div>
+   397→      </div>
+   398→
+   399→      <div className="flex gap-6 h-[calc(100vh-200px)]">
+   400→        {/* Main Graph Canvas */}
+   401→        <Card className="flex-1 overflow-hidden">
+   402→          <CardContent className="p-0 h-full relative">
+   403→            <canvas
+   404→              ref={canvasRef}
+   405→              className="w-full h-full cursor-crosshair"
+   406→              onClick={handleCanvasClick}
+   407→              onMouseMove={handleCanvasMouseMove}
+   408→              onMouseLeave={() => setHoveredNode(null)}
+   409→            />
+   410→
+   411→            {/* Floating Controls */}
+   412→            <div className="absolute top-4 left-4 flex flex-col gap-2">
+   413→              <Select value={settings.filterType} onValueChange={(v) => setSettings({ ...settings, filterType: v })}>
+   414→                <SelectTrigger className="w-[140px] h-9 bg-background/90 backdrop-blur">
+   415→                  <SelectValue />
+   416→                </SelectTrigger>
+   417→                <SelectContent>
+   418→                  <SelectItem value="all">All Types</SelectItem>
+   419→                  <SelectItem value="paper">📄 Papers</SelectItem>
+   420→                  <SelectItem value="gene">🧬 Genes</SelectItem>
+   421→                  <SelectItem value="compound">⚗️ Compounds</SelectItem>
+   422→                  <SelectItem value="author">👤 Authors</SelectItem>
+   423→                  <SelectItem value="domain">🏷️ Domains</SelectItem>
+   424→                </SelectContent>
+   425→              </Select>
+   426→
+   427→              <Select value={settings.layout} onValueChange={(v) => setSettings({ ...settings, layout: v as GraphViewSettings['layout'] })}>
+   428→                <SelectTrigger className="w-[140px] h-9 bg-background/90 backdrop-blur">
+   429→                  <SelectValue />
+   430→                </SelectTrigger>
+   431→                <SelectContent>
+   432→                  <SelectItem value="force">Force Layout</SelectItem>
+   433→                  <SelectItem value="circular">Circular</SelectItem>
+   434→                  <SelectItem value="hierarchical">Hierarchical</SelectItem>
+   435→                </SelectContent>
+   436→              </Select>
+   437→            </div>
+   438→
+   439→            {/* Legend */}
+   440→            <div className="absolute bottom-4 left-4 p-3 bg-background/90 backdrop-blur rounded-lg border text-xs">
+   441→              <h4 className="font-medium mb-2">Legend</h4>
+   442→              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+   443→                {[
+   444→                  ['paper', '📄 Papers'],
+   445→                  ['gene', '🧬 Genes'],
+   446→                  ['compound', '⚗️ Compounds'],
+   447→                  ['author', '👤 Authors'],
+   448→                  ['domain', '🏷️ Domains'],
+   449→                ].map(([type, label]) => (
+   450→                  <div key={type} className="flex items-center gap-1.5">
+   451→                    <span 
+   452→                      className="w-3 h-3 rounded-full" 
+   453→                      style={{ backgroundColor: getNodeColor(type) }}
+   454→                    />
+   455→                    <span>{label}</span>
+   456→                  </div>
+   457→                ))}
+   458→              </div>
+   459→            </div>
+   460→
+   461→            {/* Action Buttons */}
+   462→            <div className="absolute top-4 right-4 flex gap-2">
+   463→              <Button
+   464→                size="sm"
+   465→                variant="outline"
+   466→                className="bg-background/90 backdrop-blur"
+   467→                onClick={() => setSettings({ ...settings, showLabels: !settings.showLabels })}
+   468→              >
+   469→                {settings.showLabels ? '🏷️ Hide Labels' : '🏷️ Show Labels'}
+   470→              </Button>
+   471→              <Button
+   472→                size="sm"
+   473→                variant="outline"
+   474→                className="bg-background/90 backdrop-blur"
+   475→                onClick={() => setSettings({ ...settings, showEdges: !settings.showEdges })}
+   476→              >
+   477→                {settings.showEdges ? '🔗 Hide Edges' : '🔗 Show Edges'}
+   478→              </Button>
+   479→              <Button
+   480→                size="sm"
+   481→                variant="outline"
+   482→                className="bg-background/90 backdrop-blur"
+   483→                onClick={handleSaveGraph}
+   484→              >
+   485→                💾 Save Graph
+   486→              </Button>
+   487→              <Button
+   488→                size="sm"
+   489→                variant="outline"
+   490→                className="bg-background/90 backdrop-blur"
+   491→                onClick={() => {
+   492→                  clearGraph();
+   493→                  setIsInitialized(false);
+   494→                }}
+   495→              >
+   496→                🔄 Reset
+   497→              </Button>
+   498→            </div>
+   499→
+   500→            {/* Hover Tooltip */}
+   501→            {hoveredNode && (
+   502→              <div 
+   503→                className="absolute pointer-events-none px-3 py-2 bg-background border rounded-lg shadow-lg text-sm z-10"
+   504→                style={{
+   505→                  left: (filteredNodes.find(n => n.id === hoveredNode)?.x || 0) + 20,
+   506→                  top: (filteredNodes.find(n => n.id === hoveredNode)?.y || 0) - 10,
+   507→                }}
+   508→              >
+   509→                <div className="flex items-center gap-2">
+   510→                  <span>{getNodeIcon(filteredNodes.find(n => n.id === hoveredNode)?.type || '')}</span>
+   511→                  <span className="font-medium">
+   512→                    {filteredNodes.find(n => n.id === hoveredNode)?.label.value}
+   513→                  </span>
+   514→                </div>
+   515→                <div className="text-xs text-muted-foreground mt-1">
+   516→                  {filteredNodes.find(n => n.id === hoveredNode)?.connections} connections
+   517→                </div>
+   518→              </div>
+   519→            )}
+   520→          </CardContent>
+   521→        </Card>
+   522→
+   523→        {/* Details Panel */}
+   524→        {showDetailsPanel && selectedNodeData && (
+   525→          <Card className="w-80 overflow-auto">
+   526→            <CardHeader className="pb-3">
+   527→              <div className="flex items-start justify-between">
+   528→                <CardTitle className="text-base">Node Details</CardTitle>
+   529→                <Button
+   530→                  size="sm"
+   531→                  variant="ghost"
+   532→                  className="h-6 w-6 p-0"
+   533→                  onClick={() => setShowDetailsPanel(false)}
+   534→                >
+   535→                  ✕
+   536→                </Button>
+   537→              </div>
+   538→            </CardHeader>
+   539→            <CardContent className="space-y-4">
+   540→              {/* Node Info */}
+   541→              <div className="text-center p-4 bg-muted/50 rounded-lg">
+   542→                <span className="text-3xl block mb-2">{getNodeIcon(selectedNodeData.type)}</span>
+   543→                <h3 className="font-semibold">{selectedNodeData.label.value}</h3>
+   544→                <Badge 
+   545→                  className="mt-2"
+   546→                  style={{ backgroundColor: getNodeColor(selectedNodeData.type) }}
+   547→                >
+   548→                  {selectedNodeData.type}
+   549→                </Badge>
+   550→              </div>
+   551→
+   552→              {/* Stats */}
+   553→              <div className="grid grid-cols-2 gap-3 text-sm">
+   554→                <div className="p-2 bg-muted/50 rounded text-center">
+   555→                  <div className="text-lg font-bold">{selectedNodeData.connections}</div>
+   556→                  <div className="text-xs text-muted-foreground">Connections</div>
+   557→                </div>
+   558→                <div className="p-2 bg-muted/50 rounded text-center">
+   559→                  <div className="text-lg font-bold">{(selectedNodeData.importance * 100).toFixed(0)}%</div>
+   560→                  <div className="text-xs text-muted-foreground">Importance</div>
+   561→                </div>
+   562→              </div>
+   563→
+   564→              {/* Connected Nodes */}
+   565→              <div>
+   566→                <h4 className="font-medium text-sm mb-2">
+   567→                  Connected ({connectedNodes.length})
+   568→                </h4>
+   569→                <div className="space-y-1 max-h-48 overflow-auto">
+   570→                  {connectedNodes.map(node => (
+   571→                    <button
+   572→                      key={node.id}
+   573→                      className="w-full text-left p-2 rounded hover:bg-muted transition-colors text-sm flex items-center gap-2"
+   574→                      onClick={() => setSelectedNode(node.id)}
+   575→                    >
+   576→                      <span>{getNodeIcon(node.type)}</span>
+   577→                      <span className="truncate">{node.label.value}</span>
+   578→                    </button>
+   579→                  ))}
+   580→                </div>
+   581→              </div>
+   582→
+   583→              {/* Edges */}
+   584→              <div>
+   585→                <h4 className="font-medium text-sm mb-2">
+   586→                  Relationships ({connectedEdges.length})
+   587→                </h4>
+   588→                <div className="space-y-1 max-h-32 overflow-auto text-xs">
+   589→                  {connectedEdges.map((edge, i) => {
+   590→                    const otherNodeId = edge.source === selectedNode ? edge.target : edge.source;
+   591→                    const otherNode = graphNodes.find(n => n.id === otherNodeId);
+   592→                    return (
+   593→                      <div key={i} className="p-2 bg-muted/30 rounded flex items-center justify-between">
+   594→                        <span>{edge.label || edge.type}</span>
+   595→                        <span className="text-muted-foreground truncate ml-2">
+   596→                          → {otherNode?.label.value}
+   597→                        </span>
+   598→                      </div>
+   599→                    );
+   600→                  })}
+   601→                </div>
+   602→              </div>
+   603→
+   604→              {/* Actions */}
+   605→              <div className="space-y-2 pt-2 border-t">
+   606→                <Button size="sm" variant="outline" className="w-full justify-start gap-2">
+   607→                  🔍 Find Related Papers
+   608→                </Button>
+   609→                <Button size="sm" variant="outline" className="w-full justify-start gap-2">
+   610→                  📊 View Analysis
+   611→                </Button>
+   612→                <Button size="sm" variant="outline" className="w-full justify-start gap-2">
+   613→                  ⭐ Save to Library
+   614→                </Button>
+   615→              </div>
+   616→            </CardContent>
+   617→          </Card>
+   618→        )}
+   619→      </div>
+   620→
+   621→      {/* Empty State when no selection */}
+   622→      {!selectedNode && (
+   623→        <Card className="mt-6">
+   624→          <CardContent className="p-8 text-center">
+   625→            <span className="text-4xl block mb-3">🕸️</span>
+   626→            <h3 className="text-lg font-semibold mb-2">Explore the Knowledge Graph</h3>
+   627→            <p className="text-muted-foreground max-w-md mx-auto">
+   628→              Click on any node to see its details and connections. Use the controls above to filter by type or change the layout.
+   629→            </p>
+   630→            
+   631→            {/* Quick Actions */}
+   632→            <div className="mt-4 flex items-center justify-center gap-3">
+   633→              <Input
+   634→                placeholder="Search nodes..."
+   635→                value={searchQuery}
+   636→                onChange={(e) => setSearchQuery(e.target.value)}
+   637→                className="max-w-xs"
+   638→              />
+   639→              <Button
+   640→                variant="outline"
+   641→                onClick={() => {
+   642→                  if (searchQuery.trim()) {
+   643→                    const found = graphNodes.find(n => 
+   644→                      n.label.value.toLowerCase().includes(searchQuery.toLowerCase())
+   645→                    );
+   646→                    if (found) setSelectedNode(found.id);
+   647→                  }
+   648→                }}
+   649→              >
+   650→                Search
+   651→              </Button>
+   652→            </div>
+   653→          </CardContent>
+   654→        </Card>
+   655→      )}
+   656→
+   657→      {/* Call-to-action for advanced features */}
+   658→      <Card className="mt-6 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30">
+   659→        <CardContent className="p-4">
+   660→          <div className="flex items-center justify-between">
+   661→            <div>
+   662→              <h4 className="font-medium text-purple-900 dark:text-purple-100">
+   663→                🔮 Unlock Advanced Graph Features
+   664→              </h4>
+   665→              <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+   666→                Get real-time collaboration, larger graphs (10K+ nodes), and custom layouts with Pro tier.
+   667→              </p>
+   668→            </div>
+   669→            <Button variant="outline" onClick={() => store.triggerUpgradePrompt('collaboration')}>
+   670→              Learn More
+   671→            </Button>
+   672→          </div>
+   673→        </CardContent>
+   674→      </Card>
+   675→    </div>
+   676→  );
+   677→}
+   678→
