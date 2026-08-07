@@ -41,6 +41,7 @@ import {
   TabsTrigger,
 } from '@/components/ui/tabs';
 import { CollaborationSkeleton, ListSkeleton, CardSkeleton } from '@/components/SkeletonComponents';
+import { showSuccessToast, showInfoToast } from '@/lib/toast-utils';
 
 // ============ COLLABORATION PAGE COMPONENT ============
 
@@ -124,6 +125,8 @@ export default function CollaborationPage() {
       priority: 'medium',
     });
 
+    showSuccessToast('Project Created!', `"${newProjectName}" is ready for collaboration`);
+
     // Reset form
     setNewProjectName('');
     setNewProjectDesc('');
@@ -153,6 +156,8 @@ export default function CollaborationPage() {
       icon: '💬',
     });
 
+    showInfoToast('Discussion Posted', `"${newDiscussionTitle}" has been created`);
+
     // Reset form
     setNewDiscussionTitle('');
     setNewDiscussionContent('');
@@ -176,6 +181,8 @@ export default function CollaborationPage() {
       message: createDynamicField('Replied to discussion'),
       icon: '💬',
     });
+    
+    showInfoToast('Comment Posted', 'Your reply has been added');
   };
 
   const getMemberById = (id: string) => teamMembers.find(m => m.id === id);

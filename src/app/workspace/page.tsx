@@ -42,6 +42,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { showSuccessToast, showErrorToast, showLoadingToast } from '@/lib/toast-utils';
 
 // ============ TYPES ============
 
@@ -1394,6 +1395,9 @@ export default function WorkspacePage() {
     setTerminalOutput(`[${startTime.toLocaleTimeString()}] Compiling ${currentLanguage.toUpperCase()} code...\n`);
     setShowTerminal(true);
     
+    // Show loading toast
+    showLoadingToast('Executing Code...', `Running ${currentLanguage.toUpperCase()} code`);
+    
     await sleep(500);
     
     // 2. Set state to running with animation
@@ -1460,12 +1464,14 @@ export default function WorkspacePage() {
     };
     setExecutionHistory(prev => [record, ...prev].slice(0, 5));
     
-    // 7. Log activity
+    // 7. Log activity and show success toast
     addActivity({
       type: 'compute',
       message: createDynamicField(`Executed ${activeFile.name.value}: Success (${(execTime/1000).toFixed(2)}s)`),
       icon: '✅',
     });
+    
+    showSuccessToast('Execution Completed!', `Finished in ${(execTime/1000).toFixed(3)}s`);
     
     // 8. Reset to idle after 3 seconds
     setTimeout(() => {

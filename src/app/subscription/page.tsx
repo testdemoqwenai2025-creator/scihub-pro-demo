@@ -36,6 +36,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import { showSuccessToast, showErrorToast, showWarningToast, showLoadingToast } from '@/lib/toast-utils';
 
 // ============ TYPES ============
 
@@ -181,9 +182,13 @@ export default function SubscriptionPage() {
 
   // Handle form submission
   const handleSubmit = async () => {
-    if (!isFormValid()) return;
+    if (!isFormValid()) {
+      showWarningToast('Validation Error', 'Please fill in all required fields');
+      return;
+    }
     
     setIsSubmitting(true);
+    showLoadingToast('Submitting Request...', 'Processing your subscription request');
     
     try {
       const response = await fetch('/api/subscription', {
@@ -200,6 +205,7 @@ export default function SubscriptionPage() {
       
       if (result.success) {
         setSubmitSuccess(true);
+        showSuccessToast('🎉 Request Submitted Successfully!', `We'll contact you at ${formData.email} within 24-48 hours`);
         setTimeout(() => {
           setShowConfirmDialog(false);
           setSubmitSuccess(false);
@@ -209,9 +215,12 @@ export default function SubscriptionPage() {
             useCase: '', message: '', agreeToTerms: false, newsletterOptIn: true
           });
         }, 3000);
+      } else {
+        showErrorToast('Submission Failed', result.message || 'Please try again later');
       }
     } catch (error) {
       console.error('Submission error:', error);
+      showErrorToast('Submission Error', 'Network error. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }

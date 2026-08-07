@@ -44,6 +44,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { SettingsSkeleton, FormSkeleton } from '@/components/SkeletonComponents';
+import { showSuccessToast, showErrorToast, showInfoToast, showWarningToast } from '@/lib/toast-utils';
 
 // ============ SETTINGS PAGE COMPONENT ============
 
@@ -126,9 +127,12 @@ export default function SettingsPage() {
         icon: '📥',
       });
       
+      showSuccessToast('Data Exported Successfully!', 'Your backup file has been downloaded');
+      
       setShowExportDialog(false);
     } catch (error) {
       console.error('Export failed:', error);
+      showErrorToast('Export Failed', 'Could not export data. Please try again.');
     }
   };
 
@@ -148,12 +152,16 @@ export default function SettingsPage() {
           message: createDynamicField('Imported application backup'),
           icon: '📤',
         });
+        showSuccessToast('Data Imported!', 'Your settings and workspace have been restored');
+      } else {
+        showErrorToast('Import Failed', 'Invalid file format. Please check your backup file.');
       }
     } catch (error) {
       setImportResult({
         success: false,
         message: 'Import failed: Invalid file format.',
       });
+      showErrorToast('Import Error', 'An error occurred during import');
     }
   };
 
@@ -165,6 +173,7 @@ export default function SettingsPage() {
       message: createDynamicField('Reset all fields to default values'),
       icon: '↩️',
     });
+    showWarningToast('Settings Reset', 'All preferences have been restored to default values');
   };
 
   // ============ RENDER ============

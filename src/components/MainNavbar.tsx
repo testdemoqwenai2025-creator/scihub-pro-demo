@@ -15,6 +15,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -85,9 +86,16 @@ const PREMIUM_FEATURES = [
 
 export function MainNavbar() {
   const pathname = usePathname();
+  const { theme, setTheme } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Handle hydration mismatch for theme
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Handle scroll effect for navbar styling
   useEffect(() => {
@@ -197,6 +205,40 @@ export function MainNavbar() {
           {/* ====== RIGHT SIDE ACTIONS ====== */}
           <div className="flex items-center gap-2">
             
+            {/* Dark Mode Toggle */}
+            {mounted && (
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="p-2 rounded-lg hover:bg-muted transition-all duration-200 hover:scale-110 active:scale-95"
+                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              >
+                <span className="relative w-5 h-5 flex items-center justify-center">
+                  {/* Sun icon (shown in dark mode) */}
+                  <svg 
+                    className={`absolute inset-0 w-5 h-5 transition-all duration-300 ${theme === 'dark' ? 'rotate-0 scale-100 opacity-100' : 'rotate-90 scale-0 opacity-0'}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
+                    <circle cx="12" cy="12" r="5" />
+                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                  </svg>
+                  {/* Moon icon (shown in light mode) */}
+                  <svg 
+                    className={`absolute inset-0 w-5 h-5 transition-all duration-300 ${theme !== 'dark' ? 'rotate-0 scale-100 opacity-100' : '-rotate-90 scale-0 opacity-0'}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
+                    <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                  </svg>
+                </span>
+              </button>
+            )}
+
             {/* Premium Features Dropdown */}
             <div className="hidden md:flex relative group">
               <Button 

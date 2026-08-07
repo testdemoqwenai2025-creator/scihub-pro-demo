@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DataLakeSkeleton, CardSkeleton, StatsCardSkeleton } from '@/components/SkeletonComponents';
+import { showSuccessToast, showErrorToast, showLoadingToast } from '@/lib/toast-utils';
 
 // ============ TYPES ============
 
@@ -104,6 +105,7 @@ export default function DataLakePage() {
 
     setIsUploading(true);
     setUploadProgress(0);
+    showLoadingToast('Creating Dataset...', `Uploading "${formData.name}"`);
 
     // Simulate upload progress
     for (let i = 0; i <= 100; i += 10) {
@@ -111,10 +113,12 @@ export default function DataLakePage() {
       setUploadProgress(i);
     }
 
+    const datasetSize = (Math.random() * 500 + 50).toFixed(1);
+    
     createDataset({
       name: createDynamicField(formData.name),
       description: createDynamicField(formData.description || `Dataset: ${formData.name}`),
-      size: createDynamicField(`${(Math.random() * 500 + 50).toFixed(1)} MB`),
+      size: createDynamicField(`${datasetSize} MB`),
       rows: createDynamicField(Math.floor(Math.random() * 1000000 + 10000)),
       columns: createDynamicField(Math.floor(Math.random() * 100 + 10)),
       type: createDynamicField(formData.type),
@@ -142,6 +146,8 @@ export default function DataLakePage() {
       message: createDynamicField(`Uploaded dataset "${formData.name}"`),
       icon: '📊',
     });
+    
+    showSuccessToast('Dataset Created!', `Upload completed! File size: ${datasetSize} MB`);
   };
 
   // Handle dataset deletion
@@ -150,6 +156,7 @@ export default function DataLakePage() {
     if (dataset && confirm(`Delete "${dataset.name.value}"? This action cannot be undone.`)) {
       deleteDataset(id);
       setSelectedDataset(null);
+      showInfoToast('Dataset Deleted', `"${dataset.name.value}" has been removed`);
     }
   };
 
@@ -217,6 +224,8 @@ export default function DataLakePage() {
       message: createDynamicField(`Exported ${dataset.name.value} as ${format.toUpperCase()}`),
       icon: '📥',
     });
+    
+    showSuccessToast('Export Complete', `${dataset.name.value} exported as ${format.toUpperCase()}`);
   };
 
   // Loading skeleton

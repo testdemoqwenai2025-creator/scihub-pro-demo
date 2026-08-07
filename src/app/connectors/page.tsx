@@ -51,6 +51,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { showSuccessToast, showErrorToast, showInfoToast, showLoadingToast } from '@/lib/toast-utils';
 
 // ============ TYPES ============
 
@@ -689,6 +690,7 @@ export default function ConnectorsPage() {
     if (!connectionState[connector.id]) {
       // Simulate connecting
       setSelectedConnector(connector);
+      showLoadingToast('Connecting...', `Establishing connection to ${connector.name}`);
       setTimeout(() => {
         setConnectionState(prev => ({ ...prev, [connector.id]: true }));
         addActivity({
@@ -697,6 +699,7 @@ export default function ConnectorsPage() {
           icon: connector.icon,
         });
         setSelectedConnector(null);
+        showSuccessToast('Connected!', `Successfully connected to ${connector.name}`);
       }, 1500);
     } else {
       setConnectionState(prev => ({ ...prev, [connector.id]: false }));
@@ -705,12 +708,14 @@ export default function ConnectorsPage() {
         message: createDynamicField(`Disconnected from ${connector.name}`),
         icon: connector.icon,
       });
+      showInfoToast('Disconnected', `Disconnected from ${connector.name}`);
     }
   };
 
   // Handle test connection
   const handleTestConnection = async (connector: SuperConnector) => {
     setSelectedConnector(connector);
+    showLoadingToast('Testing Connection...', `Testing ${connector.name} connectivity`);
     
     try {
       // Simulate actual API test
@@ -718,11 +723,13 @@ export default function ConnectorsPage() {
       const result = await response.json();
       
       if (result.success || Math.random() > 0.2) {
+        const latency = Math.floor(Math.random() * 200 + 50);
         addActivity({
           type: 'sync',
-          message: createDynamicField(`${connector.name}: Connection successful! Latency: ${Math.floor(Math.random() * 200 + 50)}ms`),
+          message: createDynamicField(`${connector.name}: Connection successful! Latency: ${latency}ms`),
           icon: '✅',
         });
+        showSuccessToast('Connection Test Successful!', `Latency: ${latency}ms`);
       } else {
         throw new Error('Connection failed');
       }
@@ -732,6 +739,7 @@ export default function ConnectorsPage() {
         message: createDynamicField(`${connector.name}: Test failed - using fallback mode`),
         icon: '⚠️',
       });
+      showErrorToast('Connection Failed', `${connector.name}: Test failed - using fallback mode`);
     }
     
     setTimeout(() => setSelectedConnector(null), 2000);
@@ -746,6 +754,7 @@ export default function ConnectorsPage() {
   // Handle subscription submit
   const handleSubscriptionSubmit = async () => {
     setIsSubmitting(true);
+    showLoadingToast('Submitting Request...', 'Processing your subscription request');
     
     try {
       const response = await fetch('/api/subscription', {
@@ -767,6 +776,7 @@ export default function ConnectorsPage() {
           message: createDynamicField(`Subscription request for ${selectedPremiumConnector?.name}`),
           icon: '⭐',
         });
+        showSuccessToast('Request Submitted!', "We'll contact you soon with access details");
         
         setTimeout(() => {
           setShowSubscriptionForm(false);
@@ -776,6 +786,7 @@ export default function ConnectorsPage() {
       }
     } catch (error) {
       console.error('Submission error:', error);
+      showErrorToast('Submission Failed', 'Please try again later');
     } finally {
       setIsSubmitting(false);
     }

@@ -5,6 +5,9 @@ import { Toaster } from "@/components/ui/toaster";
 import { ClientProviders } from "@/components/ClientProviders";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MainNavbar, Footer } from "@/components/MainNavbar";
+import { KeyboardShortcutsProvider } from "@/components/KeyboardShortcuts";
+import { CommandPalette } from "@/components/CommandPalette";
+import { ShortcutsHelp } from "@/components/ShortcutsHelp";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -49,11 +52,15 @@ export default function RootLayout({
       >
         <ClientProviders>
           <ErrorBoundary>
-            <MainNavbar />
-            <main className="flex-1">
-              {children}
-            </main>
-            <Footer />
+            <KeyboardShortcutsProvider>
+              <MainNavbar />
+              <main className="flex-1">
+                {children}
+              </main>
+              <Footer />
+              <CommandPalette />
+              <ShortcutsHelp />
+            </KeyboardShortcutsProvider>
           </ErrorBoundary>
           <Toaster />
         </ClientProviders>

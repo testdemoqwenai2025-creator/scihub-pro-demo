@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import Link from 'next/link';
+import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast-utils';
 
 // ============ TYPES ============
 
@@ -594,6 +595,7 @@ export default function DashboardPage() {
       message: createDynamicField(`Updated profile avatar to ${emoji}`),
       icon: emoji,
     });
+    showSuccessToast('Avatar Updated!', `Your profile picture has been changed to ${emoji}`);
   };
 
   // Handle avatar removal
@@ -633,7 +635,7 @@ export default function DashboardPage() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        alert('File too large. Maximum size is 2MB.');
+        showErrorToast('File Too Large', 'Maximum file size is 2MB');
         return;
       }
       const reader = new FileReader();
@@ -648,6 +650,7 @@ export default function DashboardPage() {
           message: createDynamicField('Updated profile picture'),
           icon: '🖼️',
         });
+        showSuccessToast('Avatar Updated!', 'Your profile picture has been changed');
       };
       reader.readAsDataURL(file);
     }
@@ -677,11 +680,15 @@ export default function DashboardPage() {
         icon: '👤',
       });
       
+      showSuccessToast('Profile Saved!', 'Your profile has been updated successfully');
+      
       setProfileSaved(true);
       setTimeout(() => {
         setProfileSaved(false);
         setShowFullProfileModal(false);
       }, 2000);
+    } catch (error) {
+      showErrorToast('Save Failed', 'Failed to save profile. Please try again.');
     } finally {
       setProfileSaving(false);
     }
@@ -699,8 +706,10 @@ export default function DashboardPage() {
         message: createDynamicField(`Data pushed to ${dbConfig.provider} successfully`),
         icon: '💾',
       });
+      showSuccessToast('Data Exported!', `Data pushed to ${dbConfig.provider} successfully`);
     } catch (error) {
       console.error('Push failed:', error);
+      showErrorToast('Export Failed', 'Failed to export data. Please try again.');
     } finally {
       setIsPushing(false);
     }
