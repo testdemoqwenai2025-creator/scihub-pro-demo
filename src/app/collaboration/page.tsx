@@ -1,12 +1,25 @@
 'use client';
 
+/**
+ * SciHub Pro - Collaboration Page
+ * 
+ * Team collaboration features with:
+ * - Project management
+ * - Team member directory
+ * - Discussion forums
+ * - Real-time editing stubs
+ * - Activity feeds
+ * - Call-for-action for Pro features
+ */
+
 import { useState } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
-import { useDynamicStore, createDynamicField } from '@/store/useDynamicStore';
+import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
   SelectContent,
@@ -14,653 +27,853 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 
-// ============ TYPES ============
-
-interface MemberFormData {
-  name: string;
-  email: string;
-  role: 'pi' | 'postdoc' | 'phd' | 'researcher' | 'data_scientist' | 'developer' | 'admin';
-  institution: string;
-  orcid: string;
-}
-
-interface ProjectFormData {
-  name: string;
-  description: string;
-  status: 'active' | 'paused' | 'completed' | 'archived';
-}
-
-// ============ COLLABORATION PAGE ============
+// ============ COLLABORATION PAGE COMPONENT ============
 
 export default function CollaborationPage() {
   const { t } = useTranslation();
+  const store = useSciHubStore();
+  
   const {
-    members,
     projects,
-    addMember,
-    updateMember,
-    removeMember,
-    createProject,
+    teamMembers,
+    discussions,
+    addProject,
+    updateProject,
     addDiscussion,
+    addReply,
+    activities,
     addActivity,
-  } = useDynamicStore();
+    notifications,
+    addNotification,
+    userProfile,
+    upgradePrompts,
+    triggerUpgradePrompt,
+  } = store;
 
   // UI State
-  const [activeTab, setActiveTab] = useState<'team' | 'projects' | 'discussions'>('team');
-  const [showAddMemberForm, setShowAddMemberForm] = useState(false);
-  const [showCreateProjectForm, setShowCreateProjectForm] = useState(false);
+  const [activeTab, setActiveTab] = useState('projects');
+  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+  const [showNewDiscussionDialog, setShowNewDiscussionDialog] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [editingMember, setEditingMember] = useState<string | null>(null);
+  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
   
-  // Form states
-  const [memberForm, setMemberForm] = useState<MemberFormData>({
-    name: '',
-    email: '',
-    role: 'researcher',
-    institution: '',
-    orcid: '',
-  });
+  // New project form state
+  const [newProjectName, setNewProjectName] = useState('');
+  const [newProjectDesc, setNewProjectDesc] = useState('');
+  const [newProjectVisibility, setNewProjectVisibility] = useState<'public' | 'private' | 'team'>('team');
   
-  const [projectForm, setProjectForm] = useState<ProjectFormData>({
-    name: '',
-    description: '',
-    status: 'active',
-  });
-
-  // Discussion form
+  // New discussion form state
   const [newDiscussionTitle, setNewDiscussionTitle] = useState('');
-  const [selectedProjectForDiscussion, setSelectedProjectForDiscussion] = useState('');
+  const [newDiscussionContent, setNewDiscussionContent] = useState('');
+  const [newDiscussionTags, setNewDiscussionTags] = useState('');
 
-  // Handle member creation
-  const handleAddMember = () => {
-    if (!memberForm.name.trim() || !memberForm.email.trim()) return;
+  // Get selected project data
+  const selectedProjectData = projects.find(p => p.id === selectedProject);
 
-    addMember({
-      name: createDynamicField(memberForm.name),
-      email: createDynamicField(memberForm.email),
-      role: createDynamicField(memberForm.role),
-      institution: createDynamicField(memberForm.institution || 'Not specified'),
-      orcid: createDynamicField(memberForm.orcid || '0000-0000-0000-0000'),
-      isOnline: createDynamicField(true),
-      publications: createDynamicField(0),
+  // Get online members count
+  const onlineCount = teamMembers.filter(m => m.online).length;
+
+  // ============ HANDLERS ============
+
+  const handleCreateProject = () => {
+    if (!newProjectName.trim()) return;
+
+    addProject({
+      name: createDynamicField(newProjectName),
+      description: createDynamicField(newProjectDesc || `Research project: ${newProjectName}`),
+      memberIds: [teamMembers[0]?.id || 'member-001'], // Add current user as lead
+      status: 'active',
+      visibility: newProjectVisibility,
+      leadId: teamMembers[0]?.id || 'member-001',
+      datasetIds: [],
+      queryIds: [],
     });
 
     addActivity({
       type: 'collaboration',
-      message: createDynamicField(`${memberForm.name} joined the team`),
-      icon: '👋',
-    });
-
-    // Reset form
-    setMemberForm({ name: '', email: '', role: 'researcher', institution: '', orcid: '' });
-    setShowAddMemberForm(false);
-  };
-
-  // Handle member update (inline edit)
-  const handleUpdateMember = (memberId: string, field: string, value: any) => {
-    updateMember(memberId, {
-      [field]: {
-        value,
-        isDirty: true,
-        lastModified: new Date(),
-      }
-    });
-  };
-
-  // Handle member removal
-  const handleRemoveMember = (memberId: string) => {
-    const member = members.find(m => m.id === memberId);
-    if (member && confirm(`Remove ${member.name.value} from the team?`)) {
-      removeMember(memberId);
-    }
-  };
-
-  // Handle project creation
-  const handleCreateProject = () => {
-    if (!projectForm.name.trim()) return;
-
-    createProject({
-      name: createDynamicField(projectForm.name),
-      description: createDynamicField(projectForm.description || `Project: ${projectForm.name}`),
-      status: createDynamicField(projectForm.status),
-      members: [],
-    });
-
-    addActivity({
-      type: 'create',
-      message: createDynamicField(`Created project "${projectForm.name}"`),
+      message: createDynamicField(`Created project: ${newProjectName}`),
       icon: '📁',
     });
 
-    setProjectForm({ name: '', description: '', status: 'active' });
-    setShowCreateProjectForm(false);
+    addNotification({
+      type: 'collaboration',
+      title: 'New Project Created',
+      message: `${userProfile.displayName.value} created "${newProjectName}"`,
+      priority: 'medium',
+    });
+
+    // Reset form
+    setNewProjectName('');
+    setNewProjectDesc('');
+    setShowNewProjectDialog(false);
+
+    // Trigger upgrade prompt for team features
+    if (teamMembers.length >= 5) {
+      triggerUpgradePrompt('collaboration');
+    }
   };
 
-  // Handle discussion creation
-  const handleAddDiscussion = () => {
-    if (!newDiscussionTitle.trim() || !selectedProjectForDiscussion) return;
+  const handleCreateDiscussion = () => {
+    if (!newDiscussionTitle.trim() || !selectedProject) return;
 
-    addDiscussion(selectedProjectForDiscussion, {
+    addDiscussion({
       title: createDynamicField(newDiscussionTitle),
-      author: 'You',
-      tags: createDynamicField(['discussion']),
-      isPinned: createDynamicField(false),
+      content: createDynamicField(newDiscussionContent),
+      authorId: teamMembers[0]?.id || 'member-001',
+      projectId: selectedProject,
+      tags: newDiscussionTags.split(',').map(t => t.trim()).filter(Boolean),
+      replies: [],
     });
 
     addActivity({
-      type: 'create',
-      message: createDynamicField(`Started discussion in project`),
+      type: 'collaboration',
+      message: createDynamicField(`Started discussion: ${newDiscussionTitle}`),
       icon: '💬',
     });
 
+    // Reset form
     setNewDiscussionTitle('');
+    setNewDiscussionContent('');
+    setNewDiscussionTags('');
+    setShowNewDiscussionDialog(false);
   };
 
-  // Get role badge color
-  const getRoleBadgeColor = (role: string) => {
-    const colors: Record<string, string> = {
-      pi: 'bg-purple-500',
-      postdoc: 'bg-blue-500',
-      phd: 'bg-green-500',
-      researcher: 'bg-gray-500',
-      data_scientist: 'bg-orange-500',
-      developer: 'bg-cyan-500',
-      admin: 'bg-red-500',
-    };
-    return colors[role] || 'bg-gray-400';
+  const handleAddReply = (discussionId: string) => {
+    const text = replyTexts[discussionId];
+    if (!text?.trim()) return;
+
+    addReply(discussionId, {
+      authorId: teamMembers[0]?.id || 'member-001',
+      content: text,
+    });
+
+    setReplyTexts({ ...replyTexts, [discussionId]: '' });
+    
+    addActivity({
+      type: 'collaboration',
+      message: createDynamicField('Replied to discussion'),
+      icon: '💬',
+    });
   };
 
-  // Format role for display
-  const formatRole = (role: string) => {
-    return role.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const getMemberById = (id: string) => teamMembers.find(m => m.id === id);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'paused': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'completed': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'archived': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+      default: return 'bg-gray-100 text-gray-800';
+    }
   };
 
-  // Online count
-  const onlineCount = members.filter(m => m.isOnline.value).length;
+  const formatTimeAgo = (date: Date) => {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
 
   return (
     <div className="min-h-screen bg-background p-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">{t('collaboration.title') || 'Collaboration Hub'}</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your research team, projects, and discussions. All data persists locally.
-        </p>
-        
-        <div className="mt-2 flex items-center gap-3">
-          <Badge variant="secondary">
-            👥 {members.length} Members • {onlineCount} Online
-          </Badge>
-          <Badge variant="secondary">
-            📁 {projects.length} Projects
-          </Badge>
+      <div className="mb-8">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">
+              👥 {t('collaboration.title') || 'Collaboration'}
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              Work together on research projects, share insights, and discuss findings
+            </p>
+          </div>
+
+          {/* Quick Stats */}
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="text-sm">{onlineCount} online</span>
+            </div>
+            <Badge variant="secondary">
+              {projects.length} projects
+            </Badge>
+          </div>
+        </div>
+
+        {/* Team Members Preview */}
+        <div className="mt-4 flex items-center gap-3">
+          <div className="flex -space-x-2">
+            {teamMembers.slice(0, 5).map(member => (
+              <div
+                key={member.id}
+                className={`w-9 h-9 rounded-full border-2 border-background flex items-center justify-center text-sm font-medium ${
+                  member.online ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                }`}
+                title={`${member.name}${member.online ? ' (Online)' : ''}`}
+              >
+                {member.name.split(' ').map(n => n[0]).join('')}
+              </div>
+            ))}
+            {teamMembers.length > 5 && (
+              <div className="w-9 h-9 rounded-full border-2 border-background bg-muted flex items-center justify-center text-xs font-medium">
+                +{teamMembers.length - 5}
+              </div>
+            )}
+          </div>
+          <span className="text-sm text-muted-foreground">
+            {teamMembers.length} team members
+          </span>
         </div>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="flex items-center gap-4 mb-6 border-b">
-        <button
-          onClick={() => setActiveTab('team')}
-          className={`pb-3 px-2 font-medium transition-colors ${
-            activeTab === 'team' 
-              ? 'border-b-2 border-primary text-primary' 
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Team ({members.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('projects')}
-          className={`pb-3 px-2 font-medium transition-colors ${
-            activeTab === 'projects' 
-              ? 'border-b-2 border-primary text-primary' 
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Projects ({projects.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('discussions')}
-          className={`pb-3 px-2 font-medium transition-colors ${
-            activeTab === 'discussions' 
-              ? 'border-b-2 border-primary text-primary' 
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Discussions
-        </button>
-      </div>
+      {/* Main Content */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="projects">📁 Projects</TabsTrigger>
+          <TabsTrigger value="discussions">💬 Discussions</TabsTrigger>
+          <TabsTrigger value="team">👥 Team</TabsTrigger>
+          <TabsTrigger value="activity">📋 Activity</TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main Content Area */}
-        <div className="lg:col-span-3">
-          {/* Team Tab */}
-          {activeTab === 'team' && (
-            <div className="space-y-6">
-              {/* Team Header with Add Button */}
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Team Members</h2>
-                <Button onClick={() => setShowAddMemberForm(!showAddMemberForm)}>
-                  + Invite Member
-                </Button>
-              </div>
+        {/* PROJECTS TAB */}
+        <TabsContent value="projects" className="space-y-6">
+          {/* Projects Header */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Your Projects</h2>
+            
+            <Dialog open={showNewProjectDialog} onOpenChange={setShowNewProjectDialog}>
+              <DialogTrigger asChild>
+                <Button>➕ New Project</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Project</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 pt-4">
+                  <div>
+                    <label className="text-sm font-medium">Project Name *</label>
+                    <Input
+                      placeholder="e.g., Oncology Drug Discovery"
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="text-sm font-medium">Description</label>
+                    <Textarea
+                      placeholder="What is this project about?"
+                      value={newProjectDesc}
+                      onChange={(e) => setNewProjectDesc(e.target.value)}
+                      className="mt-1"
+                      rows={3}
+                    />
+                  </div>
 
-              {/* Add Member Form */}
-              {showAddMemberForm && (
-                <Card className="border-primary">
-                  <CardHeader>
-                    <CardTitle className="text-base">Invite New Member</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <label className="text-sm font-medium">Full Name *</label>
-                        <Input
-                          value={memberForm.name}
-                          onChange={(e) => setMemberForm({...memberForm, name: e.target.value})}
-                          placeholder="Dr. Jane Smith"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Email *</label>
-                        <Input
-                          type="email"
-                          value={memberForm.email}
-                          onChange={(e) => setMemberForm({...memberForm, email: e.target.value})}
-                          placeholder="jane@institution.edu"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Role</label>
-                        <Select value={memberForm.role} onValueChange={(v) => setMemberForm({...memberForm, role: v as MemberFormData['role']})}>
-                          <SelectTrigger className="mt-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pi">Principal Investigator</SelectItem>
-                            <SelectItem value="postdoc">Postdoctoral Researcher</SelectItem>
-                            <SelectItem value="phd">PhD Student</SelectItem>
-                            <SelectItem value="researcher">Research Scientist</SelectItem>
-                            <SelectItem value="data_scientist">Data Scientist</SelectItem>
-                            <SelectItem value="developer">Developer</SelectItem>
-                            <SelectItem value="admin">Administrator</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Institution</label>
-                        <Input
-                          value={memberForm.institution}
-                          onChange={(e) => setMemberForm({...memberForm, institution: e.target.value})}
-                          placeholder="University/Company"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="md:col-span-2">
-                        <label className="text-sm font-medium">ORCID (optional)</label>
-                        <Input
-                          value={memberForm.orcid}
-                          onChange={(e) => setMemberForm({...memberForm, orcid: e.target.value})}
-                          placeholder="0000-0000-0000-0000"
-                          className="mt-1"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3">
-                      <Button variant="outline" onClick={() => setShowAddMemberForm(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleAddMember} disabled={!memberForm.name.trim() || !memberForm.email.trim()}>
-                        Send Invitation
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Members Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {members.map(member => (
-                  <Card key={member.id} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold text-primary">
-                            {member.name.value.charAt(0)}
-                          </div>
-                          <div>
-                            <h3 className="font-medium">{member.name.value}</h3>
-                            {member.name.isDirty && (
-                              <Badge variant="outline" className="text-xs mt-0.5">✏️ Edited</Badge>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex flex-col items-end gap-1">
-                          <span className={`w-2 h-2 rounded-full ${member.isOnline.value ? 'bg-green-500' : 'bg-gray-300'}`} />
-                          <Badge className={`${getRoleBadgeColor(member.role.value)} text-xs`}>
-                            {formatRole(member.role.value)}
-                          </Badge>
-                        </div>
-                      </div>
-
-                      {/* Editable Fields */}
-                      <div className="space-y-2 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground w-16">Email:</span>
-                          <input
-                            type="email"
-                            value={member.email.value}
-                            onChange={(e) => handleUpdateMember(member.id, 'email', e.target.value)}
-                            className="flex-1 px-2 py-1 border rounded text-sm bg-background"
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground w-16">Inst.:</span>
-                          <input
-                            value={member.institution.value}
-                            onChange={(e) => handleUpdateMember(member.id, 'institution', e.target.value)}
-                            className="flex-1 px-2 py-1 border rounded text-sm bg-background"
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-muted-foreground w-16">ORCID:</span>
-                          <input
-                            value={member.orcid.value}
-                            onChange={(e) => handleUpdateMember(member.id, 'orcid', e.target.value)}
-                            className="flex-1 px-2 py-1 border rounded text-sm bg-background font-mono"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Stats */}
-                      <div className="flex items-center gap-4 mt-3 pt-3 border-t text-xs text-muted-foreground">
-                        <span>📄 {member.publications.value} pubs</span>
-                        <span>Joined {member.joinedAt.toLocaleDateString()}</span>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2 mt-3">
-                        <Button size="sm" variant="outline" className="flex-1">
-                          View Profile
-                        </Button>
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => handleRemoveMember(member.id)}
-                        >
-                          ✕
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Projects Tab */}
-          {activeTab === 'projects' && (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <h2 className="text-xl font-semibold">Projects</h2>
-                <Button onClick={() => setShowCreateProjectForm(!showCreateProjectForm)}>
-                  + Create Project
-                </Button>
-              </div>
-
-              {/* Create Project Form */}
-              {showCreateProjectForm && (
-                <Card className="border-primary">
-                  <CardHeader>
-                    <CardTitle className="text-base">Create New Project</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4 mb-4">
-                      <div>
-                        <label className="text-sm font-medium">Project Name *</label>
-                        <Input
-                          value={projectForm.name}
-                          onChange={(e) => setProjectForm({...projectForm, name: e.target.value})}
-                          placeholder="e.g., Cancer Genomics Study"
-                          className="mt-1"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Description</label>
-                        <textarea
-                          value={projectForm.description}
-                          onChange={(e) => setProjectForm({...projectForm, description: e.target.value})}
-                          placeholder="Brief description of the project goals..."
-                          className="mt-1 w-full p-2 border rounded-md h-20 resize-none text-sm bg-background"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-sm font-medium">Status</label>
-                        <Select value={projectForm.status} onValueChange={(v) => setProjectForm({...projectForm, status: v as ProjectFormData['status']})}>
-                          <SelectTrigger className="mt-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="paused">Paused</SelectItem>
-                            <SelectItem value="completed">Completed</SelectItem>
-                            <SelectItem value="archived">Archived</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end gap-3">
-                      <Button variant="outline" onClick={() => setShowCreateProjectForm(false)}>
-                        Cancel
-                      </Button>
-                      <Button onClick={handleCreateProject} disabled={!projectForm.name.trim()}>
-                        Create Project
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Projects Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {projects.map(project => (
-                  <Card 
-                    key={project.id} 
-                    className={`cursor-pointer hover:shadow-md transition-shadow ${
-                      selectedProject === project.id ? 'ring-2 ring-primary' : ''
-                    }`}
-                    onClick={() => setSelectedProject(project.id)}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <CardTitle className="text-base">{project.name.value}</CardTitle>
-                        <Badge 
-                          variant={
-                            project.status.value === 'active' ? 'default' :
-                            project.status.value === 'completed' ? 'secondary' :
-                            'outline'
-                          }
-                          className={
-                            project.status.value === 'paused' ? 'bg-yellow-100 text-yellow-800' : ''
-                          }
-                        >
-                          {project.status.value.charAt(0).toUpperCase() + project.status.value.slice(1)}
-                        </Badge>
-                      </div>
-                      <CardDescription>{project.description.value}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between text-sm text-muted-foreground">
-                        <span>👥 {project.members.length} members</span>
-                        <span>💬 {project.discussions.length} discussions</span>
-                        <span>📊 {project.datasets.length} datasets</span>
-                      </div>
-                      
-                      <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-                        Last activity: {project.lastActivity.toLocaleDateString()}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Discussions Tab */}
-          {activeTab === 'discussions' && (
-            <div className="space-y-6">
-              <h2 className="text-xl font-semibold">Discussions</h2>
-
-              {/* New Discussion Form */}
-              <Card>
-                <CardContent className="p-4">
-                  <div className="flex gap-3">
-                    <Select value={selectedProjectForDiscussion} onValueChange={setSelectedProjectForDiscussion}>
-                      <SelectTrigger className="w-[200px]">
-                        <SelectValue placeholder="Select project..." />
+                  <div>
+                    <label className="text-sm font-medium">Visibility</label>
+                    <Select value={newProjectVisibility} onValueChange={(v) => setNewProjectVisibility(v as any)}>
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {projects.map(p => (
-                          <SelectItem key={p.id} value={p.id}>{p.name.value}</SelectItem>
-                        ))}
+                        <SelectItem value="private">🔒 Private (only you)</SelectItem>
+                        <SelectItem value="team">👥 Team (invited members)</SelectItem>
+                        <SelectItem value="public">🌐 Public (anyone can view)</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-2">
+                    <Button variant="outline" onClick={() => setShowNewProjectDialog(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={handleCreateProject} disabled={!newProjectName.trim()}>
+                      Create Project
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Projects Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {projects.map(project => (
+              <Card 
+                key={project.id} 
+                className={`hover:shadow-lg transition-all cursor-pointer ${
+                  selectedProject === project.id ? 'ring-2 ring-primary' : ''
+                }`}
+                onClick={() => setSelectedProject(project.id)}
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <CardTitle className="text-lg line-clamp-1">
+                      {project.name.value}
+                    </CardTitle>
+                    <Badge className={getStatusColor(project.status)}>
+                      {project.status}
+                    </Badge>
+                  </div>
+                  <CardDescription className="line-clamp-2">
+                    {project.description.value}
+                  </CardDescription>
+                </CardHeader>
+                
+                <CardContent>
+                  {/* Project Meta */}
+                  <div className="space-y-3 text-sm">
+                    <div className="flex items-center gap-4 text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        👥 {project.memberIds.length} members
+                      </span>
+                      <span className="flex items-center gap-1">
+                        📊 {project.datasetIds.length} datasets
+                      </span>
+                      <span className="flex items-center gap-1">
+                        🔎 {project.queryIds.length} queries
+                      </span>
+                    </div>
+
+                    {/* Lead */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Lead:</span>
+                      <span className="text-xs font-medium">
+                        {getMemberById(project.leadId)?.name || 'Unknown'}
+                      </span>
+                    </div>
+
+                    {/* Last Activity */}
+                    <div className="text-xs text-muted-foreground">
+                      Last active: {formatTimeAgo(project.lastActivity)}
+                    </div>
+
+                    {/* Members Avatars */}
+                    <div className="flex items-center gap-2 pt-2 border-t">
+                      <div className="flex -space-x-1">
+                        {project.memberIds.slice(0, 4).map(id => {
+                          const member = getMemberById(id);
+                          return (
+                            <div
+                              key={id}
+                              className={`w-6 h-6 rounded-full border border-background flex items-center justify-center text-[10px] ${
+                                member?.online ? 'bg-green-100' : 'bg-gray-100'
+                              }`}
+                              title={member?.name}
+                            >
+                              {member?.name.charAt(0)}
+                            </div>
+                          );
+                        })}
+                        {project.memberIds.length > 4 && (
+                          <div className="w-6 h-6 rounded-full border border-background bg-muted flex items-center justify-center text-[10px]">
+                            +{project.memberIds.length - 4}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <Badge variant="outline" className="text-xs ml-auto">
+                        {project.visibility}
+                      </Badge>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {/* Empty State / Create Prompt */}
+            {projects.length === 0 && (
+              <Card className="col-span-full">
+                <CardContent className="py-12 text-center">
+                  <span className="text-4xl block mb-3">📁</span>
+                  <h3 className="text-lg font-semibold mb-2">No Projects Yet</h3>
+                  <p className="text-muted-foreground max-w-md mx-auto mb-4">
+                    Create a project to organize your research, collaborate with team members, and track progress.
+                  </p>
+                  <Button onClick={() => setShowNewProjectDialog(true)}>
+                    ➕ Create Your First Project
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Selected Project Details */}
+          {selectedProjectData && (
+            <Card className="mt-6">
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle>{selectedProjectData.name.value}</CardTitle>
+                    <CardDescription className="mt-1">
+                      {selectedProjectData.description.value}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedProject(null);
+                    }}
+                  >
+                    ✕ Close
+                  </Button>
+                </div>
+              </CardHeader>
+              
+              <CardContent>
+                <Tabs defaultValue="overview">
+                  <TabsList className="mb-4">
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="members">Members</TabsTrigger>
+                    <TabsTrigger value="datasets">Datasets</TabsTrigger>
+                    <TabsTrigger value="discussions">Discussions</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="overview" className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+                        <div className="text-2xl font-bold">{selectedProjectData.memberIds.length}</div>
+                        <div className="text-xs text-muted-foreground">Members</div>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+                        <div className="text-2xl font-bold">{selectedProjectData.datasetIds.length}</div>
+                        <div className="text-xs text-muted-foreground">Datasets</div>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+                        <div className="text-2xl font-bold">{selectedProjectData.queryIds.length}</div>
+                        <div className="text-xs text-muted-foreground">Queries</div>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+                        <div className="text-2xl font-bold">
+                          {discussions.filter(d => d.projectId === selectedProject).length}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Discussions</div>
+                      </div>
+                    </div>
+
+                    <Button 
+                      variant="outline" 
+                      className="w-full"
+                      onClick={() => {
+                        setActiveTab('discussions');
+                        setShowNewDiscussionDialog(true);
+                      }}
+                    >
+                      💬 Start a Discussion
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="members">
+                    <div className="space-y-2">
+                      {selectedProjectData.memberIds.map(id => {
+                        const member = getMemberById(id);
+                        if (!member) return null;
+                        
+                        return (
+                          <div key={id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-medium ${
+                                member.online ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                              }`}>
+                                {member.name.split(' ').map(n => n[0]).join('')}
+                              </div>
+                              <div>
+                                <p className="font-medium">{member.name}</p>
+                                <p className="text-sm text-muted-foreground">{member.role}</p>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              {member.online ? (
+                                <Badge variant="secondary" className="bg-green-100 text-green-700">Online</Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">
+                                  Active {formatTimeAgo(member.lastActive)}
+                                </span>
+                              )}
+                              <Badge variant="outline">{member.publicationsCount} pubs</Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="datasets">
+                    <p className="text-muted-foreground text-center py-8">
+                      No datasets linked yet. Add datasets from the Data Lake.
+                    </p>
+                  </TabsContent>
+
+                  <TabsContent value="discussions">
+                    <div className="space-y-2">
+                      {discussions
+                        .filter(d => d.projectId === selectedProject)
+                        .map(discussion => (
+                          <div key={discussion.id} className="p-3 rounded-lg hover:bg-muted/50 cursor-pointer">
+                            <div className="flex items-center justify-between">
+                              <h4 className="font-medium">{discussion.title.value}</h4>
+                              <Badge variant="secondary">{discussion.replyCount} replies</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
+                              {discussion.content.value}
+                            </p>
+                          </div>
+                        ))
+                      }
+                      
+                      {discussions.filter(d => d.projectId === selectedProject).length === 0 && (
+                        <div className="text-center py-8">
+                          <p className="text-muted-foreground mb-3">No discussions in this project yet.</p>
+                          <Button size="sm" onClick={() => setShowNewDiscussionDialog(true)}>
+                            Start First Discussion
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        /* DISCUSSIONS TAB */
+        <TabsContent value="discussions" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-semibold">Team Discussions</h2>
+            
+            <Dialog open={showNewDiscussionDialog} onOpenChange={setShowNewDiscussionDialog}>
+              <DialogTrigger asChild>
+                <Button disabled={!selectedProject}>
+                  💬 New Discussion
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Start New Discussion</DialogTitle>
+                </DialogHeader>
+                {!selectedProject ? (
+                  <p className="text-muted-foreground py-4 text-center">
+                    Please select a project first to create a discussion.
+                  </p>
+                ) : (
+                  <div className="space-y-4 pt-4">
+                    <div>
+                      <label className="text-sm font-medium">Title *</label>
+                      <Input
+                        placeholder="What do you want to discuss?"
+                        value={newDiscussionTitle}
+                        onChange={(e) => setNewDiscussionTitle(e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="text-sm font-medium">Content *</label>
+                      <Textarea
+                        placeholder="Share your thoughts, questions, or findings..."
+                        value={newDiscussionContent}
+                        onChange={(e) => setNewDiscussionContent(e.target.value)}
+                        className="mt-1"
+                        rows={4}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-sm font-medium">Tags (comma-separated)</label>
+                      <Input
+                        placeholder="e.g., methodology, question, result"
+                        value={newDiscussionTags}
+                        onChange={(e) => setNewDiscussionTags(e.target.value)}
+                        className="mt-1"
+                      />
+                    </div>
+
+                    <div className="flex gap-2 justify-end pt-2">
+                      <Button variant="outline" onClick={() => setShowNewDiscussionDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={handleCreateDiscussion} 
+                        disabled={!newDiscussionTitle.trim() || !newDiscussionContent.trim()}
+                      >
+                        Post Discussion
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Discussions List */}
+          <div className="space-y-4">
+            {discussions.map(discussion => (
+              <Card key={discussion.id}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <CardTitle className="text-base">{discussion.title.value}</CardTitle>
+                        {discussion.projectId && (
+                          <Badge variant="outline" className="text-xs">
+                            {projects.find(p => p.id === discussion.projectId)?.name.value}
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                        <span>{getMemberById(discussion.authorId)?.name}</span>
+                        <span>•</span>
+                        <span>{formatTimeAgo(discussion.createdAt)}</span>
+                        <span>•</span>
+                        <span>{discussion.replyCount} replies</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Tags */}
+                  {discussion.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {discussion.tags.map(tag => (
+                        <Badge key={tag} variant="secondary" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </CardHeader>
+                
+                <CardContent className="pt-0 space-y-4">
+                  {/* Original Post */}
+                  <p className="text-sm">{discussion.content.value}</p>
+
+                  {/* Replies */}
+                  {discussion.replies.length > 0 && (
+                    <div className="space-y-3 pl-4 border-l-2 border-muted">
+                      {discussion.replies.map(reply => (
+                        <div key={reply.id} className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">
+                              {getMemberById(reply.authorId)?.name}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatTimeAgo(reply.timestamp)}
+                            </span>
+                          </div>
+                          <p className="text-sm pl-4">{reply.content}</p>
+                          
+                          {/* Reactions */}
+                          {Object.keys(reply.reactions).length > 0 && (
+                            <div className="flex gap-1 pl-4">
+                              {Object.entries(reply.reactions).map(([emoji, count]) => (
+                                <button
+                                  key={emoji}
+                                  className="px-2 py-0.5 text-xs bg-muted rounded-full hover:bg-muted/80"
+                                >
+                                  {emoji} {count}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Reply Input */}
+                  <div className="flex gap-2 pt-2 border-t">
                     <Input
-                      value={newDiscussionTitle}
-                      onChange={(e) => setNewDiscussionTitle(e.target.value)}
-                      placeholder="Discussion topic..."
+                      placeholder="Write a reply..."
+                      value={replyTexts[discussion.id] || ''}
+                      onChange={(e) => setReplyTexts({ ...replyTexts, [discussion.id]: e.target.value })}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddReply(discussion.id)}
                       className="flex-1"
                     />
-                    <Button 
-                      onClick={handleAddDiscussion}
-                      disabled={!newDiscussionTitle.trim() || !selectedProjectForDiscussion}
+                    <Button
+                      size="sm"
+                      onClick={() => handleAddReply(discussion.id)}
+                      disabled={!replyTexts[discussion.id]?.trim()}
                     >
-                      Start Discussion
+                      Reply
                     </Button>
                   </div>
                 </CardContent>
               </Card>
+            ))}
 
-              {/* Discussions List */}
-              <div className="space-y-4">
-                {projects.flatMap(project => 
-                  project.discussions.map(discussion => (
-                    <Card key={discussion.id}>
-                      <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <CardTitle className="text-base">{discussion.title.value}</CardTitle>
-                            <CardDescription className="mt-1">
-                              In: {project.name.value} • Started by {discussion.author}
-                            </CardDescription>
-                          </div>
-                          {discussion.isPinned?.value && (
-                            <Badge variant="secondary">📌 Pinned</Badge>
-                          )}
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>💬 {discussion.replies.length} replies</span>
-                          <span>Created: {discussion.createdAt.toLocaleDateString()}</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
+            {discussions.length === 0 && (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <span className="text-4xl block mb-3">💬</span>
+                  <h3 className="text-lg font-semibold mb-2">No Discussions Yet</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Start a conversation with your team about your research.
+                  </p>
+                  <Button onClick={() => setShowNewDiscussionDialog(true)} disabled={!selectedProject}>
+                    Start First Discussion
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
 
-                {projects.every(p => p.discussions.length === 0) && (
-                  <Card>
-                    <CardContent className="py-12 text-center text-muted-foreground">
-                      <span className="text-5xl block mb-4">💬</span>
-                      <p>No discussions yet. Start one above!</p>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-4">
-          {/* Online Now */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Online Now ({onlineCount})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {members.filter(m => m.isOnline.value).map(member => (
-                  <div key={member.id} className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="text-sm truncate">{member.name.value}</span>
+        /* TEAM TAB */
+        <TabsContent value="team" className="space-y-6">
+          <h2 className="text-xl font-semibold">Team Members</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {teamMembers.map(member => (
+              <Card key={member.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-5">
+                  <div className="flex items-start gap-4">
+                    <div className={`relative`}>
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold ${
+                        member.online ? 'bg-green-100 text-green-700 ring-2 ring-green-300' : 'bg-gray-100 text-gray-500'
+                      }`}>
+                        {member.name.split(' ').map(n => n[0]).join('')}
+                      </div>
+                      {member.online && (
+                        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-background"></span>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold">{member.name}</h3>
+                      <p className="text-sm text-muted-foreground">{member.role}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {member.institution}
+                      </p>
+                    </div>
                   </div>
-                ))}
-                
-                {onlineCount === 0 && (
-                  <p className="text-sm text-muted-foreground">No one is online</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                📧 Email Team
-              </Button>
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                📅 Schedule Meeting
-              </Button>
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                📊 Generate Report
-              </Button>
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                🔔 Configure Notifications
-              </Button>
-            </CardContent>
-          </Card>
+                  {/* Expertise Tags */}
+                  <div className="flex flex-wrap gap-1 mt-3">
+                    {member.expertise.map(exp => (
+                      <Badge key={exp} variant="secondary" className="text-xs">
+                        {exp}
+                      </Badge>
+                    ))}
+                  </div>
 
-          {/* Recent Activity Summary */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Team Stats</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Publications</span>
-                <span className="font-medium">
-                  {members.reduce((acc, m) => acc + m.publications.value, 0)}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Active Projects</span>
-                <span className="font-medium">
-                  {projects.filter(p => p.status.value === 'active').length}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Discussions</span>
-                <span className="font-medium">
-                  {projects.reduce((acc, p) => acc + p.discussions.length, 0)}
-                </span>
-              </div>
+                  {/* Stats */}
+                  <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
+                    <span>📄 {member.publicationsCount} publications</span>
+                    <span className={member.online ? 'text-green-600' : ''}>
+                      {member.online ? '🟢 Online' : `Last seen ${formatTimeAgo(member.lastActive)}`}
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 mt-4 pt-3 border-t">
+                    <Button size="sm" variant="outline" className="flex-1">
+                      👤 Profile
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1">
+                      ✉️ Message
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {/* Invite Member CTA */}
+          <Card className="border-dashed">
+            <CardContent className="py-8 text-center">
+              <p className="text-muted-foreground mb-3">
+                Want to grow your team? Invite collaborators to join your projects.
+              </p>
+              <Button variant="outline" onClick={() => triggerUpgradePrompt('collaboration')}>
+                👥 Invite Team Member
+              </Button>
             </CardContent>
           </Card>
-        </div>
-      </div>
+        </TabsContent>
+
+        /* ACTIVITY TAB */
+        <TabsContent value="activity" className="space-y-4">
+          <h2 className="text-xl font-semibold">Recent Activity</h2>
+          
+          <div className="space-y-3">
+            {activities.slice(0, 20).map(activity => (
+              <Card key={activity.id} className="hover:bg-muted/30 transition-colors">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl mt-0.5">{activity.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm">{activity.message.value}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {formatTimeAgo(activity.timestamp)}
+                      </p>
+                    </div>
+                    {activity.actionUrl && (
+                      <Button size="sm" variant="ghost" className="shrink-0">
+                        View →
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+
+            {activities.length === 0 && (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <span className="text-4xl block mb-3">📋</span>
+                  <h3 className="text-lg font-semibold mb-2">No Activity Yet</h3>
+                  <p className="text-muted-foreground">
+                    Your team activity will appear here.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* Real-time Collaboration Upgrade Prompt */}
+      <Card className="mt-6 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30">
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="font-medium text-indigo-900 dark:text-indigo-100">
+                🔄 Enable Real-time Collaboration
+              </h4>
+              <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-1">
+                Edit documents together, see cursors live, and chat in real-time.
+              </p>
+            </div>
+            <Button variant="outline" onClick={() => triggerUpgradePrompt('realtime_collab')}>
+              Enable Now
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

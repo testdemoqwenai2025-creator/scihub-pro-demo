@@ -1,9 +1,20 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+/**
+ * SciHub Pro - AETHEL AI Page
+ * 
+ * AI Research Assistant with:
+ * - Multiple model selection (free & pro)
+ * - Token tracking and budget management
+ * - Conversation history
+ * - Context-aware responses
+ * - Call-for-action for premium features
+ */
+
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
-import { useDynamicStore, createDynamicField } from '@/store/useDynamicStore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,770 +28,552 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
-// ============ TYPES ============
+// ============ SUGGESTED PROMPTS ============
 
-interface AIModel {
-  id: string;
-  name: string;
-  type: 'llm' | 'vision' | 'quantum' | 'scientific' | 'multimodal';
-  parameters: string;
-  speed: string; // tokens/sec
-  specialty: string;
-  isAvailable: boolean;
-  maxContext: number; // tokens
-}
-
-interface PromptHistory {
-  id: string;
-  prompt: string;
-  model: string;
-  response?: string;
-  tokensUsed: number;
-  computeTime: number;
-  priority: string;
-  timestamp: Date;
-  status: 'queued' | 'processing' | 'completed' | 'failed';
-}
-
-interface SystemMetrics {
-  computeUtilization: number;
-  memoryUsage: number;
-  gpuUsage: number;
-  networkIO: number;
-  activeJobs: number;
-  queueDepth: number;
-}
-
-// ============ AI MODELS ============
-
-const AI_MODELS: AIModel[] = [
+const SUGGESTED_PROMPTS = [
   {
-    id: 'gpt-turbo-220b',
-    name: 'GPT-Turbo 220B',
-    type: 'llm',
-    parameters: '220B',
-    speed: '45K tokens/s',
-    specialty: 'General reasoning & analysis',
-    isAvailable: true,
-    maxContext: 128000,
+    category: 'Literature Review',
+    icon: '📚',
+    prompts: [
+      'Summarize recent advances in CRISPR gene therapy',
+      'What are the key findings in AlphaFold2 papers?',
+      'Compare machine learning approaches in drug discovery',
+    ],
   },
   {
-    id: 'vision-pro-85b',
-    name: 'Vision Pro 85B',
-    type: 'vision',
-    parameters: '85B',
-    speed: '28K tokens/s',
-    specialty: 'Image & video understanding',
-    isAvailable: true,
-    maxContext: 64000,
+    category: 'Code Generation',
+    icon: '💻',
+    prompts: [
+      'Write Python code to analyze RNA-seq data',
+      'Create an SQL query for differential expression',
+      'Generate R code for volcano plot visualization',
+    ],
   },
   {
-    id: 'quantum-sim-150b',
-    name: 'Quantum Sim 150B',
-    type: 'quantum',
-    parameters: '150B',
-    speed: '12K tokens/s',
-    specialty: 'Quantum chemistry simulation',
-    isAvailable: false,
-    maxContext: 32000,
+    category: 'Research Methods',
+    icon: '🔬',
+    prompts: [
+      'Explain how GATK variant calling works',
+      'What statistical tests should I use for my experiment?',
+      'How do I design a clinical trial protocol?',
+    ],
   },
   {
-    id: 'bio-intel-300b',
-    name: 'Bio Intel 300B',
-    type: 'scientific',
-    parameters: '300B',
-    speed: '35K tokens/s',
-    specialty: 'Biomedical & genomics analysis',
-    isAvailable: true,
-    maxContext: 96000,
-  },
-  {
-    id: 'multimodal-300b',
-    name: 'MultiModal 300B',
-    type: 'multimodal',
-    parameters: '300B',
-    speed: '32K tokens/s',
-    specialty: 'Cross-modal scientific reasoning',
-    isAvailable: true,
-    maxContext: 128000,
+    category: 'Data Analysis',
+    icon: '📊',
+    prompts: [
+      'Help me interpret my PCA results',
+      'What does p-value < 0.05 really mean?',
+      'How should I handle missing data in my dataset?',
+    ],
   },
 ];
 
-// ============ PROMPT TEMPLATES ============
+// ============ AETHEL AI PAGE COMPONENT ============
 
-const PROMPT_TEMPLATES = [
-  {
-    id: 'lit-review',
-    name: 'Literature Review',
-    template: `Generate a comprehensive literature review on [TOPIC]. Include:
-1. Recent advances (2022-2024)
-2. Key methodologies
-3. Major findings and controversies
-4. Future directions
-5. Critical analysis of the field
-
-Focus on peer-reviewed sources and provide citations where possible.`,
-  },
-  {
-    id: 'hypothesis',
-    name: 'Hypothesis Generation',
-    template: `Based on the following observation: [OBSERVATION]
-
-Generate 3 testable hypotheses that could explain this phenomenon. For each hypothesis:
-1. State the hypothesis clearly
-2. Identify key variables
-3. Suggest experimental approaches
-4. Predict potential outcomes
-5. Discuss implications if confirmed`,
-  },
-  {
-    id: 'data-analysis',
-    name: 'Data Analysis Plan',
-    template: `I have a dataset with the following characteristics:
-- Type: [DATA_TYPE]
-- Size: [SIZE]
-- Variables: [VARIABLES]
-- Research question: [QUESTION]
-
-Design a comprehensive data analysis plan including:
-1. Data preprocessing steps
-2. Statistical methods to apply
-3. Visualization strategy
-4. Validation approach
-5. Potential pitfalls and how to address them`,
-  },
-  {
-    id: 'method-suggestion',
-    name: 'Method Suggestion',
-    template: `I'm trying to: [GOAL]
-With the following constraints: [CONSTRAINTS]
-
-Suggest the most appropriate computational/experimental methods to achieve this goal. Consider:
-1. Current state-of-the-art approaches
-2. Computational requirements
-3. Data availability needs
-4. Validation strategies
-5. Alternative approaches if primary method fails`,
-  },
-  {
-    id: 'code-generation',
-    name: 'Code Generation',
-    template: `Generate [LANGUAGE] code for the following task:
-
-[TASK_DESCRIPTION]
-
-Requirements:
-1. Include proper error handling
-2. Add comments explaining key steps
-3. Use best practices for [DOMAIN]
-4. Include example usage
-5. Suggest optimizations if applicable`,
-  },
-];
-
-// ============ AETHEL PAGE ============
-
-export default function AETHELPage() {
+export default function AethelPage() {
   const { t } = useTranslation();
+  const store = useSciHubStore();
+  
   const {
-    aethelPrompts,
-    submitPrompt,
-    clearPromptHistory,
+    aethelModels,
+    aethelQueries,
+    sendAethelQuery,
+    clearAethelHistory,
+    activeAethelQuery,
+    activities,
     addActivity,
-  } = useDynamicStore();
+    preferences,
+    triggerUpgradePrompt,
+  } = store;
 
   // UI State
-  const [selectedModel, setSelectedModel] = useState(AI_MODELS[0].id);
-  const [promptText, setPromptText] = useState('');
-  const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'critical'>('normal');
-  const [computeBudget, setComputeBudget] = useState(50); // percentage
+  const [selectedModelId, setSelectedModelId] = useState(aethelModels[0]?.id || '');
+  const [promptInput, setPromptInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingProgress, setProcessingProgress] = useState(0);
-  const [currentResponse, setCurrentResponse] = useState<string>('');
-  const [isConnected, setIsConnected] = useState(false);
-  const [connectionLatency, setConnectionLatency] = useState<number | null>(null);
+  const [showHistory, setShowHistory] = useState(true);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Metrics (simulated)
-  const [metrics, setMetrics] = useState<SystemMetrics>({
-    computeUtilization: 0,
-    memoryUsage: 0,
-    gpuUsage: 0,
-    networkIO: 0,
-    activeJobs: 0,
-    queueDepth: 0,
-  });
+  // Get selected model
+  const selectedModel = aethelModels.find(m => m.id === selectedModelId);
 
-  // Update metrics periodically when connected
+  // Token usage stats
+  const totalTokensUsed = aethelQueries.reduce((sum, q) => sum + q.tokensUsed.value, 0);
+  const queriesToday = aethelQueries.filter(q => {
+    const queryDate = new Date(q.timestamp);
+    const today = new Date();
+    return queryDate.toDateString() === today.toDateString();
+  }).length;
+
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    if (!isConnected) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [aethelQueries]);
 
-    const interval = setInterval(() => {
-      setMetrics({
-        computeUtilization: Math.min(100, 20 + Math.random() * 60 + (isProcessing ? 30 : 0)),
-        memoryUsage: Math.min(100, 40 + Math.random() * 30),
-        gpuUsage: Math.min(100, isProcessing ? 70 + Math.random() * 25 : 10 + Math.random() * 20),
-        networkIO: Math.min(100, Math.random() * 40),
-        activeJobs: aethelPrompts.filter(p => p.status === 'processing').length,
-        queueDepth: aethelPrompts.filter(p => p.status === 'queued').length,
-      });
-    }, 2000);
+  // ============ HANDLERS ============
 
-    return () => clearInterval(interval);
-  }, [isConnected, isProcessing, aethelPrompts]);
-
-  // Handle connection toggle
-  const handleToggleConnection = async () => {
-    if (isConnected) {
-      setIsConnected(false);
-      setConnectionLatency(null);
-      addActivity({
-        type: 'disconnect',
-        message: createDynamicField('Disconnected from AETHEL AI'),
-        icon: '🔌',
-      });
-    } else {
-      // Simulate connection
-      setIsProcessing(true);
-      await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1500));
-      
-      setIsConnected(true);
-      setConnectionLatency(Math.floor(15 + Math.random() * 35));
-      setIsProcessing(false);
-
-      addActivity({
-        type: 'connect',
-        message: createDynamicField(`Connected to AETHEL AI (${connectionLatency}ms latency)`),
-        icon: '🤖',
-      });
-    }
-  };
-
-  // Handle prompt submission
-  const handleSubmitPrompt = async () => {
-    if (!promptText.trim() || !isConnected) return;
+  const handleSendQuery = async () => {
+    if (!promptInput.trim() || !selectedModelId) return;
 
     setIsProcessing(true);
-    setProcessingProgress(0);
-    setCurrentResponse('');
-
-    // Create prompt entry
-    submitPrompt({
-      prompt: createDynamicField(promptText),
-      model: createDynamicField(selectedModel),
-      tokensUsed: createDynamicField(0),
-      computeTime: createDynamicField(0),
-      priority: createDynamicField(priority),
-      computeBudget: createDynamicField(computeBudget),
-    });
-
-    // Simulate processing progress
-    const totalTime = 3000 + Math.random() * 4000;
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < totalTime) {
-      const elapsed = Date.now() - startTime;
-      setProcessingProgress(Math.min(95, (elapsed / totalTime) * 90));
-      await new Promise(resolve => setTimeout(resolve, 200));
-    }
-
-    // Generate mock response based on model type
-    const model = AI_MODELS.find(m => m.id === selectedModel)!;
-    const response = generateMockResponse(model.type, promptText);
     
-    setCurrentResponse(response);
-    setProcessingProgress(100);
+    try {
+      await sendAethelQuery(selectedModelId, promptInput);
+      
+      addActivity({
+        type: 'query',
+        message: createDynamicField(`AETHEL AI query sent (${selectedModel?.name})`),
+        icon: '🤖',
+      });
 
-    // Update the prompt in history with results
-    const prompts = useDynamicStore.getState().aethelPrompts;
-    if (prompts.length > 0) {
-      const lastPrompt = prompts[0];
-      // Response would be updated in store in real implementation
-    }
+      setPromptInput('');
 
-    setIsProcessing(false);
-
-    addActivity({
-      type: 'compute',
-      message: createDynamicField(`AETHEL ${model.name} completed analysis`),
-      icon: '✨',
-    });
-  };
-
-  // Generate mock response based on model type
-  const generateMockResponse = (type: AIModel['type'], prompt: string): string => {
-    switch (type) {
-      case 'llm':
-        return `## Analysis Complete
-
-Based on your query about "${prompt.substring(0, 50)}...", here's my comprehensive analysis:
-
-### Key Findings
-
-1. **Primary Insight**: The data suggests significant patterns that warrant further investigation. Current research indicates multiple factors contribute to the observed phenomenon.
-
-2. **Supporting Evidence**: 
-   - Recent studies (2023-2024) show consistent results across different methodologies
-   - Meta-analyses confirm statistical significance (p < 0.001)
-   - Effect sizes range from moderate to large (Cohen's d > 0.5)
-
-3. **Methodological Considerations**:
-   - Sample size adequacy confirmed
-   - Potential confounding variables identified
-   - Recommendations for replication studies provided
-
-### Recommendations
-
-1. **Immediate Actions**: Validate findings with independent dataset
-2. **Short-term**: Expand scope to include additional variables
-3. **Long-term**: Develop predictive models based on identified patterns
-
-### References
-
-This analysis draws upon current literature and established methodologies. Full citation list available upon request.
-
----
-*Generated by GPT-Turbo 220B • Tokens: ~1,250 • Confidence: High*`;
-
-      case 'scientific':
-        return `## Scientific Analysis Results
-
-### Query: "${prompt.substring(0, 60)}..."
-
-### Biological Interpretation
-
-**Gene/Protein Analysis**:
-- Identified 23 significant variants (p < 5e-8)
-- Pathway enrichment observed in MAPK signaling cascade
-- Conservation score: 0.89 (highly conserved across species)
-
-**Structural Insights**:
-- Predicted binding affinity: ΔG = -8.2 kcal/mol
-- Active site residues: HIS41, CYS145, MET165
-- Solvent accessibility: 45% (partially exposed)
-
-### Statistical Summary
-
-| Metric | Value | Significance |
-|--------|-------|-------------|
-| p-value | 2.3e-9 | *** |
-| Effect size | 0.72 | Large |
-| CI 95% | [0.58, 0.86] | - |
-| Power | 0.94 | Adequate |
-
-### Experimental Validation Recommended
-
-1. **In vitro**: Enzyme kinetics assay
-2. **In vivo**: Animal model validation
-3. **Clinical**: Phase I trial feasibility
-
----
-*Generated by Bio Intel 300B • Domain: Biomedical • Confidence: Very High*`;
-
-      case 'multimodal':
-        return `## Multi-Modal Analysis
-
-### Integrated Assessment
-
-Combining textual analysis with structural and functional data:
-
-#### Textual Analysis
-Your query relates to "${prompt.substring(0, 40)}..." which connects to:
-- 147 related publications (2020-2024)
-- 23 clinical trials (12 completed, 11 ongoing)
-- 4 FDA-approved interventions in similar domain
-
-#### Structural Correlation
-- Molecular docking scores correlate with experimental IC50 (R² = 0.78)
-- 3D pharmacophore features align with known binders
-- ADMET predictions favorable
-
-#### Functional Implications
-- Pathway impact: Moderate-high (Z-score = 2.34)
-- Network centrality: Top 5% of target interactome
-- Disease association: Strong (OR = 3.2)
-
-### Synthesis
-
-The convergence of evidence from multiple modalities supports:
-✅ Valid therapeutic target
-✅ Drug-like properties achievable
-✅ Mechanism of action well-characterized
-
-### Next Steps
-1. Lead optimization cycle
-2. Preclinical toxicity screening
-3. IND-enabling studies
-
----
-*Generated by MultiModal 300B • Modalities: Text+Structure+Function*`;
-
-      default:
-        return `## Processing Complete
-
-Your query has been analyzed by the selected AI model.
-
-### Summary
-The system has processed your input and generated relevant insights based on the available knowledge base.
-
-### Key Points
-- Analysis completed successfully
-- Results are ready for review
-- Additional details available on request
-
-### Action Items
-1. Review generated insights
-2. Validate critical findings
-3. Document conclusions
-
----
-*Response generated by ${AI_MODELS.find(m => m.id === selectedModel)?.name}*`;
+      // Trigger upgrade prompt if using pro features on free tier
+      if (selectedModel?.tier === 'pro' && totalTokensUsed > 10000) {
+        setTimeout(() => triggerUpgradePrompt('ai_tokens'), 1000);
+      }
+    } catch (error) {
+      console.error('Query failed:', error);
+      addActivity({
+        type: 'error_recovery',
+        message: createDynamicField('AI query failed — please try again'),
+        icon: '⚠️',
+      });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
-  // Load template
-  const handleLoadTemplate = (templateId: string) => {
-    const template = PROMPT_TEMPLATES.find(t => t.id === templateId);
-    if (template) {
-      setPromptText(template.template);
-    }
+  const handleSuggestedPrompt = (prompt: string) => {
+    setPromptInput(prompt);
   };
 
-  // Get model badge color
-  const getModelBadgeColor = (type: AIModel['type']) => {
-    const colors: Record<string, string> = {
-      llm: 'bg-blue-500',
-      vision: 'bg-purple-500',
-      quantum: 'bg-cyan-500',
-      scientific: 'bg-green-500',
-      multimodal: 'bg-orange-500',
-    };
-    return colors[type] || 'bg-gray-500';
+  const getModelStatusBadge = (model: typeof aethelModels[0]) => {
+    if (!model.available) {
+      return <Badge variant="secondary" className="bg-gray-100 text-gray-600">Offline</Badge>;
+    }
+    if (model.tier === 'free') {
+      return <Badge className="bg-green-100 text-green-700">Free</Badge>;
+    }
+    return <Badge className="bg-purple-100 text-purple-700">Pro</Badge>;
+  };
+
+  const formatTokens = (tokens: number): string => {
+    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(1)}M`;
+    if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
+    return String(tokens);
   };
 
   return (
     <div className="min-h-screen bg-background p-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">{t('aethel.title') || 'AETHEL AI Platform'}</h1>
+        <h1 className="text-3xl font-bold text-foreground">
+          🤖 {t('aethel.title') || 'AETHEL AI Assistant'}
+        </h1>
         <p className="text-muted-foreground mt-1">
-          Advanced Experimental Theoretical Hypercomputing Emulation Layer
+          Your AI research assistant for literature analysis, code generation, and scientific insights
         </p>
-        
-        {/* Connection Status */}
-        <div className="mt-3 flex items-center gap-3">
-          <Button
-            variant={isConnected ? 'default' : 'outline'}
-            onClick={handleToggleConnection}
-            disabled={isProcessing}
-          >
-            {isConnected ? '🟢 Connected' : '⚫ Connect to AETHEL'}
-          </Button>
-          
-          {connectionLatency && (
-            <span className="text-sm text-muted-foreground">
-              Latency: {connectionLatency}ms
-            </span>
-          )}
-          
-          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-            🆓 Free Tier Active
-          </Badge>
+
+        {/* Usage Stats */}
+        <div className="flex items-center gap-4 mt-3">
+          <div className="flex items-center gap-2 text-sm">
+            <span>📊 Tokens used today:</span>
+            <span className="font-medium">{formatTokens(totalTokensUsed)}</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <span>💬 Queries:</span>
+            <span className="font-medium">{queriesToday} today, {aethelQueries.length} total</span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Panel - Models & Input */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Model Selection */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Select AI Model</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {AI_MODELS.map(model => (
-                  <button
-                    key={model.id}
-                    onClick={() => setSelectedModel(model.id)}
-                    disabled={!model.isAvailable || !isConnected}
-                    className={`p-3 rounded-lg border text-left transition-all ${
-                      selectedModel === model.id
-                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                        : !model.isAvailable
-                          ? 'opacity-50 cursor-not-allowed'
-                          : 'hover:border-primary/50 hover:bg-muted/50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className={`px-2 py-0.5 rounded text-xs text-white ${getModelBadgeColor(model.type)}`}>
-                        {model.type.toUpperCase()}
-                      </span>
-                      {!model.isAvailable && (
-                        <Badge variant="secondary" className="text-xs">Offline</Badge>
-                      )}
-                    </div>
-                    <h4 className="font-medium text-sm">{model.name}</h4>
-                    <p className="text-xs text-muted-foreground mt-1">{model.specialty}</p>
-                    <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
-                      <span>{model.parameters}</span>
-                      <span>•</span>
-                      <span>{model.speed}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+      <div className="flex gap-6 h-[calc(100vh-220px)]">
+        {/* Main Chat Area */}
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          {/* Model Selector */}
+          <CardHeader className="pb-4 border-b">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Select value={selectedModelId} onValueChange={setSelectedModelId}>
+                  <SelectTrigger className="w-[250px]">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {aethelModels.map(model => (
+                      <SelectItem key={model.id} value={model.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{model.name}</span>
+                          <span className="text-xs text-muted-foreground">({model.parameters})</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-          {/* Prompt Templates */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Quick Templates</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {PROMPT_TEMPLATES.map(template => (
-                  <Button
-                    key={template.id}
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleLoadTemplate(template.id)}
-                    disabled={!isConnected}
-                  >
-                    {template.name}
-                  </Button>
-                ))}
+                {selectedModel && (
+                  <div className="flex items-center gap-2">
+                    {getModelStatusBadge(selectedModel)}
+                    <span className="text-sm text-muted-foreground">
+                      {selectedModel.specialty}
+                    </span>
+                  </div>
+                )}
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Prompt Input */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">Enter Your Prompt</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)} disabled={!isConnected}>
-                    <SelectTrigger className="w-[110px] h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low Priority</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="high">High Priority</SelectItem>
-                      <SelectItem value="critical">Critical</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  
-                  <span className="text-xs text-muted-foreground w-20">
-                    Budget: {computeBudget}%
-                  </span>
-                  <input
-                    type="range"
-                    min="10"
-                    max="100"
-                    value={computeBudget}
-                    onChange={(e) => setComputeBudget(parseInt(e.target.value))}
-                    className="w-24"
-                    disabled={!isConnected}
-                  />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={clearAethelHistory}
+              >
+                🗑️ Clear History
+              </Button>
+            </div>
+
+            {selectedModel && (
+              <div className="mt-3 p-3 bg-muted/50 rounded-lg text-sm">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-medium">Model Info</span>
+                  <Badge variant={selectedModel.tier === 'free' ? 'secondary' : 'default'}>
+                    {selectedModel.tier === 'free' ? 'Free Tier' : 'Pro Tier'}
+                  </Badge>
+                </div>
+                <p className="text-muted-foreground text-xs mt-1">
+                  {selectedModel.description}
+                </p>
+                <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                  <span>Speed: {selectedModel.speed}</span>
+                  <span>Max tokens: {formatTokens(selectedModel.maxTokens)}</span>
+                  {selectedModel.inputCost > 0 && (
+                    <>
+                      <span>${selectedModel.inputCost}/1K input</span>
+                      <span>${selectedModel.outputCost}/1K output</span>
+                    </>
+                  )}
                 </div>
               </div>
+            )}
+          </CardHeader>
+
+          {/* Messages Area */}
+          <CardContent className="flex-1 overflow-auto p-4 space-y-4">
+            {aethelQueries.length === 0 ? (
+              /* Empty State */
+              <div className="h-full flex items-center justify-center">
+                <div className="text-center max-w-md">
+                  <span className="text-5xl block mb-4">🤖</span>
+                  <h3 className="text-xl font-semibold mb-2">Welcome to AETHEL AI</h3>
+                  <p className="text-muted-foreground mb-6">
+                    I&apos;m your AI research assistant. Ask me about scientific concepts, 
+                    get help with code, or discuss your research findings.
+                  </p>
+
+                  {/* Quick Start Prompts */}
+                  <div className="grid grid-cols-1 sm-grid-cols-2 gap-2 text-left">
+                    {[
+                      { icon: '📚', text: 'Explain CRISPR gene editing', sub: 'Scientific concepts' },
+                      { icon: '💻', text: 'Write Python analysis code', sub: 'Code generation' },
+                      { icon: '📊', text: 'Help interpret my results', sub: 'Data analysis' },
+                      { icon: '🔬', text: 'Design an experiment', sub: 'Research methods' },
+                    ].map((item, i) => (
+                      <button
+                        key={i}
+                        className="p-3 rounded-lg border hover:bg-muted transition-colors text-left"
+                        onClick={() => handleSuggestedPrompt(item.text)}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span>{item.icon}</span>
+                          <span className="font-medium text-sm">{item.text}</span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">{item.sub}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Chat Messages */
+              aethelQueries.map((query) => (
+                <div key={query.id} className="space-y-3">
+                  {/* User Message */}
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] bg-primary text-primary-foreground rounded-lg px-4 py-3">
+                      <p className="text-sm">{query.prompt.value}</p>
+                      <p className="text-xs opacity-70 mt-2 text-right">
+                        {new Date(query.timestamp).toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* AI Response */}
+                  {query.status === 'processing' && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] bg-muted rounded-lg px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="animate-spin">⏳</span>
+                          <span className="text-sm text-muted-foreground">
+                            Thinking...
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {query.status === 'completed' && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] bg-background border rounded-lg px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span>🤖</span>
+                          <span className="font-medium text-sm">{selectedModel?.name}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {query.tokensUsed.value} tokens
+                          </Badge>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {(query.computeTime.value / 1000).toFixed(1)}s
+                          </span>
+                        </div>
+                        
+                        <div className="text-sm whitespace-pre-wrap">
+                          {query.response.value}
+                        </div>
+
+                        {/* Response Actions */}
+                        <div className="flex items-center gap-2 mt-3 pt-2 border-t">
+                          <Button size="sm" variant="ghost" className="h-7 text-xs">
+                            📋 Copy
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs">
+                            🔁 Regenerate
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="h-7 text-xs"
+                            onClick={() => handleSuggestedPrompt(`Follow up: ${query.prompt.value.substring(0, 50)}...`)}
+                          >
+                            💬 Follow Up
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {query.status === 'failed' && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] bg-destructive/10 border border-destructive/20 rounded-lg px-4 py-3">
+                        <p className="text-sm text-destructive">
+                          ❌ Error: {query.error || 'Failed to generate response'}
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="mt-2 h-7 text-xs"
+                          onClick={() => sendAethelQuery(selectedModelId, query.prompt.value)}
+                        >
+                          🔄 Retry
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {query.status === 'rate_limited' && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg px-4 py-3">
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                          ⚠️ Rate limit reached. Please wait a moment before sending another message.
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="mt-2 h-7 text-xs"
+                          onClick={() => triggerUpgradePrompt('ai_tokens')}
+                        >
+                          ⬆️ Upgrade for More Tokens
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {/* Processing Indicator for Active Query */}
+            {activeAethelQuery && (
+              <div className="flex justify-start">
+                <div className="bg-muted rounded-lg px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    <span className="text-sm text-muted-foreground ml-2">
+                      Generating response...
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div ref={messagesEndRef} />
+          </CardContent>
+
+          {/* Input Area */}
+          <div className="p-4 border-t">
+            <div className="flex gap-3">
+              <Textarea
+                value={promptInput}
+                onChange={(e) => setPromptInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendQuery();
+                  }
+                }}
+                placeholder="Ask me anything about your research..."
+                className="flex-1 min-h-[60px] max-h-[120px] resize-none"
+                disabled={!selectedModel || isProcessing}
+              />
+              
+              <Button
+                onClick={handleSendQuery}
+                disabled={!promptInput.trim() || !selectedModel || isProcessing}
+                className="self-end"
+                size="lg"
+              >
+                {isProcessing ? '⏳ Sending...' : '🤖 Send'}
+              </Button>
+            </div>
+            
+            <p className="text-xs text-muted-foreground mt-2">
+              💡 Tip: Press Enter to send, Shift+Enter for new line
+            </p>
+          </div>
+        </Card>
+
+        {/* Sidebar */}
+        <div className="w-80 space-y-4 overflow-auto">
+          {/* Model Comparison */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Available Models</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {aethelModels.map(model => (
+                <button
+                  key={model.id}
+                  className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    selectedModelId === model.id
+                      ? 'border-primary bg-primary/5'
+                      : 'hover:bg-muted'
+                  } ${!model.available ? 'opacity-50' : ''}`}
+                  onClick={() => model.available && setSelectedModelId(model.id)}
+                  disabled={!model.available}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-medium text-sm">{model.name}</span>
+                    {getModelStatusBadge(model)}
+                  </div>
+                  
+                  <p className="text-xs text-muted-foreground line-clamp-1">
+                    {model.description}
+                  </p>
+                  
+                  <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+                    <span>{model.parameters}</span>
+                    <span>{model.speed}</span>
+                    {model.tier !== 'free' && (
+                      <span className="text-orange-600">${model.inputCost}/1K</span>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+
+          {/* Suggested Prompts */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Suggested Prompts</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Textarea
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder={
-                  isConnected 
-                    ? "Enter your research query or paste your prompt here..."
-                    : "Connect to AETHEL AI to start querying..."
-                }
-                rows={6}
-                className="resize-none font-mono text-sm"
-                disabled={!isConnected}
-              />
+              {SUGGESTED_PROMPTS.map((category) => (
+                <div key={category.category}>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1">
+                    <span>{category.icon}</span>
+                    {category.category}
+                  </h4>
+                  <div className="space-y-1">
+                    {category.prompts.map((prompt, i) => (
+                      <button
+                        key={i}
+                        className="w-full text-left p-2 rounded text-xs hover:bg-muted transition-colors truncate"
+                        onClick={() => handleSuggestedPrompt(prompt)}
+                      >
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
 
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {promptText.length} characters • ~{Math.ceil(promptText.length / 4)} tokens
-                </span>
-                <Button
-                  onClick={handleSubmitPrompt}
-                  disabled={!promptText.trim() || !isConnected || isProcessing}
-                >
-                  {isProcessing ? (
-                    <>⏳ Processing... {Math.round(processingProgress)}%</>
-                  ) : (
-                    '🚀 Submit to AETHEL'
-                  )}
-                </Button>
+          {/* Token Usage */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Usage This Month</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span>Tokens Used</span>
+                  <span>{formatTokens(totalTokensUsed)} / 50K</span>
+                </div>
+                <Progress value={(totalTokensUsed / 50000) * 100} />
               </div>
 
-              {isProcessing && (
-                <Progress value={processingProgress} className="h-2" />
+              <div className="grid grid-cols-2 gap-2 text-center text-sm">
+                <div className="p-2 bg-muted/50 rounded">
+                  <div className="font-bold">{queriesToday}</div>
+                  <div className="text-xs text-muted-foreground">Today</div>
+                </div>
+                <div className="p-2 bg-muted/50 rounded">
+                  <div className="font-bold">{aethelQueries.length}</div>
+                  <div className="text-xs text-muted-foreground">Total</div>
+                </div>
+              </div>
+
+              {totalTokensUsed > 40000 && (
+                <div className="p-2 bg-yellow-50 dark:bg-yellow-950 rounded text-xs text-yellow-700 dark:text-yellow-300 text-center">
+                  ⚠️ Approaching monthly limit. Upgrade for unlimited access.
+                </div>
               )}
             </CardContent>
           </Card>
 
-          {/* Response Display */}
-          {(currentResponse || aethelPrompts.some(p => p.response)) && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  AI Response
-                  <Badge variant="secondary" className="text-xs">
-                    {AI_MODELS.find(m => m.id === selectedModel)?.name}
-                  </Badge>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-auto">
-                  {currentResponse || (
-                    <pre className="whitespace-pre-wrap font-mono text-sm">
-                      {aethelPrompts.find(p => p.response)?.response}
-                    </pre>
-                  )}
-                </div>
-                
-                <div className="flex gap-2 mt-4 pt-4 border-t">
-                  <Button size="sm" variant="outline" onClick={() => {
-                    navigator.clipboard.writeText(currentResponse);
-                  }}>
-                    📋 Copy Response
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    💾 Save to Workspace
-                  </Button>
-                  <Button size="sm" variant="outline">
-                    🔄 Refine Response
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Right Panel - Status & History */}
-        <div className="space-y-4">
-          {/* Connection Status */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">System Status</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <StatusItem label="Compute Utilization" value={metrics.computeUtilization} unit="%" />
-              <StatusItem label="Memory Usage" value={metrics.memoryUsage} unit="%" />
-              <StatusItem label="GPU Usage" value={metrics.gpuUsage} unit="%" />
-              <StatusItem label="Network I/O" value={metrics.networkIO} unit="%" />
-              
-              <div className="pt-3 border-t space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Active Jobs</span>
-                  <span className="font-medium">{metrics.activeJobs}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Queue Depth</span>
-                  <span className="font-medium">{metrics.queueDepth}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Prompt History */}
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">Recent Prompts</CardTitle>
-                <Button size="sm" variant="ghost" onClick={clearPromptHistory}>
-                  Clear
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 max-h-[400px] overflow-auto">
-                {aethelPrompts.slice(0, 10).map(entry => (
-                  <button
-                    key={entry.id}
-                    onClick={() => {
-                      setPromptText(entry.prompt.value);
-                      setSelectedModel(entry.model.value);
-                    }}
-                    className={`w-full text-left p-2 rounded text-xs hover:bg-muted transition-colors ${
-                      entry.status === 'processing' ? 'animate-pulse bg-blue-50' :
-                      entry.status === 'completed' ? '' :
-                      ''
-                    }`}
-                  >
-                    <div className="font-medium truncate">{entry.prompt.value.substring(0, 60)}...</div>
-                    <div className="flex items-center gap-2 mt-1 text-muted-foreground">
-                      <span>{entry.model.value.split(' ')[0]}</span>
-                      <span>{entry.timestamp.toLocaleTimeString()}</span>
-                      <Badge variant="outline" className="text-[10px]">
-                        {entry.status}
-                      </Badge>
-                    </div>
-                  </button>
-                ))}
-                
-                {aethelPrompts.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    No prompts yet. Submit one above!
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Usage Stats */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Session Usage</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total Prompts</span>
-                <span className="font-medium">{aethelPrompts.length}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Tokens Used</span>
-                <span className="font-medium">
-                  {aethelPrompts.reduce((acc, p) => acc + p.tokensUsed.value, 0).toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Avg Compute Time</span>
-                <span className="font-medium">
-                  {aethelPrompts.length > 0
-                    ? `${(aethelPrompts.reduce((acc, p) => acc + p.computeTime.value, 0) / aethelPrompts.length).toFixed(1)}s`
-                    : '-'
-                  }
-                </span>
-              </div>
-              
-              <div className="pt-3 border-t mt-3">
-                <p className="text-xs text-muted-foreground">
-                  🆓 Free tier: Unlimited queries during demo period
-                </p>
-              </div>
+          {/* Pro Features CTA */}
+          <Card className="border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30">
+            <CardContent className="p-4">
+              <h4 className="font-medium text-purple-900 dark:text-purple-100 mb-2">
+                ✨ Unlock Pro Models
+              </h4>
+              <ul className="text-sm text-purple-700 dark:text-purple-300 space-y-1 mb-3">
+                <li>• Access to 70B+ parameter models</li>
+                <li>• Higher rate limits</li>
+                <li>• Priority processing</li>
+                <li>• Advanced analysis modes</li>
+              </ul>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => triggerUpgradePrompt('ai_tokens')}
+              >
+                View Pro Plans
+              </Button>
             </CardContent>
           </Card>
         </div>
       </div>
-    </div>
-  );
-}
-
-// ============ SUB-COMPONENTS ============
-
-function StatusItem({ label, value, unit }: { label: string; value: number; unit: string }) {
-  return (
-    <div className="space-y-1">
-      <div className="flex justify-between text-sm">
-        <span className="text-muted-foreground">{label}</span>
-        <span className="font-medium">{value}{unit}</span>
-      </div>
-      <Progress value={value} className="h-1.5" />
     </div>
   );
 }

@@ -1,15 +1,28 @@
 'use client';
 
+/**
+ * SciHub Pro - Settings Page
+ * 
+ * Complete settings management with:
+ * - User preferences (theme, language, etc.)
+ * - Profile management
+ * - Data export/import
+ * - Storage management
+ * - Notification settings
+ * - Upgrade/Plan management
+ * - Call-for-action prompts
+ */
+
 import { useState } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
-import { useDynamicStore } from '@/store/useDynamicStore';
+import { useSciHubStore, VOLUME_TIERS } from '@/store/useSciHubStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -17,321 +30,298 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 
-// ============ SETTINGS PAGE ============
+// ============ SETTINGS PAGE COMPONENT ============
 
 export default function SettingsPage() {
   const { t } = useTranslation();
+  const store = useSciHubStore();
+  
   const {
+    preferences,
+    updatePreferences,
+    setTheme,
+    setLanguage,
+    setSkillLevel,
     userProfile,
     updateUserProfile,
-    resetUserProfile,
-    notificationPrefs,
-    updateNotificationPref,
-    dbConfig,
-    updateDbConfig,
-    getDirtyFieldsCount,
+    resetProfileChanges,
+    datasets,
+    totalStorageUsed,
+    currentVolumeTier,
+    databaseConfig,
     exportState,
     importState,
-    checkVolumeThreshold,
     addActivity,
-    createDynamicField,
-  } = useDynamicStore();
+    triggerUpgradePrompt,
+    checkVolumeThreshold,
+    getDirtyFieldsCount,
+    resetAllFields,
+    notifications,
+    markAllNotificationsRead,
+  } = store;
 
   // UI State
-  const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'language' | 'notifications' | 'api-keys' | 'database' | 'advanced'>('profile');
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [activeTab, setActiveTab] = useState('profile');
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
 
-  // Handle profile field updates
-  const handleProfileChange = (field: keyof typeof userProfile, value: string) => {
-    updateUserProfile(field, value);
-    setSaveStatus('idle');
+  // Calculate storage percentage for current tier
+  const storagePercentage = Math.min(
+    100,
+    (totalStorageUsed / currentVolumeTier.maxSize) * 100
+  );
+
+  // Format bytes to readable string
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Handle save all settings
-  const handleSaveAll = async () => {
-    setSaveStatus('saving');
-    
-    // Simulate save delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    setSaveStatus('saved');
-    
-    addActivity({
-      type: 'update',
-      message: createDynamicField('Settings saved successfully'),
-      icon: '💾',
-    });
+  // ============ HANDLERS ============
 
-    // Reset status after showing success
-    setTimeout(() => setSaveStatus('idle'), 2000);
+  const handleExportData = () => {
+    try {
+      const stateJson = exportState();
+      const blob = new Blob([stateJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `scihub-pro-backup-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      
+      addActivity({
+        type: 'export',
+        message: createDynamicField('Exported application backup'),
+        icon: '📥',
+      });
+      
+      setShowExportDialog(false);
+    } catch (error) {
+      console.error('Export failed:', error);
+    }
   };
 
-  // Handle reset profile
-  const handleResetProfile = () => {
-    resetUserProfile();
-    setShowResetConfirm(false);
-    
-    addActivity({
-      type: 'update',
-      message: createDynamicField('Profile reset to defaults'),
-      icon: '🔄',
-    });
-  };
-
-  // Handle export state
-  const handleExportState = () => {
-    const stateJson = exportState();
-    const blob = new Blob([stateJson], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `scihub-settings-${new Date().toISOString().split('T')[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-
-    addActivity({
-      type: 'export',
-      message: createDynamicField('Exported application settings'),
-      icon: '📥',
-    });
-  };
-
-  // Handle import state
-  const handleImportState = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = event.target?.result as string;
-        importState(content);
-        
+  const handleImportData = () => {
+    try {
+      const success = importState(importText);
+      setImportResult({
+        success,
+        message: success 
+          ? 'Data imported successfully! Your settings and workspace have been restored.'
+          : 'Import failed. Please check that the file is a valid SciHub Pro backup.'
+      });
+      
+      if (success) {
         addActivity({
-          type: 'update',
-          message: createDynamicField('Imported settings from file'),
+          type: 'import',
+          message: createDynamicField('Imported application backup'),
           icon: '📤',
         });
-
-        alert('Settings imported successfully!');
-      } catch (error) {
-        console.error('Import failed:', error);
-        alert('Failed to import settings. Please check the file format.');
       }
-    };
-    reader.readAsText(file);
+    } catch (error) {
+      setImportResult({
+        success: false,
+        message: 'Import failed: Invalid file format.',
+      });
+    }
   };
 
-  // Dirty fields count
-  const dirtyCount = getDirtyFieldsCount();
+  const handleResetAll = () => {
+    resetAllFields();
+    setShowResetConfirm(false);
+    addActivity({
+      type: 'reset',
+      message: createDynamicField('Reset all fields to default values'),
+      icon: '↩️',
+    });
+  };
+
+  // ============ RENDER ============
 
   return (
     <div className="min-h-screen bg-background p-6">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-foreground">{t('settings.title') || 'Settings'}</h1>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-foreground">⚙️ Settings</h1>
         <p className="text-muted-foreground mt-1">
-          Manage your preferences, profile, and system configuration.
+          Manage your profile, preferences, data, and account settings
         </p>
-
-        {/* Save Status & Actions */}
-        <div className="mt-4 flex items-center gap-4 flex-wrap">
-          {dirtyCount > 0 && (
-            <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
-              📝 {dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}
-            </Badge>
-          )}
-          
-          <Button onClick={handleSaveAll} disabled={saveStatus === 'saving'}>
-            {saveStatus === 'saving' ? '⏳ Saving...' : 
-             saveStatus === 'saved' ? '✅ Saved!' :
-             '💾 Save All Changes'}
-          </Button>
-          
-          <Button variant="outline" onClick={handleExportState}>
-            📥 Export Settings
-          </Button>
-          
-          <label className="cursor-pointer">
-            <Button variant="outline" asChild>
-              <span>📤 Import Settings</span>
-            </Button>
-            <input
-              type="file"
-              accept=".json"
-              onChange={handleImportState}
-              className="hidden"
-            />
-          </label>
-        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Main Content Area */}
-        <div className="lg:col-span-3 space-y-6">
-          {/* Tab Navigation */}
-          <div className="flex flex-wrap gap-2 border-b pb-3">
-            {[
-              { id: 'profile', label: 'Profile', icon: '👤' },
-              { id: 'appearance', label: 'Appearance', icon: '🎨' },
-              { id: 'language', label: 'Language', icon: '🌐' },
-              { id: 'notifications', label: 'Notifications', icon: '🔔' },
-              { id: 'api-keys', label: 'API Keys', icon: '🔑' },
-              { id: 'database', label: 'Database', icon: '🗄️' },
-              { id: 'advanced', label: 'Advanced', icon: '⚙️' },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                className={`px-4 py-2 rounded-t-lg text-sm font-medium transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                }`}
-              >
-                {tab.icon} {tab.label}
-              </button>
-            ))}
-          </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="mb-6">
+          <TabsTrigger value="profile">👤 Profile</TabsTrigger>
+          <TabsTrigger value="preferences">🎨 Preferences</TabsTrigger>
+          <TabsTrigger value="data">💾 Data & Storage</TabsTrigger>
+          <TabsTrigger value="notifications">🔔 Notifications</TabsTrigger>
+          <TabsTrigger value="account">👑 Account</TabsTrigger>
+        </TabsList>
 
-          {/* Profile Tab */}
-          {activeTab === 'profile' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Profile Information</CardTitle>
-                <CardDescription>
-                  Manage your personal information and research identity
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Display Name */}
-                  <div>
-                    <label className="text-sm font-medium">Display Name</label>
-                    <Input
-                      value={userProfile.displayName.value}
-                      onChange={(e) => handleProfileChange('displayName', e.target.value)}
-                      placeholder="Your name"
-                      className={`mt-1 ${userProfile.displayName.isDirty ? 'border-orange-400' : ''}`}
-                    />
-                    {userProfile.displayName.isDirty && (
-                      <p className="text-xs text-orange-600 mt-1">Modified from original</p>
-                    )}
-                  </div>
-
-                  {/* Email */}
-                  <div>
-                    <label className="text-sm font-medium">Email Address</label>
-                    <Input
-                      type="email"
-                      value={userProfile.email.value}
-                      onChange={(e) => handleProfileChange('email', e.target.value)}
-                      placeholder="your@email.com"
-                      className={`mt-1 ${userProfile.email.isDirty ? 'border-orange-400' : ''}`}
-                    />
-                  </div>
-
-                  {/* Institution */}
-                  <div>
-                    <label className="text-sm font-medium">Institution</label>
-                    <Input
-                      value={userProfile.institution.value}
-                      onChange={(e) => handleProfileChange('institution', e.target.value)}
-                      placeholder="University or Company"
-                      className={`mt-1 ${userProfile.institution.isDirty ? 'border-orange-400' : ''}`}
-                    />
-                  </div>
-
-                  {/* ORCID */}
-                  <div>
-                    <label className="text-sm font-medium">ORCID iD</label>
-                    <Input
-                      value={userProfile.orcid.value}
-                      onChange={(e) => handleProfileChange('orcid', e.target.value)}
-                      placeholder="0000-0000-0000-0000"
-                      className={`mt-1 font-mono ${userProfile.orcid.isDirty ? 'border-orange-400' : ''}`}
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      <a href="https://orcid.org" target="_blank" rel="noopener noreferrer" className="hover:text-primary">
-                        Get your free ORCID →
-                      </a>
-                    </p>
-                  </div>
-
-                  {/* Role */}
-                  <div>
-                    <label className="text-sm font-medium">Primary Role</label>
-                    <Select
-                      value={userProfile.role.value}
-                      onValueChange={(v) => handleProfileChange('role', v)}
-                    >
-                      <SelectTrigger className={`mt-1 ${userProfile.role.isDirty ? 'border-orange-400' : ''}`}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="researcher">Researcher</SelectItem>
-                        <SelectItem value="developer">Developer</SelectItem>
-                        <SelectItem value="admin">Administrator</SelectItem>
-                        <SelectItem value="community">Community Member</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                {/* Bio */}
+        {/* PROFILE TAB */}
+        <TabsContent value="profile" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Personal Information</CardTitle>
+              <CardDescription>
+                Update your personal details and research information
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium">Biography / Research Interests</label>
-                  <Textarea
-                    value={userProfile.bio.value}
-                    onChange={(e) => handleProfileChange('bio', e.target.value)}
-                    placeholder="Tell us about your research interests and background..."
-                    rows={4}
-                    className={`mt-1 resize-none ${userProfile.bio.isDirty ? 'border-orange-400' : ''}`}
+                  <label className="text-sm font-medium">Display Name</label>
+                  <Input
+                    value={userProfile.displayName.value}
+                    onChange={(e) => updateUserProfile('displayName', e.target.value)}
+                    className={`mt-1 ${userProfile.displayName.isDirty ? 'border-orange-400' : ''}`}
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {userProfile.bio.value.length}/500 characters
-                  </p>
-                </div>
-
-                {/* Actions */}
-                <div className="flex justify-between pt-4 border-t">
-                  <Button variant="destructive" onClick={() => setShowResetConfirm(true)}>
-                    Reset to Defaults
-                  </Button>
-                  
-                  {showResetConfirm && (
-                    <div className="flex items-center gap-3 p-3 bg-red-50 dark:bg-red-950 rounded-lg border border-red-200 dark:border-red-800">
-                      <span className="text-sm">Are you sure? This cannot be undone.</span>
-                      <Button size="sm" variant="destructive" onClick={handleResetProfile}>
-                        Yes, Reset
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => setShowResetConfirm(false)}>
-                        Cancel
-                      </Button>
-                    </div>
+                  {userProfile.displayName.isDirty && (
+                    <span className="text-xs text-orange-500 mt-1">Modified</span>
                   )}
                 </div>
-              </CardContent>
-            </Card>
-          )}
 
-          {/* Appearance Tab */}
-          {activeTab === 'appearance' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Appearance Preferences</CardTitle>
-                <CardDescription>
-                  Customize how SciHub Pro looks and feels
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
+                <div>
+                  <label className="text-sm font-medium">Email</label>
+                  <Input
+                    type="email"
+                    value={userProfile.email.value}
+                    onChange={(e) => updateUserProfile('email', e.target.value)}
+                    className={`mt-1 ${userProfile.email.isDirty ? 'border-orange-400' : ''}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Institution</label>
+                  <Input
+                    value={userProfile.institution.value}
+                    onChange={(e) => updateUserProfile('institution', e.target.value)}
+                    className={`mt-1 ${userProfile.institution.isDirty ? 'border-orange-400' : ''}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">ORCID</label>
+                  <Input
+                    placeholder="0000-0000-0000-0000"
+                    value={userProfile.orcid.value}
+                    onChange={(e) => updateUserProfile('orcid', e.target.value)}
+                    className={`mt-1 ${userProfile.orcid.isDirty ? 'border-orange-400' : ''}`}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Bio</label>
+                <Textarea
+                  value={userProfile.bio.value}
+                  onChange={(e) => updateUserProfile('bio', e.target.value)}
+                  className={`mt-1 ${userProfile.bio.isDirty ? 'border-orange-400' : ''}`}
+                  rows={3}
+                  placeholder="Tell us about your research interests..."
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium">Research Interests</label>
+                <Input
+                  placeholder="cancer-genomics, machine-learning, drug-discovery"
+                  defaultValue={userProfile.researchInterests.join(', ')}
+                  className="mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Comma-separated keywords
+                </p>
+              </div>
+
+              {/* Dirty Fields Indicator */}
+              {getDirtyFieldsCount() > 0 && (
+                <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg">
+                  <span className="text-sm text-orange-700 dark:text-orange-300">
+                    You have {getDirtyFieldsCount()} unsaved change{getDirtyFieldsCount() > 1 ? 's' : ''}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={resetProfileChanges}>
+                      Reset Changes
+                    </Button>
+                    <Button size="sm" onClick={() => {
+                      // In a real app, this would save to server
+                      addActivity({
+                        type: 'save',
+                        message: createDynamicField('Saved profile changes'),
+                        icon: '✅',
+                      });
+                    }}>
+                      Save Changes
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Research Stats */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Research Statistics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="p-4 bg-muted/50 rounded-lg text-center">
+                  <div className="text-2xl font-bold">{userProfile.publicationsCount}</div>
+                  <div className="text-sm text-muted-foreground">Publications</div>
+                </div>
+                <div className="p-4 bg-muted/50 rounded-lg text-center">
+                  <div className="text-2xl font-bold">{userProfile.hIndex || 'N/A'}</div>
+                  <div className="text-sm text-muted-foreground">H-Index</div>
+                </div>
+                <div className="p-4 bg-muted/50 rounded-lg text-center">
+                  <div className="text-2xl font-bold">{userProfile.role}</div>
+                  <div className="text-sm text-muted-foreground">Role</div>
+                </div>
+                <div className="p-4 bg-muted/50 rounded-lg text-center">
+                  <div className="text-2xl font-bold">
+                    {Math.floor((Date.now() - new Date(userProfile.joinDate).getTime()) / (1000 * 60 * 60 * 24))}
+                  </div>
+                  <div className="text-sm text-muted-foreground">Days Active</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        /* PREFERENCES TAB */
+        <TabsContent value="preferences" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Appearance</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium">Theme</label>
-                  <Select defaultValue="system">
-                    <SelectTrigger className="w-[200px] mt-1">
+                  <Select value={preferences.theme} onValueChange={(v) => setTheme(v as any)}>
+                    <SelectTrigger className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -343,398 +333,614 @@ export default function SettingsPage() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium">Font Size</label>
-                  <Select defaultValue="medium">
-                    <SelectTrigger className="w-[200px] mt-1">
+                  <label className="text-sm font-medium">Language</label>
+                  <Select value={preferences.language} onValueChange={setLanguage}>
+                    <SelectTrigger className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="small">Small (14px)</SelectItem>
-                      <SelectItem value="medium">Medium (16px)</SelectItem>
-                      <SelectItem value="large">Large (18px)</SelectItem>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="zh">中文</SelectItem>
+                      <SelectItem value="es">Español</SelectItem>
+                      <SelectItem value="fr">Français</SelectItem>
+                      <SelectItem value="de">Deutsch</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Font Size</label>
+                  <Select 
+                    value={preferences.fontSize} 
+                    onValueChange={(v) => updatePreferences({ fontSize: v as any })}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="small">Small</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="large">Large</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
                   <label className="text-sm font-medium">Results Per Page</label>
-                  <Select defaultValue="20">
-                    <SelectTrigger className="w-[200px] mt-1">
+                  <Select 
+                    value={String(preferences.resultsPerPage)} 
+                    onValueChange={(v) => updatePreferences({ resultsPerPage: Number(v) })}
+                  >
+                    <SelectTrigger className="mt-1">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="10">10 items</SelectItem>
-                      <SelectItem value="20">20 items</SelectItem>
-                      <SelectItem value="50">50 items</SelectItem>
-                      <SelectItem value="100">100 items</SelectItem>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Behavior</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Auto-save Interval</label>
+                  <Select 
+                    value={String(preferences.autoSaveInterval)} 
+                    onValueChange={(v) => updatePreferences({ autoSaveInterval: Number(v) })}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="15">15 seconds</SelectItem>
+                      <SelectItem value="30">30 seconds</SelectItem>
+                      <SelectItem value="60">1 minute</SelectItem>
+                      <SelectItem value="300">5 minutes</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">Compact Mode</p>
-                    <p className="text-xs text-muted-foreground">Reduce spacing for more content density</p>
-                  </div>
-                  <Switch />
-                </div>
-
-                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                  <div>
-                    <p className="font-medium text-sm">Animations</p>
-                    <p className="text-xs text-muted-foreground">Enable UI animations and transitions</p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Language Tab */}
-          {activeTab === 'language' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Language & Region</CardTitle>
-                <CardDescription>
-                  Choose your preferred language for the interface
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {[
-                    { code: 'en', name: 'English', flag: '🇺🇸' },
-                    { code: 'es', name: 'Español', flag: '🇪🇸' },
-                    { code: 'fr', name: 'Français', flag: '🇫🇷' },
-                    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-                    { code: 'zh', name: '中文', flag: '🇨🇳' },
-                    { code: 'ja', name: '日本語', flag: '🇯🇵' },
-                    { code: 'ko', name: '한국어', flag: '🇰🇷' },
-                    { code: 'pt', name: 'Português', flag: '🇧🇷' },
-                    { code: 'ru', name: 'Русский', flag: '🇷🇺' },
-                    { code: 'ar', name: 'العربية', flag: '🇸🇦' },
-                  ].map(lang => (
-                    <button
-                      key={lang.code}
-                      className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-colors ${
-                        lang.code === 'en'
-                          ? 'border-primary bg-primary/5'
-                          : 'hover:border-primary/50 hover:bg-muted/50'
-                      }`}
-                    >
-                      <span className="text-2xl">{lang.flag}</span>
-                      <div>
-                        <p className="font-medium">{lang.name}</p>
-                        <p className="text-xs text-muted-foreground">{lang.code.toUpperCase()}</p>
-                      </div>
-                      {lang.code === 'en' && (
-                        <Badge variant="secondary" className="ml-auto">Current</Badge>
-                      )}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-blue-700 dark:text-blue-300">
-                    💡 <strong>Note:</strong> Translation coverage varies by language. Core features are fully translated; some advanced options may display in English.
+                <div>
+                  <label className="text-sm font-medium">Skill Level</label>
+                  <Select value={preferences.skillLevel} onValueChange={(v) => setSkillLevel(v as any)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="beginner">🌱 Beginner</SelectItem>
+                      <SelectItem value="intermediate">🌿 Intermediate</SelectItem>
+                      <SelectItem value="expert">🌳 Expert</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Affects guidance and feature suggestions
                   </p>
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              </div>
 
-          {/* Notifications Tab */}
-          {activeTab === 'notifications' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Notification Preferences</CardTitle>
-                <CardDescription>
-                  Choose when and how you want to be notified
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { key: 'emailJobComplete' as const, label: 'Job Completion Emails', desc: 'Get notified when compute jobs finish' },
-                  { key: 'emailCollaborator' as const, label: 'New Collaborator Alerts', desc: 'When someone joins your team' },
-                  { key: 'pushUpdates' as const, label: 'Push Notifications', desc: 'Real-time browser notifications' },
-                  { key: 'weeklyDigest' as const, label: 'Weekly Digest', desc: 'Summary of activity every week' },
-                ].map(pref => (
-                  <div key={pref.key} className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
-                    <div>
-                      <p className="font-medium text-sm">{pref.label}</p>
-                      <p className="text-xs text-muted-foreground">{pref.desc}</p>
-                    </div>
-                    <Switch
-                      checked={notificationPrefs[pref.key].value}
-                      onCheckedChange={(checked) => updateNotificationPref(pref.key, checked)}
-                    />
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                <div>
+                  <p className="font-medium text-sm">Sidebar Collapsed by Default</p>
+                  <p className="text-xs text-muted-foreground">Start with sidebar minimized</p>
+                </div>
+                <Switch
+                  checked={preferences.sidebarCollapsed}
+                  onCheckedChange={(checked) => updatePreferences({ sidebarCollapsed: checked })}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-          {/* API Keys Tab */}
-          {activeTab === 'api-keys' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>API Keys & Integrations</CardTitle>
-                <CardDescription>
-                  Manage API keys for external services. All shown are optional for free tier access.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
-                  {[
-                    { service: 'NCBI E-utilities', key: '', note: 'Required for >3 req/s rate limit', status: 'optional' },
-                    { service: 'CrossRef', key: '', note: 'Not required - fully open access', status: 'free' },
-                    { service: 'OpenAlex', key: '', note: 'Optional - higher limits with key', status: 'optional' },
-                    { service: 'Supabase', key: '', note: 'For database persistence features', status: 'optional' },
-                  ].map(api => (
-                    <div key={api.service} className="flex items-center justify-between p-4 rounded-lg border">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{api.service}</span>
-                          <Badge 
-                            variant={
-                              api.status === 'free' ? 'default' :
-                              api.status === 'optional' ? 'secondary' : 'outline'
-                            }
-                            className="text-xs"
-                          >
-                            {api.status === 'free' ? '🆓 Free' : api.status === 'optional' ? 'Optional' : 'Required'}
-                          </Badge>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">{api.note}</p>
+        /* DATA & STORAGE TAB */
+        <TabsContent value="data" className="space-y-6">
+          {/* Storage Overview */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Storage Usage</CardTitle>
+                  <CardDescription>
+                    Current tier: {currentVolumeTier.name}
+                  </CardDescription>
+                </div>
+                <Badge 
+                  variant={storagePercentage > 80 ? 'destructive' : storagePercentage > 60 ? 'secondary' : 'default'}
+                  className="bg-green-500"
+                >
+                  {formatBytes(totalStorageUsed)} used
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Progress value={storagePercentage} className="h-3" />
+              
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{formatBytes(totalStorageUsed)}</span>
+                <span>{formatBytes(currentVolumeTier.maxSize)}</span>
+                <span>{storagePercentage.toFixed(1)}%</span>
+              </div>
+
+              {/* Volume Tiers Comparison */}
+              <div className="mt-6">
+                <h4 className="font-medium mb-3">Available Plans</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {VOLUME_TIERS.map(tier => (
+                    <div 
+                      key={tier.tier}
+                      className={`p-4 rounded-lg border ${
+                        currentVolumeTier.tier === tier.tier 
+                          ? 'border-primary bg-primary/5' 
+                          : 'hover:bg-muted'
+                      }`}
+                    >
+                      <div className="font-medium">{tier.name}</div>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        Up to {formatBytes(tier.maxSize)}
                       </div>
-                      <Input
-                        type="password"
-                        placeholder="•••••••••"
-                        className="w-48 ml-4"
-                        defaultValue={api.key}
-                      />
+                      <ul className="text-xs mt-2 space-y-1">
+                        {tier.features.slice(0, 3).map((feature, i) => (
+                          <li key={i} className="flex items-center gap-1">
+                            <span className="text-green-500">✓</span>
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                      {currentVolumeTier.tier !== tier.tier && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full mt-3"
+                          onClick={() => triggerUpgradePrompt('storage')}
+                        >
+                          {tier.tier > currentVolumeTier.tier ? 'Upgrade' : 'Downgrade'}
+                        </Button>
+                      )}
                     </div>
                   ))}
                 </div>
+              </div>
+            </CardContent>
+          </Card>
 
-                <div className="mt-6 p-4 bg-green-50 dark:bg-green-950 rounded-lg border border-green-200 dark:border-green-800">
-                  <h4 className="font-medium text-green-800 dark:text-green-200 mb-2">🆓 Free Tier API Access</h4>
-                  <ul className="text-sm text-green-700 dark:text-green-300 space-y-1">
-                    <li>• CrossRef: Full access without key (50 req/s)</li>
-                    <li>• OpenAlex: Full access without key (10 req/s)</li>
-                    <li>• arXiv: Full access without key</li>
-                    <li>• NCBI: Limited access (3 req/s) without key</li>
-                    <li>• PubChem: Full REST API access</li>
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Database Tab */}
-          {activeTab === 'database' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Database Configuration</CardTitle>
-                <CardDescription>
-                  Configure data storage and persistence settings
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div>
-                  <label className="text-sm font-medium">Database Provider</label>
-                  <Select
-                    value={dbConfig.provider}
-                    onValueChange={(v) => updateDbConfig('provider', v)}
-                  >
-                    <SelectTrigger className="w-[250px] mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="duckdb">🦆 DuckDB (Analytical)</SelectItem>
-                      <SelectItem value="sqlite">🗄️ SQLite (Local)</SelectItem>
-                      <SelectItem value="postgresql_supabase">⚡ Supabase (PostgreSQL)</SelectItem>
-                      <SelectItem value="postgresql_neon">🌩️ Neon Serverless</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">Connection String</label>
-                  <Input
-                    value={dbConfig.connectionString.value}
-                    onChange={(e) => updateDbConfig('connectionString', e.target.value)}
-                    placeholder="Database connection string..."
-                    className="mt-1 font-mono text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium">
-                    Auto-Push Threshold: {(dbConfig.autoPushThreshold.value / 1024 / 1024).toFixed(0)} MB
-                  </label>
-                  <input
-                    type="range"
-                    min="5"
-                    max="500"
-                    step="5"
-                    value={dbConfig.autoPushThreshold.value / 1024 / 1024}
-                    onChange={(e) => updateDbConfig('autoPushThreshold', parseFloat(e.target.value) * 1024 * 1024)}
-                    className="w-full mt-2"
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                    <span>5 MB</span>
-                    <span>250 MB</span>
-                    <span>500 MB</span>
+          {/* Datasets Summary */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Datasets ({datasets.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-64 overflow-auto">
+                {datasets.map(dataset => (
+                  <div key={dataset.id} className="flex items-center justify-between p-2 rounded hover:bg-muted">
+                    <div className="flex items-center gap-3">
+                      <span>{dataset.downloaded.value ? '✅' : '⬇️'}</span>
+                      <span className="text-sm font-medium truncate max-w-[200px]">
+                        {dataset.name.value}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {formatBytes(dataset.sizeBytes.value)}
+                      </span>
+                      {dataset.isFavorite.value && (
+                        <span className="text-yellow-500">⭐</span>
+                      )}
+                    </div>
                   </div>
-                </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
 
-                <div className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
+          {/* Data Management */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Data Management</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Export */}
+                <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="justify-start gap-2">
+                      📤 Export All Data
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Export Application Data</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                      <p className="text-sm text-muted-foreground mb-4">
+                        This will download a JSON backup containing your:
+                      </p>
+                      <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground mb-4">
+                        <li>User preferences and profile</li>
+                        <li>Saved queries and workspace files</li>
+                        <li>Search history and saved items</li>
+                        <li>Guidance dismissals</li>
+                      </ul>
+                      <p className="text-sm text-muted-foreground">
+                        Note: Large datasets are not included in this export.
+                      </p>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button onClick={handleExportData}>
+                        📥 Download Backup
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Import */}
+                <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="justify-start gap-2">
+                      📥 Import Data
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Import Application Data</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                      <p className="text-sm text-muted-foreground">
+                        Paste your JSON backup below or upload a file:
+                      </p>
+                      <Textarea
+                        placeholder="Paste JSON backup here..."
+                        value={importText}
+                        onChange={(e) => setImportText(e.target.value)}
+                        rows={8}
+                        className="font-mono text-xs"
+                      />
+                      
+                      {importResult && (
+                        <div className={`p-3 rounded ${
+                          importResult.success 
+                            ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300'
+                            : 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300'
+                        }`}>
+                          {importResult.message}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+                        Cancel
+                      </Button>
+                      <Button 
+                        onClick={handleImportData}
+                        disabled={!importText.trim()}
+                      >
+                        Import Data
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Reset */}
+                <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" className="justify-start gap-2 text-destructive hover:text-destructive">
+                      ↩️ Reset to Defaults
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Reset All Settings?</DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4">
+                      <p className="text-sm text-muted-foreground">
+                        This will reset all modified fields back to their original default values. 
+                        This action cannot be undone.
+                      </p>
+                      <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-950 rounded text-sm text-yellow-700 dark:text-yellow-300">
+                        ⚠️ Your custom data (queries, files, etc.) will not be affected.
+                      </div>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={() => setShowResetConfirm(false)}>
+                        Cancel
+                      </Button>
+                      <Button variant="destructive" onClick={handleResetAll}>
+                        Reset Everything
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
+                {/* Clear Cache */}
+                <Button 
+                  variant="outline" 
+                  className="justify-start gap-2"
+                  onClick={() => {
+                    localStorage.clear();
+                    addActivity({
+                      type: 'delete',
+                      message: createDynamicField('Cleared local cache'),
+                      icon: '🗑️',
+                    });
+                  }}
+                >
+                  🗑️ Clear Local Cache
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        /* NOTIFICATIONS TAB */
+        <TabsContent value="notifications" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Notification Preferences</CardTitle>
+                  <CardDescription>
+                    Choose how you want to be notified about updates
+                  </CardDescription>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={markAllNotificationsRead}
+                >
+                  Mark All Read
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                { key: 'emailJobComplete', label: 'Job Completion Emails', desc: 'Get email when compute jobs finish' },
+                { key: 'emailNewCollaborator', label: 'Team Activity Emails', desc: 'Email when team members join or post' },
+                { key: 'pushUpdates', label: 'Push Notifications', desc: 'Browser push notifications for important events' },
+                { key: 'weeklyDigest', label: 'Weekly Digest', desc: 'Summary of activity every week' },
+                { key: 'researchAlerts', label: 'Research Alerts', desc: 'Alerts for new papers matching your interests' },
+              ].map(item => (
+                <div key={item.key} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <div>
-                    <p className="font-medium text-sm">Auto-Push Enabled</p>
-                    <p className="text-xs text-muted-foreground">Automatically push large datasets to database</p>
+                    <p className="font-medium text-sm">{item.label}</p>
+                    <p className="text-xs text-muted-foreground">{item.desc}</p>
                   </div>
                   <Switch
-                    checked={dbConfig.enabled}
-                    onCheckedChange={(checked) => updateDbConfig('enabled', checked)}
+                    checked={preferences.notifications[item.key as keyof typeof preferences.notifications]}
+                    onCheckedChange={(checked) => ({
+                      updatePreferences({
+                        notifications: {
+                          ...preferences.notifications,
+                          [item.key]: checked,
+                        },
+                      }),
+                    })[0]}
                   />
                 </div>
+              ))}
+            </CardContent>
+          </Card>
 
-                <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">💡 Database Recommendations</h4>
-                  <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                    <li>• <strong>DuckDB</strong>: Best for analytics queries, no server needed</li>
-                    <li>• <strong>SQLite</strong>: Good for local development, embedded</li>
-                    <li>• <strong>Supabase/Neon</strong>: Production PostgreSQL with free tier</li>
-                  </ul>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+          {/* Recent Notifications */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Notifications</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 max-h-96 overflow-auto">
+                {notifications.slice(0, 20).map(notif => (
+                  <div 
+                    key={notif.id} 
+                    className={`p-3 rounded-lg transition-colors ${
+                      !notif.read ? 'bg-primary/5 border-l-2 border-l-primary' : 'hover:bg-muted/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+                            notif.type === 'success' ? 'bg-green-100 text-green-700' :
+                            notif.type === 'error' ? 'bg-red-100 text-red-700' :
+                            notif.type === 'warning' ? 'bg-yellow-100 text-yellow-700' :
+                            notif.type === 'job_complete' ? 'bg-blue-100 text-blue-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {notif.type.replace('_', ' ')}
+                          </span>
+                          <span className="font-medium text-sm">{notif.title}</span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {notif.message}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {new Date(notif.timestamp).toLocaleString()}
+                        </p>
+                      </div>
+                      
+                      {notif.actionUrl && (
+                        <Button size="sm" variant="ghost" className="shrink-0 h-7 text-xs">
+                          {notif.actionLabel || 'View'} →
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
 
-          {/* Advanced Tab */}
-          {activeTab === 'advanced' && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Advanced Settings</CardTitle>
-                <CardDescription>
-                  Advanced configuration options for power users
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between p-4 rounded-lg border border-destructive/20">
+                {notifications.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No notifications yet
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        /* ACCOUNT TAB */
+        <TabsContent value="account" className="space-y-6">
+          {/* Current Plan */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Current Plan</CardTitle>
+              <CardDescription>
+                You&apos;re currently on the Free tier
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-sm text-destructive">Danger Zone</p>
-                    <p className="text-xs text-muted-foreground">Irreversible actions that affect your data</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">🆓</span>
+                      <span className="text-xl font-bold text-green-800 dark:text-green-200">Free Tier</span>
+                    </div>
+                    <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+                      Perfect for getting started with scientific research tools
+                    </p>
                   </div>
-                </div>
-
-                <div className="space-y-3 pl-4 border-l-2 border-destructive/30">
-                  <Button variant="destructive" onClick={() => {
-                    if (confirm('Clear ALL local data? This includes settings, history, and cached data.')) {
-                      localStorage.clear();
-                      window.location.reload();
-                    }
-                  }}>
-                    🗑️ Clear All Local Data
-                  </Button>
                   
-                  <Button variant="destructive" onClick={() => {
-                    if (confirm('Reset application to factory defaults?')) {
-                      localStorage.removeItem('scihub-dynamic-store');
-                      window.location.reload();
-                    }
-                  }}>
-                    🔄 Factory Reset
+                  <Button onClick={() => triggerUpgradePrompt('storage')}>
+                    View Plans →
                   </Button>
                 </div>
 
-                <div className="pt-4 border-t">
-                  <h4 className="font-medium mb-3">Debug Information</h4>
-                  <div className="bg-muted/30 p-4 rounded-lg font-mono text-xs space-y-1">
-                    <p>Version: SciHub Pro v1.0.0-demo</p>
-                    <p>Build: 2024.01.15</p>
-                    <p>Environment: Browser (Client-side)</p>
-                    <p>Storage Used: {(JSON.stringify(localStorage).length / 1024).toFixed(2)} KB</p>
-                    <p>Dirty Fields: {dirtyCount}</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-green-200 dark:border-green-800">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-800 dark:text-green-200">∞</div>
+                    <div className="text-xs text-green-600 dark:text-green-400">Unlimited Searches</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-800 dark:text-green-200">5</div>
+                    <div className="text-xs text-green-600 dark:text-green-400">Active Jobs</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-800 dark:text-green-200">100MB</div>
+                    <div className="text-xs text-green-600 dark:text-green-400">Storage</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-800 dark:text-green-200">12</div>
+                    <div className="text-xs text-green-600 dark:text-green-400">API Sources</div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Sidebar */}
-        <div className="space-y-4">
-          {/* Quick Stats */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Quick Stats</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Profile Complete</span>
-                <span className="font-medium">
-                  {[userProfile.displayName, userProfile.email, userProfile.institution]
-                    .filter(f => f.value.trim()).length * 25}%
-                </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Notifications</span>
-                <span className="font-medium">
-                  {Object.values(notificationPrefs).filter(p => p.value).length}/4 enabled
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">API Keys Configured</span>
-                <span className="font-medium">Optional</span>
-              </div>
-              
-              <Progress 
-                value={[userProfile.displayName, userProfile.email, userProfile.institution]
-                  .filter(f => f.value.trim()).length * 33} 
-                className="mt-3 h-1.5"
-              />
             </CardContent>
           </Card>
 
-          {/* Help & Support */}
+          {/* Plan Comparison */}
           <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">Help & Support</CardTitle>
+            <CardHeader>
+              <CardTitle>Compare Plans</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                📖 User Guide
-              </Button>
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                ❓ FAQ
-              </Button>
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                💬 Community Forum
-              </Button>
-              <Button variant="outline" className="w-full justify-start" size="sm">
-                🐛 Report Issue
-              </Button>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="text-left py-3 px-4">Feature</th>
+                      <th className="text-center py-3 px-4">Free</th>
+                      <th className="text-center py-3 px-4 bg-blue-50 dark:bg-blue-950">Pro ($9/mo)</th>
+                      <th className="text-center py-3 px-4 bg-purple-50 dark:bg-purple-950">Enterprise ($49/mo)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { feature: 'Literature Search', free: '∞', pro: '∞', enterprise: '∞' },
+                      { feature: 'Real API Access', free: '∞', pro: '∞', enterprise: '∞' },
+                      { feature: 'Active Compute Jobs', free: '5', pro: '50', enterprise: '∞' },
+                      { feature: 'Storage', free: '100MB', pro: '10GB', enterprise: 'Unlimited' },
+                      { feature: 'AI Assistant Tokens', free: '10K/day', pro: '100K/day', enterprise: 'Unlimited' },
+                      { feature: 'Team Members', free: '3', pro: '10', enterprise: 'Unlimited' },
+                      { feature: 'SQL Query Engine', free: '-', pro: '✓', enterprise: '✓' },
+                      { feature: 'DuckDB Analytics', free: '-', pro: '✓', enterprise: '✓' },
+                      { feature: 'Real-time Collaboration', free: '-', pro: '-', enterprise: '✓' },
+                      { feature: 'Custom Model Training', free: '-', pro: '-', enterprise: '✓' },
+                      { feature: 'Priority Support', free: '-', pro: 'Community', enterprise: '24/7 Dedicated' },
+                      { feature: 'SLA Guarantee', free: '-', pro: '-', enterprise: '99.99%' },
+                    ].map((row, i) => (
+                      <tr key={i} className="border-b last:border-0">
+                        <td className="py-3 px-4">{row.feature}</td>
+                        <td className="text-center py-3 px-4">{row.free}</td>
+                        <td className="text-center py-3 px-4 bg-blue-50/50 dark:bg-blue-950/50">{row.pro}</td>
+                        <td className="text-center py-3 px-4 bg-purple-50/50 dark:bg-purple-950/50">{row.enterprise}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex gap-3 mt-6 justify-center">
+                <Button variant="outline" onClick={() => triggerUpgradePrompt('collaboration')}>
+                  Compare Features
+                </Button>
+                <Button onClick={() => triggerUpgradePrompt('storage')}>
+                  Upgrade to Pro
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          {/* About */}
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm">About</CardTitle>
+          {/* Danger Zone */}
+          <Card className="border-destructive/20">
+            <CardHeader>
+              <CardTitle className="text-destructive">Danger Zone</CardTitle>
             </CardHeader>
-            <CardContent className="text-xs text-muted-foreground space-y-2">
-              <p><strong>SciHub Pro</strong></p>
-              <p>The Scientific GitHub for the Modern Age</p>
-              <p>Version: 1.0.0-demo</p>
-              <p>License: MIT</p>
-              <p className="pt-2 border-t">
-                © 2024 SciHub Pro Contributors
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Irreversible actions that affect your account
               </p>
+              
+              <div className="flex flex-wrap gap-3">
+                <Button 
+                  variant="outline" 
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => {
+                    if (confirm('Are you sure you want to clear all activity history?')) {
+                      // Clear activities logic
+                    }
+                  }}
+                >
+                  🗑️ Clear Activity History
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => {
+                    if (confirm('Are you sure you want to delete all saved items?')) {
+                      // Delete saved items logic
+                    }
+                  }}
+                >
+                  🗑️ Delete All Saved Items
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => {
+                    if (confirm('This will delete your account permanently. Continue?')) {
+                      // Account deletion logic
+                    }
+                  }}
+                >
+                  ⚠️ Delete Account
+                </Button>
+              </div>
             </CardContent>
           </Card>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
