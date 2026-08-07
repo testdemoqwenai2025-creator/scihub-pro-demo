@@ -1,0 +1,1700 @@
+     1→'use client'
+     2→
+     3→import { useState, useEffect } from 'react'
+     4→import { Button } from '@/components/ui/button'
+     5→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+     6→import { Badge } from '@/components/ui/badge'
+     7→import { Input } from '@/components/ui/input'
+     8→import { Separator } from '@/components/ui/separator'
+     9→import { useRouter } from 'next/navigation'
+    10→import Link from 'next/link'
+    11→import {
+    12→  Dialog,
+    13→  DialogContent,
+    14→  DialogDescription,
+    15→  DialogHeader,
+    16→  DialogTitle,
+    17→} from '@/components/ui/dialog'
+    18→import {
+    19→  Select,
+    20→  SelectContent,
+    21→  SelectItem,
+    22→  SelectTrigger,
+    23→  SelectValue,
+    24→} from '@/components/ui/select'
+    25→
+    26→// Icons as simple SVG components
+    27→const Icons = {
+    28→  Package: () => (
+    29→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+    30→  ),
+    31→  Container: () => (
+    32→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+    33→  ),
+    34→  Users: () => (
+    35→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    36→  ),
+    37→  Server: () => (
+    38→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
+    39→  ),
+    40→  Brain: () => (
+    41→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/><path d="M17.599 6.5a3 3 0 0 0 .399-1.375"/><path d="M6.003 5.125A3 3 0 0 0 6.401 6.5"/><path d="M3.477 10.896a4 4 0 0 1 .585-.206"/><path d="m19.938 6.689.002.003"/><path d="M20.523 10.896a4 4 0 0 0-.585-.206"/><path d="M6 18a4 4 0 0 1-1.967-.516"/><path d="M19.967 17.484A4 4 0 0 1 18 18"/></svg>
+    42→  ),
+    43→  Shield: () => (
+    44→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+    45→  ),
+    46→  Upload: () => (
+    47→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+    48→  ),
+    49→  Workflow: () => (
+    50→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+    51→  ),
+    52→  GitBranch: () => (
+    53→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+    54→  ),
+    55→  Rocket: () => (
+    56→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>
+    57→  ),
+    58→  Menu: () => (
+    59→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+    60→  ),
+    61→  X: () => (
+    62→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    63→  ),
+    64→  Play: () => (
+    65→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+    66→  ),
+    67→  Check: () => (
+    68→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    69→  ),
+    70→  ArrowRight: () => (
+    71→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+    72→  ),
+    73→  Star: () => (
+    74→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    75→  ),
+    76→  Mail: () => (
+    77→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+    78→  ),
+    79→  Github: () => (
+    80→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+    81→  ),
+    82→  Twitter: () => (
+    83→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z"/></svg>
+    84→  ),
+    85→  Linkedin: () => (
+    86→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
+    87→  ),
+    88→  Loader2: () => (
+    89→    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+    90→  ),
+    91→}
+    92→
+    93→// Network visualization component
+    94→function NetworkVisualization() {
+    95→  return (
+    96→    <div className="relative w-full h-[400px] md:h-[500px] overflow-hidden">
+    97→      {/* Animated background nodes */}
+    98→      <div className="absolute inset-0">
+    99→        {[...Array(20)].map((_, i) => (
+   100→          <div
+   101→            key={i}
+   102→            className="absolute rounded-full bg-cyan-500/20 animate-pulse"
+   103→            style={{
+   104→              width: `${Math.random() * 100 + 50}px`,
+   105→              height: `${Math.random() * 100 + 50}px`,
+   106→              left: `${Math.random() * 100}%`,
+   107→              top: `${Math.random() * 100}%`,
+   108→              animationDelay: `${Math.random() * 2}s`,
+   109→              animationDuration: `${Math.random() * 3 + 2}s`,
+   110→            }}
+   111→          />
+   112→        ))}
+   113→      </div>
+   114→      
+   115→      {/* Central node */}
+   116→      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 md:w-48 md:h-48 rounded-full bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center shadow-2xl shadow-cyan-500/30 z-10">
+   117→        <span className="text-white font-bold text-lg md:text-2xl">AETH-1</span>
+   118→      </div>
+   119→
+   120→      {/* Connected nodes */}
+   121→      {[
+   122→        { label: 'Python', x: '15%', y: '25%', color: 'from-blue-400 to-blue-600' },
+   123→        { label: 'R', x: '80%', y: '20%', color: 'from-green-400 to-green-600' },
+   124→        { label: 'Julia', x: '85%', y: '60%', color: 'from-purple-400 to-purple-600' },
+   125→        { label: 'MATLAB', x: '70%', y: '80%', color: 'from-orange-400 to-orange-600' },
+   126→        { label: 'GPU', x: '20%', y: '75%', color: 'from-red-400 to-red-600' },
+   127→        { label: 'Cloud', x: '10%', y: '55%', color: 'from-yellow-400 to-yellow-600' },
+   128→      ].map((node, i) => (
+   129→        <div key={i} className="absolute z-10" style={{ left: node.x, top: node.y }}>
+   130→          <div className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br ${node.color} flex items-center justify-center shadow-lg`}>
+   131→            <span className="text-white text-xs font-semibold">{node.label}</span>
+   132→          </div>
+   133→          {/* Connection line to center */}
+   134→          <svg className="absolute inset-0 -z-10 pointer-events-none" style={{ 
+   135→            left: '-200px', 
+   136→            top: '-250px',
+   137→            width: '450px', 
+   138→            height: '550px' 
+   139→          }}>
+   140→            <line 
+   141→              x1="225" 
+   142→              y1="275" 
+   143→              x2={node.x === '15%' ? '120' : node.x === '80%' ? '380' : node.x === '85%' ? '395' : node.x === '70%' ? '340' : node.x === '20%' ? '130' : '90'} 
+   144→              y2={node.y === '25%' ? '80' : node.y === '20%' ? '60' : node.y === '60%' ? '180' : node.y === '80%' ? '240' : node.y === '75%' ? '220' : '160'}
+   145→              stroke="url(#gradient)" 
+   146→              strokeWidth="2"
+   147→              strokeDasharray="5,5"
+   148→              opacity="0.5"
+   149→            >
+   150→              <animate attributeName="stroke-dashoffset" values="0;10" dur="1s" repeatCount="indefinite" />
+   151→            </line>
+   152→            <defs>
+   153→              <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+   154→                <stop offset="0%" stopColor="#06b6d4" />
+   155→                <stop offset="100%" stopColor="#14b8a6" />
+   156→              </linearGradient>
+   157→            </defs>
+   158→          </svg>
+   159→        </div>
+   160→      ))}
+   161→    </div>
+   162→  )
+   163→}
+   164→
+   165→// Feature data
+   166→const features = [
+   167→  {
+   168→    icon: Icons.Package,
+   169→    title: 'Package Discovery & Sharing',
+   170→    description: 'Find, install, and share scientific packages across any language or framework. One registry for everything.',
+   171→    link: '/connectors',
+   172→  },
+   173→  {
+   174→    icon: Icons.Container,
+   175→    title: 'Reproducible Environments',
+   176→    description: 'Container-based environments that ensure your research is reproducible by anyone, anywhere.',
+   177→    link: '/workspace',
+   178→  },
+   179→  {
+   180→    icon: Icons.Users,
+   181→    title: 'Collaborative Workspace',
+   182→    description: 'Real-time collaboration with version control built for scientific workflows, not just code.',
+   183→    link: '/dashboard',
+   184→  },
+   185→  {
+   186→    icon: Icons.Server,
+   187→    title: 'Scalable Compute',
+   188→    description: 'From laptop to cluster to cloud—scale your compute without changing your workflow.',
+   189→    link: '/datasets',
+   190→  },
+   191→  {
+   192→    icon: Icons.Brain,
+   193→    title: 'AI-Powered Insights',
+   194→    description: 'Integrated AI assistants that help analyze data, suggest methods, and accelerate discovery.',
+   195→    link: '/search',
+   196→  },
+   197→  {
+   198→    icon: Icons.Shield,
+   199→    title: 'Enterprise Security',
+   200→    description: 'SOC 2 compliant with audit logs, SSO, and data governance for institutional requirements.',
+   201→    link: '#',
+   202→  },
+   203→]
+   204→
+   205→// How it works steps
+   206→const steps = [
+   207→  {
+   208→    icon: Icons.Upload,
+   209→    step: '01',
+   210→    title: 'Import Your Tools',
+   211→    description: 'Connect your existing tools, scripts, and workflows in minutes. We support Python, R, Julia, MATLAB, and more.',
+   212→  },
+   213→  {
+   214→    icon: Icons.Workflow,
+   215→    step: '02',
+   216→    title: 'Build Workflows Visually',
+   217→    description: 'Drag-and-drop interface to create complex computational pipelines without writing glue code.',
+   218→  },
+   219→  {
+   220→    icon: Icons.GitBranch,
+   221→    step: '03',
+   222→    title: 'Version & Share',
+   223→    description: 'Git-like version control for experiments. Share with collaborators or publish for reproducibility.',
+   224→  },
+   225→  {
+   226→    icon: Icons.Rocket,
+   227→    step: '04',
+   228→    title: 'Deploy at Scale',
+   229→    description: 'One-click deployment to cloud, HPC clusters, or edge devices. Scale from prototype to production.',
+   230→  },
+   231→]
+   232→
+   233→// Stats data
+   234→const stats = [
+   235→  { value: '100K+', label: 'Researchers Target Y1' },
+   236→  { value: '$500M+', label: 'ARR Target Y5' },
+   237→  { value: '75%+', label: 'Gross Margin' },
+   238→  { value: '12%', label: 'Market CAGR' },
+   239→]
+   240→
+   241→// Pricing tiers
+   242→const pricingTiers = [
+   243→  {
+   244→    name: 'Community',
+   245→    price: 'Free',
+   246→    period: 'forever',
+   247→    description: 'For individual researchers and students',
+   248→    features: ['Unlimited public projects', 'Basic compute (10 hrs/mo)', 'Community support', 'Core package registry'],
+   249→    cta: 'Get Started',
+   250→    highlighted: false,
+   251→    action: 'free',
+   252→  },
+   253→  {
+   254→    name: 'Professional',
+   255→    price: '$49',
+   256→    period: '/user/month',
+   257→    description: 'For professional researchers and small labs',
+   258→    features: ['Private projects', 'Advanced compute (100 hrs/mo)', 'Priority support', 'AI-powered insights', 'Team collaboration'],
+   259→    cta: 'Start Free Trial',
+   260→    highlighted: true,
+   261→    action: 'trial',
+   262→  },
+   263→  {
+   264→    name: 'Enterprise',
+   265→    price: 'Custom',
+   266→    period: '',
+   267→    description: 'For institutions and large organizations',
+   268→    features: ['Everything in Professional', 'Unlimited compute', 'SSO & SAML', 'Dedicated support', 'Custom integrations', 'SLA guarantee'],
+   269→    cta: 'Contact Sales',
+   270→    highlighted: false,
+   271→    action: 'enterprise',
+   272→  },
+   273→]
+   274→
+   275→// Testimonials
+   276→const testimonials = [
+   277→  {
+   278→    quote: "I use 15 different software tools. None of them talk to each other. AETH-1 would save me 20 hours per week just on data wrangling.",
+   279→    author: '@ADHD_Scientist',
+   280→    role: 'Computational Biologist',
+   281→    source: 'Viral Tweet • 45K Retweets',
+   282→  },
+   283→  {
+   284→    quote: "It took me 3 weeks to install GROMACS and get it working with our lab's GPU cluster. With Endeavor Science, it was running in 30 minutes.",
+   285→    author: 'Dr. Sarah Chen',
+   286→    role: 'Postdoctoral Researcher, MIT',
+   287→    source: 'Beta Tester Feedback',
+   288→  },
+   289→  {
+   290→    quote: "Researchers install random software from GitHub on our secure networks. We need a platform we can trust.",
+   291→    author: 'Anonymous CTO',
+   292→    role: 'Biotech Company',
+   293→    source: 'STAT News Interview',
+   294→  },
+   295→]
+   296→
+   297→export default function Home() {
+   298→  const router = useRouter()
+   299→  const [isMenuOpen, setIsMenuOpen] = useState(false)
+   300→  const [email, setEmail] = useState('')
+   301→  const [isScrolled, setIsScrolled] = useState(false)
+   302→
+   303→  // Modal states
+   304→  const [showDemoModal, setShowDemoModal] = useState(false)
+   305→  const [showEarlyAccessModal, setShowEarlyAccessModal] = useState(false)
+   306→  const [showInvestorModal, setShowInvestorModal] = useState(false)
+   307→  const [showSignupModal, setShowSignupModal] = useState(false)
+   308→  const [showTrialModal, setShowTrialModal] = useState(false)
+   309→  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false)
+   310→
+   311→  // Form states
+   312→  const [waitlistEmail, setWaitlistEmail] = useState('')
+   313→  const [waitlistLoading, setWaitlistLoading] = useState(false)
+   314→  const [waitlistSuccess, setWaitlistSuccess] = useState(false)
+   315→  const [waitlistError, setWaitlistError] = useState('')
+   316→
+   317→  // Early Access form states
+   318→  const [earlyAccessForm, setEarlyAccessForm] = useState({
+   319→    name: '',
+   320→    email: '',
+   321→    institution: '',
+   322→    role: '',
+   323→    researchField: '',
+   324→    hearAboutUs: '',
+   325→    excitedFeature: '',
+   326→    agreeTerms: false,
+   327→  })
+   328→  const [earlyAccessLoading, setEarlyAccessLoading] = useState(false)
+   329→  const [earlyAccessSuccess, setEarlyAccessSuccess] = useState(false)
+   330→  const [earlyAccessError, setEarlyAccessError] = useState('')
+   331→
+   332→  // Enterprise form states
+   333→  const [enterpriseForm, setEnterpriseForm] = useState({
+   334→    company: '',
+   335→    website: '',
+   336→    industry: '',
+   337→    country: '',
+   338→    users: '',
+   339→    apiCalls: '',
+   340→    storage: '',
+   341→    integrations: '',
+   342→    compliance: '',
+   343→    contactName: '',
+   344→    jobTitle: '',
+   345→    workEmail: '',
+   346→    phone: '',
+   347→    bestTime: '',
+   348→    timeline: '',
+   349→    budget: '',
+   350→    notes: '',
+   351→  })
+   352→  const [enterpriseLoading, setEnterpriseLoading] = useState(false)
+   353→  const [enterpriseSuccess, setEnterpriseSuccess] = useState(false)
+   354→  const [enterpriseError, setEnterpriseError] = useState('')
+   355→
+   356→  useEffect(() => {
+   357→    const handleScroll = () => {
+   358→      setIsScrolled(window.scrollY > 20)
+   359→    }
+   360→    window.addEventListener('scroll', handleScroll)
+   361→    return () => window.removeEventListener('scroll', handleScroll)
+   362→  }, [])
+   363→
+   364→  // Waitlist submit handler
+   365→  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+   366→    e.preventDefault()
+   367→    
+   368→    if (!waitlistEmail.includes('@')) {
+   369→      setWaitlistError('Please enter a valid email address')
+   370→      return
+   371→    }
+   372→
+   373→    setWaitlistLoading(true)
+   374→    setWaitlistError('')
+   375→
+   376→    try {
+   377→      // Store in localStorage as backup
+   378→      const waitlistEntries = JSON.parse(localStorage.getItem('scihub_waitlist') || '[]')
+   379→      if (!waitlistEntries.includes(waitlistEmail)) {
+   380→        waitlistEntries.push({
+   381→          email: waitlistEmail,
+   382→          timestamp: new Date().toISOString(),
+   383→          source: 'landing_page'
+   384→        })
+   385→        localStorage.setItem('scihub_waitlist', JSON.stringify(waitlistEntries))
+   386→      }
+   387→      
+   388→      // Simulate API call
+   389→      await new Promise(resolve => setTimeout(resolve, 1500))
+   390→      
+   391→      setWaitlistSuccess(true)
+   392→      setWaitlistEmail('')
+   393→    } catch {
+   394→      // Fallback success
+   395→      setWaitlistSuccess(true)
+   396→    } finally {
+   397→      setWaitlistLoading(false)
+   398→    }
+   399→  }
+   400→
+   401→  // Early Access submit handler
+   402→  const handleEarlyAccessSubmit = async (e: React.FormEvent) => {
+   403→    e.preventDefault()
+   404→
+   405→    if (!earlyAccessForm.name || !earlyAccessForm.email || !earlyAccessForm.institution) {
+   406→      setEarlyAccessError('Please fill in all required fields')
+   407→      return
+   408→    }
+   409→
+   410→    if (!earlyAccessForm.agreeTerms) {
+   411→      setEarlyAccessError('Please agree to the beta terms')
+   412→      return
+   413→    }
+   414→
+   415→    setEarlyAccessLoading(true)
+   416→    setEarlyAccessError('')
+   417→
+   418→    try {
+   419→      // Store in localStorage
+   420→      const entries = JSON.parse(localStorage.getItem('scihub_early_access') || '[]')
+   421→      entries.push({
+   422→        ...earlyAccessForm,
+   423→        timestamp: new Date().toISOString()
+   424→      })
+   425→      localStorage.setItem('scihub_early_access', JSON.stringify(entries))
+   426→
+   427→      await new Promise(resolve => setTimeout(resolve, 1500))
+   428→      
+   429→      setEarlyAccessSuccess(true)
+   430→    } catch {
+   431→      setEarlyAccessError('Something went wrong. Please try again.')
+   432→    } finally {
+   433→      setEarlyAccessLoading(false)
+   434→    }
+   435→  }
+   436→
+   437→  // Enterprise submit handler
+   438→  const handleEnterpriseSubmit = async (e: React.FormEvent) => {
+   439→    e.preventDefault()
+   440→
+   441→    if (!enterpriseForm.company || !enterpriseForm.contactName || !enterpriseForm.workEmail) {
+   442→      setEnterpriseError('Please fill in all required fields')
+   443→      return
+   444→    }
+   445→
+   446→    setEnterpriseLoading(true)
+   447→    setEnterpriseError('')
+   448→
+   449→    try {
+   450→      // Store in localStorage
+   451→      const entries = JSON.parse(localStorage.getItem('scihub_enterprise_leads') || '[]')
+   452→      entries.push({
+   453→        ...enterpriseForm,
+   454→        timestamp: new Date().toISOString()
+   455→      })
+   456→      localStorage.setItem('scihub_enterprise_leads', JSON.stringify(entries))
+   457→
+   458→      await new Promise(resolve => setTimeout(resolve, 2000))
+   459→      
+   460→      setEnterpriseSuccess(true)
+   461→    } catch {
+   462→      setEnterpriseError('Something went wrong. Please try again.')
+   463→    } finally {
+   464→      setEnterpriseLoading(false)
+   465→    }
+   466→  }
+   467→
+   468→  // Pricing CTA handler
+   469→  const handlePricingCta = (action: string) => {
+   470→    switch (action) {
+   471→      case 'free':
+   472→        setShowSignupModal(true)
+   473→        break
+   474→      case 'trial':
+   475→        setShowTrialModal(true)
+   476→        break
+   477→      case 'enterprise':
+   478→        setShowEnterpriseModal(true)
+   479→        break
+   480→    }
+   481→  }
+   482→
+   483→  return (
+   484→    <div className="min-h-screen flex flex-col bg-slate-950 text-white">
+   485→      {/* Navigation */}
+   486→      <header className={`sticky top-0 z-50 transition-all duration-300 ${isScrolled ? 'bg-slate-950/95 backdrop-blur-md shadow-lg' : 'bg-transparent'}`}>
+   487→        <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
+   488→          <div className="flex items-center justify-between h-16 md:h-20">
+   489→            {/* Logo */}
+   490→            <div className="flex items-center gap-2">
+   491→              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center font-bold text-white">
+   492→                E
+   493→              </div>
+   494→              <span className="text-xl font-bold hidden sm:block">Endeavor Science</span>
+   495→            </div>
+   496→
+   497→            {/* Desktop Nav Links */}
+   498→            <div className="hidden md:flex items-center gap-8">
+   499→              <a href="#platform" className="text-sm text-slate-300 hover:text-white transition-colors">Platform</a>
+   500→              <a href="#pricing" className="text-sm text-slate-300 hover:text-white transition-colors">Pricing</a>
+   501→              <a href="#about" className="text-sm text-slate-300 hover:text-white transition-colors">About</a>
+   502→              <a href="#contact" className="text-sm text-slate-300 hover:text-white transition-colors">Contact</a>
+   503→            </div>
+   504→
+   505→            {/* Desktop CTAs */}
+   506→            <div className="hidden md:flex items-center gap-3">
+   507→              <Button 
+   508→                variant="ghost" 
+   509→                size="sm" 
+   510→                className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10"
+   511→                onClick={() => setShowInvestorModal(true)}
+   512→              >
+   513→                Investor Portal
+   514→              </Button>
+   515→              <Button 
+   516→                size="sm" 
+   517→                className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0"
+   518→                onClick={() => setShowEarlyAccessModal(true)}
+   519→              >
+   520→                Get Early Access
+   521→              </Button>
+   522→            </div>
+   523→
+   524→            {/* Mobile menu button */}
+   525→            <button
+   526→              onClick={() => setIsMenuOpen(!isMenuOpen)}
+   527→              className="md:hidden p-2 text-slate-300 hover:text-white"
+   528→            >
+   529→              {isMenuOpen ? <Icons.X /> : <Icons.Menu />}
+   530→            </button>
+   531→          </div>
+   532→
+   533→          {/* Mobile menu */}
+   534→          {isMenuOpen && (
+   535→            <div className="md:hidden py-4 border-t border-slate-800">
+   536→              <div className="flex flex-col gap-4">
+   537→                <a href="#platform" className="text-sm text-slate-300 hover:text-white transition-colors" onClick={() => setIsMenuOpen(false)}>Platform</a>
+   538→                <a href="#pricing" className="text-sm text-slate-300 hover:text-white transition-colors" onClick={() => setIsMenuOpen(false)}>Pricing</a>
+   539→                <a href="#about" className="text-sm text-slate-300 hover:text-white transition-colors" onClick={() => setIsMenuOpen(false)}>About</a>
+   540→                <a href="#contact" className="text-sm text-slate-300 hover:text-white transition-colors" onClick={() => setIsMenuOpen(false)}>Contact</a>
+   541→                <Separator className="bg-slate-800" />
+   542→                <Button 
+   543→                  variant="outline" 
+   544→                  size="sm" 
+   545→                  className="w-full border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10"
+   546→                  onClick={() => { setShowInvestorModal(true); setIsMenuOpen(false); }}
+   547→                >
+   548→                  Investor Portal
+   549→                </Button>
+   550→                <Button 
+   551→                  size="sm" 
+   552→                  className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0"
+   553→                  onClick={() => { setShowEarlyAccessModal(true); setIsMenuOpen(false); }}
+   554→                >
+   555→                  Get Early Access
+   556→                </Button>
+   557→              </div>
+   558→            </div>
+   559→          )}
+   560→        </nav>
+   561→      </header>
+   562→
+   563→      {/* Hero Section */}
+   564→      <section className="relative py-16 md:py-24 lg:py-32 overflow-hidden">
+   565→        {/* Background gradient */}
+   566→        <div className="absolute inset-0 bg-gradient-to-b from-cyan-900/20 via-transparent to-transparent" />
+   567→        
+   568→        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+   569→          <div className="max-w-4xl mx-auto text-center mb-12 md:mb-16">
+   570→            <Badge variant="secondary" className="mb-6 bg-cyan-500/10 text-cyan-400 border-cyan-500/20 px-4 py-1.5">
+   571→              🚀 Now in Private Beta
+   572→            </Badge>
+   573→            
+   574→            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight mb-6">
+   575→              The{' '}
+   576→              <span className="bg-gradient-to-r from-cyan-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">
+   577→                GitHub for Scientific Computing
+   578→              </span>
+   579→            </h1>
+   580→            
+   581→            <p className="text-lg md:text-xl text-slate-300 max-w-3xl mx-auto mb-8 leading-relaxed">
+   582→              Democratizing Discovery — One platform to unify, reproduce, and accelerate all your research.
+   583→            </p>
+   584→            
+   585→            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+   586→              <Button 
+   587→                size="lg" 
+   588→                className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 px-8 py-6 text-base"
+   589→                onClick={() => setShowSignupModal(true)}
+   590→              >
+   591→                Start Free
+   592→                <Icons.ArrowRight />
+   593→              </Button>
+   594→              <Button 
+   595→                size="lg" 
+   596→                variant="outline" 
+   597→                className="border-slate-700 hover:bg-slate-800 hover:border-slate-600 px-8 py-6 text-base"
+   598→                onClick={() => setShowDemoModal(true)}
+   599→              >
+   600→                <Icons.Play />
+   601→                Watch Demo
+   602→              </Button>
+   603→            </div>
+   604→
+   605→            {/* Stats bar */}
+   606→            <div className="flex flex-wrap items-center justify-center gap-6 md:gap-10 text-sm md:text-base">
+   607→              <div className="flex items-center gap-2">
+   608→                <span className="text-cyan-400 font-bold">$50B</span>
+   609→                <span className="text-slate-400">Market</span>
+   610→              </div>
+   611→              <Separator orientation="vertical" className="h-6 bg-slate-700" />
+   612→              <div className="flex items-center gap-2">
+   613→                <span className="text-cyan-400 font-bold">10M+</span>
+   614→                <span className="text-slate-400">Scientists</span>
+   615→              </div>
+   616→              <Separator orientation="vertical" className="h-6 bg-slate-700" />
+   617→              <div className="flex items-center gap-2">
+   618→                <span className="text-cyan-400 font-bold">90%</span>
+   619→                <span className="text-slate-400">Time Saved</span>
+   620→              </div>
+   621→            </div>
+   622→          </div>
+   623→
+   624→          {/* Hero Visual */}
+   625→          <NetworkVisualization />
+   626→        </div>
+   627→      </section>
+   628→
+   629→      {/* Problem/Solution Section */}
+   630→      <section id="platform" className="py-16 md:py-24 bg-slate-900/50">
+   631→        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+   632→          <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-start">
+   633→            {/* Pain Points */}
+   634→            <div>
+   635→              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+   636→                The Problem is{' '}
+   637→                <span className="text-red-400">Real</span>
+   638→              </h2>
+   639→              <p className="text-slate-400 mb-8 text-lg">
+   640→                Scientists waste up to 60% of their time managing tools instead of doing research.
+   641→              </p>
+   642→              
+   643→              <div className="space-y-4">
+   644→                {[
+   645→                  {
+   646→                    icon: '🔧',
+   647→                    title: '15+ Tools That Don\'t Talk',
+   648→                    desc: 'Python, R, MATLAB, Julia, Fortran... each with its own ecosystem and no interoperability.',
+   649→                  },
+   650→                  {
+   651→                    icon: '⏰',
+   652→                    title: '60% Time Lost to Data Wrangling',
+   653→                    desc: 'Format conversion, dependency hell, environment setup — the real work never starts.',
+   654→                  },
+   655→                  {
+   656→                    icon: '❌',
+   657→                    title: 'Reproducibility Crisis',
+   658→                    desc: '70% of researchers can\'t reproduce their own work after 6 months. Publications are losing trust.',
+   659→                  },
+   660→                ].map((pain, i) => (
+   661→                  <Card key={i} className="bg-slate-800/50 border-slate-700/50 hover:border-red-500/30 transition-all group">
+   662→                    <CardContent className="p-5 flex gap-4">
+   663→                      <span className="text-2xl">{pain.icon}</span>
+   664→                      <div>
+   665→                        <h3 className="font-semibold text-white group-hover:text-red-400 transition-colors">{pain.title}</h3>
+   666→                        <p className="text-sm text-slate-400 mt-1">{pain.desc}</p>
+   667→                      </div>
+   668→                    </CardContent>
+   669→                  </Card>
+   670→                ))}
+   671→              </div>
+   672→            </div>
+   673→
+   674→            {/* Solution Preview */}
+   675→            <div className="relative">
+   676→              <h2 className="text-3xl md:text-4xl font-bold mb-4">
+   677→                Our{' '}
+   678→                <span className="text-cyan-400">Solution</span>
+   679→              </h2>
+   680→              <p className="text-slate-400 mb-8 text-lg">
+   681→                One unified workspace that brings everything together.
+   682→              </p>
+   683→
+   684→              {/* Before/After Comparison */}
+   685→              <div className="space-y-4">
+   686→                <Card className="bg-slate-800/50 border-red-500/30">
+   687→                  <CardHeader className="pb-3">
+   688→                    <Badge variant="destructive" className="w-fit bg-red-500/20 text-red-400 border-red-500/30">Before</Badge>
+   689→                    <CardTitle className="text-base text-slate-300">Fragmented Workflow</CardTitle>
+   690→                  </CardHeader>
+   691→                  <CardContent>
+   692→                    <div className="flex flex-wrap gap-2">
+   693→                      {['Python', 'R', 'MATLAB', 'Julia', 'Git', 'Docker', 'Slurm', 'Excel', 'Jupyter', 'VS Code', 'SSH', 'Conda'].map((tool) => (
+   694→                        <Badge key={tool} variant="outline" className="border-slate-600 text-slate-400 text-xs">{tool}</Badge>
+   695→                      ))}
+   696→                    </div>
+   697→                    <p className="text-xs text-slate-500 mt-3">12+ disconnected tools, manual integration required</p>
+   698→                  </CardContent>
+   699→                </Card>
+   700→
+   701→                <div className="flex justify-center">
+   702→                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 flex items-center justify-center transform rotate-90 md:rotate-0">
+   703→                    <Icons.ArrowRight />
+   704→                  </div>
+   705→                </div>
+   706→
+   707→                <Card className="bg-gradient-to-br from-cyan-900/30 to-teal-900/30 border-cyan-500/30 shadow-lg shadow-cyan-500/10">
+   708→                  <CardHeader className="pb-3">
+   709→                    <Badge className="w-fit bg-cyan-500/20 text-cyan-400 border-cyan-500/30">After</Badge>
+   710→                    <CardTitle className="text-base text-white">Unified Platform</CardTitle>
+   711→                  </CardHeader>
+   712→                  <CardContent>
+   713→                    <div className="bg-slate-800/80 rounded-lg p-4 border border-cyan-500/20">
+   714→                      <div className="flex items-center gap-3 mb-3">
+   715→                        <div className="w-8 h-8 rounded bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center text-xs font-bold">E</div>
+   716→                        <span className="font-medium text-white">Endeavor Science Workspace</span>
+   717→                      </div>
+   718→                      <div className="space-y-2">
+   719→                        <div className="flex items-center gap-2 text-sm text-slate-300">
+   720→                          <Icons.Check className="w-4 h-4 text-cyan-400" /> All languages supported
+   721→                        </div>
+   722→                        <div className="flex items-center gap-2 text-sm text-slate-300">
+   723→                          <Icons.Check className="w-4 h-4 text-cyan-400" /> Built-in version control
+   724→                        </div>
+   725→                        <div className="flex items-center gap-2 text-sm text-slate-300">
+   726→                          <Icons.Check className="w-4 h-4 text-cyan-400" /> One-click deployment
+   727→                        </div>
+   728→                        <div className="flex items-center gap-2 text-sm text-slate-300">
+   729→                          <Icons.Check className="w-4 h-4 text-cyan-400" /> AI-assisted workflows
+   730→                        </div>
+   731→                      </div>
+   732→                    </div>
+   733→                  </CardContent>
+   734→                </Card>
+   735→              </div>
+   736→            </div>
+   737→          </div>
+   738→        </div>
+   739→      </section>
+   740→
+   741→      {/* Features Grid */}
+   742→      <section className="py-16 md:py-24">
+   743→        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+   744→          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
+   745→            <Badge variant="secondary" className="mb-4 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Features</Badge>
+   746→            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+   747→              Everything You Need,{' '}
+   748→              <span className="bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent">One Platform</span>
+   749→            </h2>
+   750→            <p className="text-slate-400 text-lg">
+   751→              Built by scientists, for scientists. Every feature designed to accelerate discovery.
+   752→            </p>
+   753→          </div>
+   754→
+   755→          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+   756→            {features.map((feature, i) => (
+   757→              <Link key={i} href={feature.link}>
+   758→                <Card className="group h-full bg-slate-900/50 border-slate-800 hover:border-cyan-500/50 transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+   759→                  <CardContent className="p-6">
+   760→                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500/20 to-teal-500/20 flex items-center justify-center text-cyan-400 mb-4 group-hover:from-cyan-500/30 group-hover:to-teal-500/30 transition-colors">
+   761→                      <feature.icon />
+   762→                    </div>
+   763→                    <h3 className="font-semibold text-lg text-white mb-2 group-hover:text-cyan-400 transition-colors">{feature.title}</h3>
+   764→                    <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
+   765→                    <div className="mt-4 flex items-center gap-1 text-cyan-400 text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+   766→                      Learn more <Icons.ArrowRight className="w-4 h-4" />
+   767→                    </div>
+   768→                  </CardContent>
+   769→                </Card>
+   770→              </Link>
+   771→            ))}
+   772→          </div>
+   773→        </div>
+   774→      </section>
+   775→
+   776→      {/* How It Works */}
+   777→      <section className="py-16 md:py-24 bg-slate-900/50">
+   778→        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+   779→          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
+   780→            <Badge variant="secondary" className="mb-4 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">How It Works</Badge>
+   781→            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+   782→              From Chaos to Clarity in{' '}
+   783→              <span className="text-cyan-400">4 Steps</span>
+   784→            </h2>
+   785→            <p className="text-slate-400 text-lg">
+   786→              Get started in minutes, not months. No PhD in DevOps required.
+   787→            </p>
+   788→          </div>
+   789→
+   790→          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+   791→            {steps.map((step, i) => (
+   792→              <div key={i} className="relative">
+   793→                {/* Connector line */}
+   794→                {i < steps.length - 1 && (
+   795→                  <div className="hidden lg:block absolute top-12 left-full w-full h-0.5 bg-gradient-to-r from-cyan-500/50 to-transparent" />
+   796→                )}
+   797→                
+   798→                <div className="text-center">
+   799→                  <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500/20 to-teal-500/20 border border-cyan-500/30 mb-4 relative">
+   800→                    <step.icon className="text-cyan-400" />
+   801→                    <span className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-cyan-500 text-white text-sm font-bold flex items-center justify-center">
+   802→                      {step.step}
+   803→                    </span>
+   804→                  </div>
+   805→                  <h3 className="font-semibold text-lg text-white mb-2">{step.title}</h3>
+   806→                  <p className="text-slate-400 text-sm leading-relaxed">{step.description}</p>
+   807→                </div>
+   808→              </div>
+   809→            ))}
+   810→          </div>
+   811→        </div>
+   812→      </section>
+   813→
+   814→      {/* Social Proof / Stats */}
+   815→      <section id="about" className="py-16 md:py-24">
+   816→        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+   817→          <div className="text-center max-w-3xl mx-auto mb-12">
+   818→            <Badge variant="secondary" className="mb-4 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Traction</Badge>
+   819→            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+   820→              Backed by{' '}
+   821→              <span className="text-cyan-400">Real Numbers</span>
+   822→            </h2>
+   823→            <p className="text-slate-400 text-lg">
+   824→              A massive market opportunity with clear path to dominance.
+   825→            </p>
+   826→          </div>
+   827→
+   828→          <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+   829→            {stats.map((stat, i) => (
+   830→              <Card key={i} className="bg-gradient-to-br from-slate-900 to-slate-800 border-slate-700/50 text-center">
+   831→                <CardContent className="p-6 md:p-8">
+   832→                  <div className="text-3xl md:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-cyan-400 to-teal-400 bg-clip-text text-transparent mb-2">
+   833→                    {stat.value}
+   834→                  </div>
+   835→                  <p className="text-slate-400 text-sm md:text-base">{stat.label}</p>
+   836→                </CardContent>
+   837→              </Card>
+   838→            ))}
+   839→          </div>
+   840→
+   841→          {/* Market context */}
+   842→          <div className="mt-12 text-center">
+   843→            <p className="text-slate-500 text-sm max-w-2xl mx-auto">
+   844→              The scientific software market is <span className="text-cyan-400 font-medium">$45B+</span> and growing at <span className="text-cyan-400 font-medium">12% CAGR</span>. Yet scientists still cobble together fragmented tools. We're building what GitHub did for code—for science.
+   845→            </p>
+   846→          </div>
+   847→        </div>
+   848→      </section>
+   849→
+   850→      {/* Pricing Preview */}
+   851→      <section id="pricing" className="py-16 md:py-24 bg-slate-900/50">
+   852→        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+   853→          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
+   854→            <Badge variant="secondary" className="mb-4 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Pricing</Badge>
+   855→            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+   856→              Simple, Transparent{' '}
+   857→              <span className="text-cyan-400">Pricing</span>
+   858→            </h2>
+   859→            <p className="text-slate-400 text-lg">
+   860→              Start free, scale when ready. No surprise fees.
+   861→            </p>
+   862→          </div>
+   863→
+   864→          <div className="grid md:grid-cols-3 gap-6 lg:gap-8 max-w-5xl mx-auto">
+   865→            {pricingTiers.map((tier, i) => (
+   866→              <Card key={i} className={`relative ${tier.highlighted ? 'bg-gradient-to-b from-cyan-900/30 to-slate-900 border-cyan-500/50 shadow-xl shadow-cyan-500/10 scale-105' : 'bg-slate-900/50 border-slate-800'}`}>
+   867→                {tier.highlighted && (
+   868→                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+   869→                    <Badge className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">Most Popular</Badge>
+   870→                  </div>
+   871→                )}
+   872→                <CardHeader className="text-center pb-4">
+   873→                  <CardTitle className="text-xl text-white">{tier.name}</CardTitle>
+   874→                  <CardDescription className="text-slate-400">{tier.description}</CardDescription>
+   875→                  <div className="mt-4">
+   876→                    <span className="text-4xl font-bold text-white">{tier.price}</span>
+   877→                    {tier.period && <span className="text-slate-400 ml-1">{tier.period}</span>}
+   878→                  </div>
+   879→                </CardHeader>
+   880→                <CardContent className="pt-0">
+   881→                  <ul className="space-y-3 mb-6">
+   882→                    {tier.features.map((feature, j) => (
+   883→                      <li key={j} className="flex items-start gap-2 text-sm">
+   884→                        <Icons.Check className="w-4 h-4 text-cyan-400 mt-0.5 shrink-0" />
+   885→                        <span className={tier.highlighted ? 'text-slate-200' : 'text-slate-400'}>{feature}</span>
+   886→                      </li>
+   887→                    ))}
+   888→                  </ul>
+   889→                  <Button 
+   890→                    className={`w-full ${tier.highlighted ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0' : ''}`}
+   891→                    variant={!tier.highlighted ? 'outline' : 'default'}
+   892→                    onClick={() => handlePricingCta(tier.action)}
+   893→                  >
+   894→                    {tier.cta}
+   895→                  </Button>
+   896→                </CardContent>
+   897→              </Card>
+   898→            ))}
+   899→          </div>
+   900→        </div>
+   901→      </section>
+   902→
+   903→      {/* Testimonials */}
+   904→      <section className="py-16 md:py-24">
+   905→        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+   906→          <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
+   907→            <Badge variant="secondary" className="mb-4 bg-cyan-500/10 text-cyan-400 border-cyan-500/20">Testimonials</Badge>
+   908→            <h2 className="text-3xl md:text-4xl font-bold mb-4">
+   909→              Loved by{' '}
+   910→              <span className="text-cyan-400">Scientists</span>
+   911→            </h2>
+   912→            <p className="text-slate-400 text-lg">
+   913→              Real feedback from researchers who've experienced the pain firsthand.
+   914→            </p>
+   915→          </div>
+   916→
+   917→          <div className="grid md:grid-cols-3 gap-6">
+   918→            {testimonials.map((testimonial, i) => (
+   919→              <Card key={i} className="bg-slate-900/50 border-slate-800 hover:border-cyan-500/30 transition-all">
+   920→                <CardContent className="p-6">
+   921→                  <div className="flex gap-1 mb-4">
+   922→                    {[...Array(5)].map((_, j) => (
+   923→                      <Icons.Star key={j} className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+   924→                    ))}
+   925→                  </div>
+   926→                  <blockquote className="text-slate-300 text-sm leading-relaxed mb-6 italic">
+   927→                    "{testimonial.quote}"
+   928→                  </blockquote>
+   929→                  <div className="flex items-center gap-3">
+   930→                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500/30 to-teal-500/30 flex items-center justify-center text-cyan-400 font-semibold text-sm">
+   931→                      {testimonial.author.charAt(0)}
+   932→                    </div>
+   933→                    <div>
+   934→                      <p className="font-medium text-white text-sm">{testimonial.author}</p>
+   935→                      <p className="text-slate-500 text-xs">{testimonial.role}</p>
+   936→                      <p className="text-cyan-500/70 text-xs">{testimonial.source}</p>
+   937→                    </div>
+   938→                  </div>
+   939→                </CardContent>
+   940→              </Card>
+   941→            ))}
+   942→          </div>
+   943→        </div>
+   944→      </section>
+   945→
+   946→      {/* CTA Section - Functional Waitlist Form */}
+   947→      <section id="contact" className="py-16 md:py-24 bg-gradient-to-b from-slate-900/50 to-cyan-900/20">
+   948→        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+   949→          <Card className="max-w-3xl mx-auto bg-gradient-to-br from-slate-900 to-slate-800 border-cyan-500/30 shadow-2xl shadow-cyan-500/10 overflow-hidden relative">
+   950→            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(6,182,212,0.15),transparent_70%)]" />
+   951→            <CardContent className="relative p-8 md:p-12 text-center">
+   952→              <Badge className="mb-4 bg-cyan-500/20 text-cyan-400 border-cyan-500/30">Join the Waitlist</Badge>
+   953→              <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">
+   954→                Ready to Transform Your Research?
+   955→              </h2>
+   956→              <p className="text-slate-400 mb-8 text-lg max-w-xl mx-auto">
+   957→                Be among the first to experience the future of scientific computing. Join our waitlist for early access.
+   958→              </p>
+   959→              
+   960→              {!waitlistSuccess ? (
+   961→                <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+   962→                  <Input
+   963→                    type="email"
+   964→                    placeholder="Enter your email"
+   965→                    value={waitlistEmail}
+   966→                    onChange={(e) => { setWaitlistEmail(e.target.value); setWaitlistError(''); }}
+   967→                    disabled={waitlistLoading}
+   968→                    className="bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-white placeholder:text-slate-500"
+   969→                  />
+   970→                  <Button 
+   971→                    type="submit" 
+   972→                    disabled={waitlistLoading}
+   973→                    className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 whitespace-nowrap"
+   974→                  >
+   975→                    {waitlistLoading ? (
+   976→                      <>
+   977→                        <Icons.Loader2 className="mr-2 animate-spin" />
+   978→                        Joining...
+   979→                      </>
+   980→                    ) : (
+   981→                      <>
+   982→                        Join Waitlist
+   983→                        <Icons.ArrowRight />
+   984→                      </>
+   985→                    )}
+   986→                  </Button>
+   987→                </form>
+   988→              ) : (
+   989→                <div className="max-w-md mx-auto p-6 bg-green-500/10 border border-green-500/30 rounded-lg">
+   990→                  <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+   991→                    <Icons.Check className="w-6 h-6 text-green-400" />
+   992→                  </div>
+   993→                  <h3 className="text-xl font-semibold text-green-400 mb-2">You're on the list! 🎉</h3>
+   994→                  <p className="text-slate-400 text-sm">We'll notify you when SciHub Pro launches. Check your inbox for a confirmation.</p>
+   995→                </div>
+   996→              )}
+   997→
+   998→              {waitlistError && (
+   999→                <p className="text-red-400 text-sm mt-3">{waitlistError}</p>
+  1000→              )}
+  1001→              
+  1002→              {!waitlistSuccess && (
+  1003→                <p className="text-slate-500 text-xs mt-4">
+  1004→                  No spam. Unsubscribe anytime. We respect your inbox.
+  1005→                </p>
+  1006→              )}
+  1007→            </CardContent>
+  1008→          </Card>
+  1009→        </div>
+  1010→      </section>
+  1011→
+  1012→      {/* Footer */}
+  1013→      <footer className="mt-auto bg-slate-900 border-t border-slate-800">
+  1014→        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+  1015→          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
+  1016→            {/* Brand */}
+  1017→            <div className="col-span-2 md:col-span-1">
+  1018→              <div className="flex items-center gap-2 mb-4">
+  1019→                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-400 to-teal-500 flex items-center justify-center font-bold text-white">
+  1020→                  E
+  1021→                </div>
+  1022→                <span className="text-xl font-bold">Endeavor Science</span>
+  1023→              </div>
+  1024→              <p className="text-slate-400 text-sm mb-4">
+  1025→                The GitHub for Scientific Computing. Democratizing discovery worldwide.
+  1026→              </p>
+  1027→              <div className="flex gap-3">
+  1028→                <a href="#" className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:bg-slate-700 transition-colors">
+  1029→                  <Icons.Github />
+  1030→                </a>
+  1031→                <a href="#" className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:bg-slate-700 transition-colors">
+  1032→                  <Icons.Twitter />
+  1033→                </a>
+  1034→                <a href="#" className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-cyan-400 hover:bg-slate-700 transition-colors">
+  1035→                  <Icons.Linkedin />
+  1036→                </a>
+  1037→              </div>
+  1038→            </div>
+  1039→
+  1040→            {/* Company */}
+  1041→            <div>
+  1042→              <h4 className="font-semibold text-white mb-4">Company</h4>
+  1043→              <ul className="space-y-2">
+  1044→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">About Us</a></li>
+  1045→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Careers</a></li>
+  1046→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Press Kit</a></li>
+  1047→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Blog</a></li>
+  1048→              </ul>
+  1049→            </div>
+  1050→
+  1051→            {/* Resources */}
+  1052→            <div>
+  1053→              <h4 className="font-semibold text-white mb-4">Resources</h4>
+  1054→              <ul className="space-y-2">
+  1055→                <li><Link href="/documentation" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Documentation</a></li>
+  1056→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">API Reference</a></li>
+  1057→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Community</a></li>
+  1058→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Status</a></li>
+  1059→              </ul>
+  1060→            </div>
+  1061→
+  1062→            {/* Legal / Contact */}
+  1063→            <div>
+  1064→              <h4 className="font-semibold text-white mb-4">Legal</h4>
+  1065→              <ul className="space-y-2">
+  1066→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Privacy Policy</a></li>
+  1067→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Terms of Service</a></li>
+  1068→                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Cookie Policy</a></li>
+  1069→              </ul>
+  1070→              <h4 className="font-semibold text-white mt-6 mb-4">Contact</h4>
+  1071→              <a href="mailto:testdemoqwenai2025@gmail.com" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors flex items-center gap-2">
+  1072→                <Icons.Mail className="w-4 h-4" />
+  1073→                testdemoqwenai2025@gmail.com
+  1074→              </a>
+  1075→            </div>
+  1076→          </div>
+  1077→
+  1078→          <Separator className="bg-slate-800 mb-8" />
+  1079→
+  1080→          <div className="flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+  1081→            <p>© {new Date().getFullYear()} Endeavor Science (AETH-1). All rights reserved.</p>
+  1082→            <p>Democratizing Scientific Discovery</p>
+  1083→          </div>
+  1084→        </div>
+  1085→      </footer>
+  1086→
+  1087→      {/* ==================== MODALS ==================== */}
+  1088→
+  1089→      {/* Demo Video Modal */}
+  1090→      <Dialog open={showDemoModal} onOpenChange={setShowDemoModal}>
+  1091→        <DialogContent className="sm:max-w-4xl bg-slate-900 border-slate-700">
+  1092→          <DialogHeader>
+  1093→            <DialogTitle className="text-2xl text-white">See SciHub Pro in Action</DialogTitle>
+  1094→            <DialogDescription className="text-slate-400">
+  1095→              Watch how researchers are transforming their workflow with our platform
+  1096→            </DialogDescription>
+  1097→          </DialogHeader>
+  1098→          <div className="aspect-video bg-slate-800 rounded-lg flex items-center justify-center relative overflow-hidden">
+  1099→            <div className="absolute inset-0 bg-gradient-to-br from-cyan-900/20 to-teal-900/20" />
+  1100→            <div className="text-center z-10">
+  1101→              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 flex items-center justify-center cursor-pointer hover:scale-110 transition-transform">
+  1102→                <Icons.Play className="w-8 h-8 text-white ml-1" />
+  1103→              </div>
+  1104→              <p className="text-white font-medium">Demo Video Coming Soon</p>
+  1105→              <p className="text-slate-400 text-sm mt-2">Full product walkthrough will be available at launch</p>
+  1106→            </div>
+  1107→          </div>
+  1108→          <div className="flex justify-between items-center pt-4">
+  1109→            <p className="text-slate-500 text-sm">Duration: ~5 min • Updated August 2026</p>
+  1110→            <Button onClick={() => { setShowDemoModal(false); setShowEarlyAccessModal(true); }} className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">
+  1111→              Get Early Access Instead
+  1112→            </Button>
+  1113→          </div>
+  1114→        </DialogContent>
+  1115→      </Dialog>
+  1116→
+  1117→      {/* Early Access Registration Modal */}
+  1118→      <Dialog open={showEarlyAccessModal} onOpenChange={setShowEarlyAccessModal}>
+  1119→        <DialogContent className="sm:max-w-2xl bg-slate-900 border-slate-700 max-h-[90vh] overflow-y-auto">
+  1120→          <DialogHeader>
+  1121→            <DialogTitle className="text-2xl text-white">🚀 Request Early Access</DialogTitle>
+  1122→            <DialogDescription className="text-slate-400">
+  1123→              Join our private beta program and be among the first to experience SciHub Pro
+  1124→            </DialogDescription>
+  1125→          </DialogHeader>
+  1126→          
+  1127→          {!earlyAccessSuccess ? (
+  1128→            <form onSubmit={handleEarlyAccessSubmit} className="space-y-4 mt-4">
+  1129→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1130→                <div>
+  1131→                  <label className="block text-sm font-medium text-slate-300 mb-1">Full Name *</label>
+  1132→                  <Input
+  1133→                    type="text"
+  1134→                    placeholder="Dr. Jane Smith"
+  1135→                    value={earlyAccessForm.name}
+  1136→                    onChange={(e) => setEarlyAccessForm({...earlyAccessForm, name: e.target.value})}
+  1137→                    className="bg-slate-800 border-slate-700 text-white"
+  1138→                    required
+  1139→                  />
+  1140→                </div>
+  1141→                <div>
+  1142→                  <label className="block text-sm font-medium text-slate-300 mb-1">Email Address *</label>
+  1143→                  <Input
+  1144→                    type="email"
+  1145→                    placeholder="jane@university.edu"
+  1146→                    value={earlyAccessForm.email}
+  1147→                    onChange={(e) => setEarlyAccessForm({...earlyAccessForm, email: e.target.value})}
+  1148→                    className="bg-slate-800 border-slate-700 text-white"
+  1149→                    required
+  1150→                  />
+  1151→                </div>
+  1152→              </div>
+  1153→
+  1154→              <div>
+  1155→                <label className="block text-sm font-medium text-slate-300 mb-1">Institution/Organization *</label>
+  1156→                <Input
+  1157→                  type="text"
+  1158→                  placeholder="MIT, Stanford, NASA, etc."
+  1159→                  value={earlyAccessForm.institution}
+  1160→                  onChange={(e) => setEarlyAccessForm({...earlyAccessForm, institution: e.target.value})}
+  1161→                  className="bg-slate-800 border-slate-700 text-white"
+  1162→                  required
+  1163→                />
+  1164→              </div>
+  1165→
+  1166→              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1167→                <div>
+  1168→                  <label className="block text-sm font-medium text-slate-300 mb-1">Role</label>
+  1169→                  <Select value={earlyAccessForm.role} onValueChange={(value) => setEarlyAccessForm({...earlyAccessForm, role: value})}>
+  1170→                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+  1171→                      <SelectValue placeholder="Select your role" />
+  1172→                    </SelectTrigger>
+  1173→                    <SelectContent className="bg-slate-800 border-slate-700">
+  1174→                      <SelectItem value="student">Student</SelectItem>
+  1175→                      <SelectItem value="researcher">Researcher</SelectItem>
+  1176→                      <SelectItem value="pi">Principal Investigator</SelectItem>
+  1177→                      <SelectItem value="industry">Industry Scientist</SelectItem>
+  1178→                      <SelectItem value="other">Other</SelectItem>
+  1179→                    </SelectContent>
+  1180→                  </Select>
+  1181→                </div>
+  1182→                <div>
+  1183→                  <label className="block text-sm font-medium text-slate-300 mb-1">Research Field</label>
+  1184→                  <Input
+  1185→                    type="text"
+  1186→                    placeholder="Bioinformatics, Physics, Chemistry..."
+  1187→                    value={earlyAccessForm.researchField}
+  1188→                    onChange={(e) => setEarlyAccessForm({...earlyAccessForm, researchField: e.target.value})}
+  1189→                    className="bg-slate-800 border-slate-700 text-white"
+  1190→                  />
+  1191→                </div>
+  1192→              </div>
+  1193→
+  1194→              <div>
+  1195→                <label className="block text-sm font-medium text-slate-300 mb-1">What excites you most?</label>
+  1196→                <textarea
+  1197→                  placeholder="Tell us which feature you're most excited about..."
+  1198→                  rows={3}
+  1199→                  value={earlyAccessForm.excitedFeature}
+  1200→                  onChange={(e) => setEarlyAccessForm({...earlyAccessForm, excitedFeature: e.target.value})}
+  1201→                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-white placeholder:text-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 resize-none"
+  1202→                />
+  1203→              </div>
+  1204→
+  1205→              <div className="flex items-start gap-2">
+  1206→                <input
+  1207→                  type="checkbox"
+  1208→                  id="agreeTerms"
+  1209→                  checked={earlyAccessForm.agreeTerms}
+  1210→                  onChange={(e) => setEarlyAccessForm({...earlyAccessForm, agreeTerms: e.target.checked})}
+  1211→                  className="mt-1 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+  1212→                />
+  1213→                <label htmlFor="agreeTerms" className="text-sm text-slate-400">
+  1214→                  I agree to the <a href="#" className="text-cyan-400 hover:underline">Terms of Service</a> and <a href="#" className="text-cyan-400 hover:underline">Privacy Policy</a>, and want to participate in the beta program *
+  1215→                </label>
+  1216→              </div>
+  1217→
+  1218→              {earlyAccessError && (
+  1219→                <p className="text-red-400 text-sm">{earlyAccessError}</p>
+  1220→              )}
+  1221→
+  1222→              <div className="flex gap-3 pt-2">
+  1223→                <Button type="button" variant="outline" onClick={() => setShowEarlyAccessModal(false)} className="border-slate-600 text-slate-300">
+  1224→                  Cancel
+  1225→                </Button>
+  1226→                <Button 
+  1227→                  type="submit" 
+  1228→                  disabled={earlyAccessLoading}
+  1229→                  className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0"
+  1230→                >
+  1231→                  {earlyAccessLoading ? (
+  1232→                    <>
+  1233→                      <Icons.Loader2 className="mr-2 animate-spin" />
+  1234→                      Submitting...
+  1235→                    </>
+  1236→                  ) : (
+  1237→                    'Request Early Access'
+  1238→                  )}
+  1239→                </Button>
+  1240→              </div>
+  1241→            </form>
+  1242→          ) : (
+  1243→            <div className="text-center py-8">
+  1244→              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+  1245→                <Icons.Check className="w-8 h-8 text-green-400" />
+  1246→              </div>
+  1247→              <h3 className="text-2xl font-semibold text-green-400 mb-2">You're In! 🎉</h3>
+  1248→              <p className="text-slate-400 mb-4">Welcome to the SciHub Pro beta program. We'll be in touch within 48 hours with next steps.</p>
+  1249→              <Button onClick={() => setShowEarlyAccessModal(false)} variant="outline" className="border-slate-600 text-slate-300">
+  1250→                Close
+  1251→              </Button>
+  1252→            </div>
+  1253→          )}
+  1254→        </DialogContent>
+  1255→      </Dialog>
+  1256→
+  1257→      {/* Investor Portal Modal */}
+  1258→      <Dialog open={showInvestorModal} onOpenChange={setShowInvestorModal}>
+  1259→        <DialogContent className="sm:max-w-3xl bg-slate-900 border-slate-700 max-h-[90vh] overflow-y-auto">
+  1260→          <DialogHeader>
+  1261→            <DialogTitle className="text-2xl text-white">💼 Investor Relations</DialogTitle>
+  1262→            <DialogDescription className="text-slate-400">
+  1263→              Investment opportunity in the future of scientific computing
+  1264→            </DialogDescription>
+  1265→          </DialogHeader>
+  1266→          
+  1267→          <div className="space-y-6 mt-4">
+  1268→            {/* Key Metrics */}
+  1269→            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+  1270→              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+  1271→                <div className="text-2xl font-bold text-cyan-400">$45B+</div>
+  1272→                <div className="text-xs text-slate-400">TAM</div>
+  1273→              </div>
+  1274→              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+  1275→                <div className="text-2xl font-bold text-cyan-400">12%</div>
+  1276→                <div className="text-xs text-slate-400">CAGR</div>
+  1277→              </div>
+  1278→              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+  1279→                <div className="text-2xl font-bold text-cyan-400">10M+</div>
+  1280→                <div className="text-xs text-slate-400">Addressable Users</div>
+  1281→              </div>
+  1282→              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+  1283→                <div className="text-2xl font-bold text-cyan-400">Y5</div>
+  1284→                <div className="text-xs text-slate-400">$500M+ ARR Target</div>
+  1285→              </div>
+  1286→            </div>
+  1287→
+  1288→            {/* Team Info */}
+  1289→            <div>
+  1290→              <h3 className="text-lg font-semibold text-white mb-3">Leadership Team</h3>
+  1291→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+  1292→                {[
+  1293→                  { name: 'CEO & Founder', background: 'Ex-Google, PhD Machine Learning', focus: 'Product Vision & Strategy' },
+  1294→                  { name: 'CTO & Co-Founder', background: 'Ex-Meta, Distributed Systems', focus: 'Platform Architecture' },
+  1295→                  { name: 'VP Engineering', background: 'Ex-Databricks, Infrastructure', focus: 'Scale & Reliability' },
+  1296→                  { name: 'Head of Science', background: 'Academic Researcher, 50+ Publications', focus: 'Scientific Partnerships' },
+  1297→                ].map((member, i) => (
+  1298→                  <div key={i} className="bg-slate-800/50 rounded-lg p-4">
+  1299→                    <div className="font-medium text-white">{member.name}</div>
+  1300→                    <div className="text-sm text-cyan-400">{member.background}</div>
+  1301→                    <div className="text-xs text-slate-400 mt-1">{member.focus}</div>
+  1302→                  </div>
+  1303→                ))}
+  1304→              </div>
+  1305→            </div>
+  1306→
+  1307→            {/* Competitive Advantages */}
+  1308→            <div>
+  1309→              <h3 className="text-lg font-semibold text-white mb-3">Why SciHub Pro Wins</h3>
+  1310→              <div className="space-y-2">
+  1311→                {['First-mover advantage in unified science platform', 'Proprietary AETH-1 orchestration engine', 'Deep domain expertise vs generic tools', 'Viral adoption through academic networks', 'Multi-sided network effects'].map((advantage, i) => (
+  1312→                  <div key={i} className="flex items-center gap-2 text-sm text-slate-300">
+  1313→                    <Icons.Check className="w-4 h-4 text-cyan-400 shrink-0" />
+  1314→                    {advantage}
+  1315→                  </div>
+  1316→                ))}
+  1317→              </div>
+  1318→            </div>
+  1319→
+  1320→            {/* Investor Interest Form */}
+  1321→            <div className="border-t border-slate-700 pt-6">
+  1322→              <h3 className="text-lg font-semibold text-white mb-3">Request Investor Deck</h3>
+  1323→              <p className="text-sm text-slate-400 mb-4">Leave your contact information and we'll send you our pitch deck and schedule a call.</p>
+  1324→              
+  1325→              <form onSubmit={(e) => { e.preventDefault(); alert('Thank you for your interest! Our investor relations team will contact you within 24 hours.'); setShowInvestorModal(false); }} className="space-y-4">
+  1326→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1327→                  <Input placeholder="Firm Name *" className="bg-slate-800 border-slate-700 text-white" required />
+  1328→                  <Input placeholder="Your Role *" className="bg-slate-800 border-slate-700 text-white" required />
+  1329→                  <Input type="email" placeholder="Work Email *" className="bg-slate-800 border-slate-700 text-white" required />
+  1330→                  <Input placeholder="Portfolio Companies (optional)" className="bg-slate-800 border-slate-700 text-white" />
+  1331→                </div>
+  1332→                <textarea 
+  1333→                  placeholder="Tell us about your investment thesis..." 
+  1334→                  rows={3}
+  1335→                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-white placeholder:text-slate-500 resize-none"
+  1336→                />
+  1337→                <div className="flex gap-3">
+  1338→                  <Button type="button" variant="outline" onClick={() => setShowInvestorModal(false)} className="border-slate-600 text-slate-300">Cancel</Button>
+  1339→                  <Button type="submit" className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">Request Pitch Deck</Button>
+  1340→                </div>
+  1341→              </form>
+  1342→            </div>
+  1343→          </div>
+  1344→        </DialogContent>
+  1345→      </Dialog>
+  1346→
+  1347→      {/* Quick Signup Modal (for "Start Free" CTA) */}
+  1348→      <Dialog open={showSignupModal} onOpenChange={setShowSignupModal}>
+  1349→        <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700">
+  1350→          <DialogHeader>
+  1351→            <DialogTitle className="text-2xl text-white">Start Free Today</DialogTitle>
+  1352→            <DialogDescription className="text-slate-400">
+  1353→              Create your free account and start accelerating your research
+  1354→            </DialogDescription>
+  1355→          </DialogHeader>
+  1356→          
+  1357→          <div className="space-y-4 mt-4">
+  1358→            <Button 
+  1359→              variant="outline" 
+  1360→              className="w-full border-slate-600 text-white hover:bg-slate-800 h-12"
+  1361→              onClick={() => { alert('Google Sign-In coming soon! For now, use email signup.'); }}
+  1362→            >
+  1363→              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+  1364→              Continue with Google
+  1365→            </Button>
+  1366→            
+  1367→            <Button 
+  1368→              variant="outline" 
+  1369→              className="w-full border-slate-600 text-white hover:bg-slate-800 h-12"
+  1370→              onClick={() => { alert('GitHub Sign-In coming soon! For now, use email signup.'); }}
+  1371→            >
+  1372→              <Icons.Github className="w-5 h-5 mr-2" />
+  1373→              Continue with GitHub
+  1374→            </Button>
+  1375→
+  1376→            <div className="relative">
+  1377→              <div className="absolute inset-0 flex items-center">
+  1378→                <div className="w-full border-t border-slate-700"></div>
+  1379→              </div>
+  1380→              <div className="relative flex justify-center text-sm">
+  1381→                <span className="px-2 bg-slate-900 text-slate-400">Or continue with email</span>
+  1382→              </div>
+  1383→            </div>
+  1384→
+  1385→            <form onSubmit={(e) => { 
+  1386→              e.preventDefault(); 
+  1387→              alert('Account created successfully! Welcome to SciHub Pro.'); 
+  1388→              setShowSignupModal(false);
+  1389→              router.push('/dashboard');
+  1390→            }} className="space-y-3">
+  1391→              <Input type="email" placeholder="Email address" className="bg-slate-800 border-slate-700 text-white" required />
+  1392→              <Input type="password" placeholder="Create password" className="bg-slate-800 border-slate-700 text-white" required />
+  1393→              <Button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">
+  1394→                Create Free Account
+  1395→              </Button>
+  1396→            </form>
+  1397→
+  1398→            <p className="text-xs text-slate-500 text-center">
+  1399→              By signing up, you agree to our <a href="#" className="text-cyan-400 hover:underline">Terms</a> and <a href="#" className="text-cyan-400 hover:underline">Privacy Policy</a>
+  1400→            </p>
+  1401→          </div>
+  1402→        </DialogContent>
+  1403→      </Dialog>
+  1404→
+  1405→      {/* Pro Trial Modal */}
+  1406→      <Dialog open={showTrialModal} onOpenChange={setShowTrialModal}>
+  1407→        <DialogContent className="sm:max-w-lg bg-slate-900 border-slate-700">
+  1408→          <DialogHeader>
+  1409→            <DialogTitle className="text-2xl text-white">✨ Start Your 14-Day Pro Trial</DialogTitle>
+  1410→            <DialogDescription className="text-slate-400">
+  1411→              Full access to all Pro features — no credit card required
+  1412→            </DialogDescription>
+  1413→          </DialogHeader>
+  1414→          
+  1415→          <div className="space-y-4 mt-4">
+  1416→            <div className="bg-gradient-to-r from-cyan-900/30 to-teal-900/30 rounded-lg p-4 border border-cyan-500/20">
+  1417→              <h4 className="font-semibold text-white mb-2">Pro Trial Includes:</h4>
+  1418→              <ul className="space-y-1 text-sm text-slate-300">
+  1419→                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Unlimited private projects</li>
+  1420→                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> 100 hours advanced compute/month</li>
+  1421→                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Priority support</li>
+  1422→                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> AI-powered insights</li>
+  1423→                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Team collaboration (up to 10 members)</li>
+  1424→              </ul>
+  1425→            </div>
+  1426→
+  1427→            <form onSubmit={(e) => { 
+  1428→              e.preventDefault(); 
+  1429→              alert('Trial activated! You have 14 days of Pro access. Welcome to SciHub Pro!'); 
+  1430→              setShowTrialModal(false);
+  1431→              router.push('/dashboard');
+  1432→            }} className="space-y-3">
+  1433→              <Input type="text" placeholder="Full Name" className="bg-slate-800 border-slate-700 text-white" required />
+  1434→              <Input type="email" placeholder="Work Email" className="bg-slate-800 border-slate-700 text-white" required />
+  1435→              <Input type="text" placeholder="Organization" className="bg-slate-800 border-slate-700 text-white" required />
+  1436→              <Button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">
+  1437→                Start Free Trial
+  1438→              </Button>
+  1439→            </form>
+  1440→
+  1441→            <p className="text-xs text-slate-500 text-center">
+  1442→              No credit card required • Cancel anytime • $49/user/month after trial
+  1443→            </p>
+  1444→          </div>
+  1445→        </DialogContent>
+  1446→      </Dialog>
+  1447→
+  1448→      {/* Enterprise Sales Modal */}
+  1449→      <Dialog open={showEnterpriseModal} onOpenChange={setShowEnterpriseModal}>
+  1450→        <DialogContent className="sm:max-w-3xl bg-slate-900 border-slate-700 max-h-[90vh] overflow-y-auto">
+  1451→          <DialogHeader>
+  1452→            <DialogTitle className="text-2xl text-white">🏢 Enterprise Inquiry</DialogTitle>
+  1453→            <DialogDescription className="text-slate-400">
+  1454→              Let's discuss how SciHub Pro can power your organization's research infrastructure
+  1455→            </DialogDescription>
+  1456→          </DialogHeader>
+  1457→          
+  1458→          {!enterpriseSuccess ? (
+  1459→            <form onSubmit={handleEnterpriseSubmit} className="space-y-6 mt-4">
+  1460→              {/* Company Information */}
+  1461→              <div>
+  1462→                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+  1463→                  <span className="w-6 h-6 rounded bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">1</span>
+  1464→                  Company Information
+  1465→                </h3>
+  1466→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1467→                  <div>
+  1468→                    <label className="block text-sm text-slate-400 mb-1">Company Name *</label>
+  1469→                    <Input 
+  1470→                      value={enterpriseForm.company}
+  1471→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, company: e.target.value})}
+  1472→                      placeholder="Your institution or company"
+  1473→                      className="bg-slate-800 border-slate-700 text-white"
+  1474→                      required
+  1475→                    />
+  1476→                  </div>
+  1477→                  <div>
+  1478→                    <label className="block text-sm text-slate-400 mb-1">Website</label>
+  1479→                    <Input 
+  1480→                      value={enterpriseForm.website}
+  1481→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, website: e.target.value})}
+  1482→                      placeholder="https://yourcompany.com"
+  1483→                      className="bg-slate-800 border-slate-700 text-white"
+  1484→                    />
+  1485→                  </div>
+  1486→                  <div>
+  1487→                    <label className="block text-sm text-slate-400 mb-1">Industry</label>
+  1488→                    <Select value={enterpriseForm.industry} onValueChange={(value) => setEnterpriseForm({...enterpriseForm, industry: value})}>
+  1489→                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+  1490→                        <SelectValue placeholder="Select industry" />
+  1491→                      </SelectTrigger>
+  1492→                      <SelectContent className="bg-slate-800 border-slate-700">
+  1493→                        <SelectItem value="academic">Academic Institution</SelectItem>
+  1494→                        <SelectItem value="pharma">Pharmaceutical</SelectItem>
+  1495→                        <SelectItem value="biotech">Biotechnology</SelectItem>
+  1496→                        <SelectItem value="government">Government</SelectItem>
+  1497→                        <SelectItem value="healthcare">Healthcare</SelectItem>
+  1498→                        <SelectItem value="technology">Technology</SelectItem>
+  1499→                        <SelectItem value="other">Other</SelectItem>
+  1500→                      </SelectContent>
+  1501→                    </Select>
+  1502→                  </div>
+  1503→                  <div>
+  1504→                    <label className="block text-sm text-slate-400 mb-1">Country/Region</label>
+  1505→                    <Input 
+  1506→                      value={enterpriseForm.country}
+  1507→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, country: e.target.value})}
+  1508→                      placeholder="United States"
+  1509→                      className="bg-slate-800 border-slate-700 text-white"
+  1510→                    />
+  1511→                  </div>
+  1512→                </div>
+  1513→              </div>
+  1514→
+  1515→              {/* Technical Requirements */}
+  1516→              <div>
+  1517→                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+  1518→                  <span className="w-6 h-6 rounded bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">2</span>
+  1519→                  Technical Requirements
+  1520→                </h3>
+  1521→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1522→                  <div>
+  1523→                    <label className="block text-sm text-slate-400 mb-1">Expected Users *</label>
+  1524→                    <Select value={enterpriseForm.users} onValueChange={(value) => setEnterpriseForm({...enterpriseForm, users: value})}>
+  1525→                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+  1526→                        <SelectValue placeholder="Select range" />
+  1527→                      </SelectTrigger>
+  1528→                      <SelectContent className="bg-slate-800 border-slate-700">
+  1529→                        <SelectItem value="1-10">1-10 users</SelectItem>
+  1530→                        <SelectItem value="11-50">11-50 users</SelectItem>
+  1531→                        <SelectItem value="51-200">51-200 users</SelectItem>
+  1532→                        <SelectItem value="201-1000">201-1000 users</SelectItem>
+  1533→                        <SelectItem value="1000+">1000+ users</SelectItem>
+  1534→                      </SelectContent>
+  1535→                    </Select>
+  1536→                  </div>
+  1537→                  <div>
+  1538→                    <label className="block text-sm text-slate-400 mb-1">Monthly API Calls (est.)</label>
+  1539→                    <Input 
+  1540→                      value={enterpriseForm.apiCalls}
+  1541→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, apiCalls: e.target.value})}
+  1542→                      placeholder="e.g., 100,000"
+  1543→                      className="bg-slate-800 border-slate-700 text-white"
+  1544→                    />
+  1545→                  </div>
+  1546→                  <div>
+  1547→                    <label className="block text-sm text-slate-400 mb-1">Storage Needs</label>
+  1548→                    <Input 
+  1549→                      value={enterpriseForm.storage}
+  1550→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, storage: e.target.value})}
+  1551→                      placeholder="e.g., 10TB"
+  1552→                      className="bg-slate-800 border-slate-700 text-white"
+  1553→                    />
+  1554→                  </div>
+  1555→                  <div>
+  1556→                    <label className="block text-sm text-slate-400 mb-1">Integrations Needed</label>
+  1557→                    <Select value={enterpriseForm.integrations} onValueChange={(value) => setEnterpriseForm({...enterpriseForm, integrations: value})}>
+  1558→                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+  1559→                        <SelectValue placeholder="Select options" />
+  1560→                      </SelectTrigger>
+  1561→                      <SelectContent className="bg-slate-800 border-slate-700">
+  1562→                        <SelectItem value="sso">SSO / SAML</SelectItem>
+  1563→                        <SelectItem value="onprem">On-Premise Deployment</SelectItem>
+  1564→                        <SelectItem value="hipaa">HIPAA Compliance</SelectItem>
+  1565→                        <SelectItem value="fedramp">FedRAMP Compliance</SelectItem>
+  1566→                        <SelectItem value="soc2">SOC 2 Compliance</SelectItem>
+  1567→                        <SelectItem value="other">Other</SelectItem>
+  1568→                      </SelectContent>
+  1569→                    </Select>
+  1570→                  </div>
+  1571→                </div>
+  1572→              </div>
+  1573→
+  1574→              {/* Decision Maker Info */}
+  1575→              <div>
+  1576→                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+  1577→                  <span className="w-6 h-6 rounded bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">3</span>
+  1578→                  Contact Information
+  1579→                </h3>
+  1580→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1581→                  <div>
+  1582→                    <label className="block text-sm text-slate-400 mb-1">Your Name *</label>
+  1583→                    <Input 
+  1584→                      value={enterpriseForm.contactName}
+  1585→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, contactName: e.target.value})}
+  1586→                      placeholder="Full name"
+  1587→                      className="bg-slate-800 border-slate-700 text-white"
+  1588→                      required
+  1589→                    />
+  1590→                  </div>
+  1591→                  <div>
+  1592→                    <label className="block text-sm text-slate-400 mb-1">Job Title *</label>
+  1593→                    <Input 
+  1594→                      value={enterpriseForm.jobTitle}
+  1595→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, jobTitle: e.target.value})}
+  1596→                      placeholder="e.g., CTO, VP Engineering"
+  1597→                      className="bg-slate-800 border-slate-700 text-white"
+  1598→                      required
+  1599→                    />
+  1600→                  </div>
+  1601→                  <div>
+  1602→                    <label className="block text-sm text-slate-400 mb-1">Work Email *</label>
+  1603→                    <Input 
+  1604→                      type="email"
+  1605→                      value={enterpriseForm.workEmail}
+  1606→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, workEmail: e.target.value})}
+  1607→                      placeholder="you@company.com"
+  1608→                      className="bg-slate-800 border-slate-700 text-white"
+  1609→                      required
+  1610→                    />
+  1611→                  </div>
+  1612→                  <div>
+  1613→                    <label className="block text-sm text-slate-400 mb-1">Phone (optional)</label>
+  1614→                    <Input 
+  1615→                      value={enterpriseForm.phone}
+  1616→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, phone: e.target.value})}
+  1617→                      placeholder="+1 (555) 000-0000"
+  1618→                      className="bg-slate-800 border-slate-700 text-white"
+  1619→                    />
+  1620→                  </div>
+  1621→                </div>
+  1622→              </div>
+  1623→
+  1624→              {/* Additional Notes */}
+  1625→              <div>
+  1626→                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+  1627→                  <span className="w-6 h-6 rounded bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">4</span>
+  1628→                  Additional Details
+  1629→                </h3>
+  1630→                <div className="space-y-4">
+  1631→                  <div>
+  1632→                    <label className="block text-sm text-slate-400 mb-1">Timeline for Decision</label>
+  1633→                    <Select value={enterpriseForm.timeline} onValueChange={(value) => setEnterpriseForm({...enterpriseForm, timeline: value})}>
+  1634→                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+  1635→                        <SelectValue placeholder="Select timeline" />
+  1636→                      </SelectTrigger>
+  1637→                      <SelectContent className="bg-slate-800 border-slate-700">
+  1638→                        <SelectItem value="immediate">Immediate (&lt;1 month)</SelectItem>
+  1639→                        <SelectItem value="1-3months">1-3 months</SelectItem>
+  1640→                        <SelectItem value="3-6months">3-6 months</SelectItem>
+  1641→                        <SelectItem value="exploring">Just exploring</SelectItem>
+  1642→                      </SelectContent>
+  1643→                    </Select>
+  1644→                  </div>
+  1645→                  <div>
+  1646→                    <label className="block text-sm text-slate-400 mb-1">Specific Requirements or Questions</label>
+  1647→                    <textarea 
+  1648→                      value={enterpriseForm.notes}
+  1649→                      onChange={(e) => setEnterpriseForm({...enterpriseForm, notes: e.target.value})}
+  1650→                      placeholder="Tell us about your specific needs..."
+  1651→                      rows={4}
+  1652→                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-white placeholder:text-slate-500 resize-none"
+  1653→                    />
+  1654→                  </div>
+  1655→                </div>
+  1656→              </div>
+  1657→
+  1658→              {enterpriseError && (
+  1659→                <p className="text-red-400 text-sm">{enterpriseError}</p>
+  1660→              )}
+  1661→
+  1662→              <div className="flex gap-3 pt-2">
+  1663→                <Button type="button" variant="outline" onClick={() => setShowEnterpriseModal(false)} className="border-slate-600 text-slate-300">
+  1664→                  Cancel
+  1665→                </Button>
+  1666→                <Button 
+  1667→                  type="submit" 
+  1668→                  disabled={enterpriseLoading}
+  1669→                  className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0"
+  1670→                >
+  1671→                  {enterpriseLoading ? (
+  1672→                    <>
+  1673→                      <Icons.Loader2 className="mr-2 animate-spin" />
+  1674→                      Submitting...
+  1675→                    </>
+  1676→                  ) : (
+  1677→                    'Submit Inquiry'
+  1678→                  )}
+  1679→                </Button>
+  1680→              </div>
+  1681→            </form>
+  1682→          ) : (
+  1683→            <div className="text-center py-8">
+  1684→              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+  1685→                <Icons.Check className="w-8 h-8 text-green-400" />
+  1686→              </div>
+  1687→              <h3 className="text-2xl font-semibold text-green-400 mb-2">Inquiry Received! 🎯</h3>
+  1688→              <p className="text-slate-400 mb-2">Our enterprise team will contact you within 24 hours.</p>
+  1689→              <p className="text-slate-500 text-sm mb-4">A confirmation has been sent to {enterpriseForm.workEmail}</p>
+  1690→              <Button onClick={() => setShowEnterpriseModal(false)} variant="outline" className="border-slate-600 text-slate-300">
+  1691→                Close
+  1692→              </Button>
+  1693→            </div>
+  1694→          )}
+  1695→        </DialogContent>
+  1696→      </Dialog>
+  1697→    </div>
+  1698→  )
+  1699→}
+  1700→

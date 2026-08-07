@@ -1,0 +1,994 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react';
+     4→import { useTranslation } from '@/i18n/useTranslation';
+     5→import { useDynamicStore, createDynamicField, updateDynamicField } from '@/store/useDynamicStore';
+     6→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     7→import { Badge } from '@/components/ui/badge';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Input } from '@/components/ui/input';
+    10→import { Progress } from '@/components/ui/progress';
+    11→import {
+    12→  Dialog,
+    13→  DialogContent,
+    14→  DialogDescription,
+    15→  DialogHeader,
+    16→  DialogTitle,
+    17→} from '@/components/ui/dialog';
+    18→import {
+    19→  Select,
+    20→  SelectContent,
+    21→  SelectItem,
+    22→  SelectTrigger,
+    23→  SelectValue,
+    24→} from '@/components/ui/select';
+    25→import Link from 'next/link';
+    26→
+    27→// ============ TYPES ============
+    28→
+    29→interface StatCardConfig {
+    30→  key: string;
+    31→  icon: string;
+    32→  color: string;
+    33→  route: string;
+    34→}
+    35→
+    36→interface ActivityItem {
+    37→  id: string;
+    38→  type: string;
+    39→  message: string;
+    40→  icon: string;
+    41→  timestamp: Date;
+    42→  details?: string;
+    43→}
+    44→
+    45→// ============ REALISTIC ACTIVITY DATA ============
+    46→
+    47→const generateRealisticActivities = (): ActivityItem[] => {
+    48→  const now = new Date();
+    49→  return [
+    50→    {
+    51→      id: '1',
+    52→      type: 'connect',
+    53→      message: 'Connected to CrossRef API successfully',
+    54→      icon: '📚',
+    55→      timestamp: new Date(now.getTime() - 2 * 60000),
+    56→      details: 'Latency: 45ms • 12 queries available'
+    57→    },
+    58→    {
+    59→      id: '2',
+    60→      type: 'search',
+    61→      message: 'Searched "machine learning drug discovery"',
+    62→      icon: '🔍',
+    63→      timestamp: new Date(now.getTime() - 8 * 60000),
+    64→      details: 'Found 234 results across 5 databases'
+    65→    },
+    66→    {
+    67→      id: '3',
+    68→      type: 'export',
+    69→      message: 'Exported dataset to Parquet format',
+    70→      icon: '📤',
+    71→      timestamp: new Date(now.getTime() - 15 * 60000),
+    72→      details: '2.4GB • 15,000 rows • Compression: 8x'
+    73→    },
+    74→    {
+    75→      id: '4',
+    76→      type: 'job',
+    77→      message: 'Completed analysis pipeline: RNA-seq',
+    78→      icon: '⚙️',
+    79→      timestamp: new Date(now.getTime() - 32 * 60000),
+    80→      details: 'Duration: 4m 23s • GPU: RTX 4090'
+    81→    },
+    82→    {
+    83→      id: '5',
+    84→      type: 'collaboration',
+    85→      message: 'Dr. Sarah Chen joined workspace',
+    86→      icon: '👥',
+    87→      timestamp: new Date(now.getTime() - 45 * 60000),
+    88→      details: 'MIT • Computational Biology'
+    89→    },
+    90→    {
+    91→      id: '6',
+    92→      type: 'download',
+    93→      message: 'Downloaded PDB structure 7A94',
+    94→      icon: '⬇️',
+    95→      timestamp: new Date(now.getTime() - 1 * 3600000),
+    96→      details: '3.2MB • Cryo-EM • 2.8Å resolution'
+    97→    },
+    98→    {
+    99→      id: '7',
+   100→      type: 'query',
+   101→      message: 'Ran SPARQL query on Wikidata',
+   102→      icon: '🔎',
+   103→      timestamp: new Date(now.getTime() - 1.5 * 3600000),
+   104→      details: '1,247 results in 234ms'
+   105→    },
+   106→    {
+   107→      id: '8',
+   108→      type: 'save',
+   109→      message: 'Saved workflow: ML Training Pipeline v2',
+   110→      icon: '⭐',
+   111→      timestamp: new Date(now.getTime() - 2 * 3600000),
+   112→      details: '12 nodes • Auto-versioned'
+   113→    },
+   114→    {
+   115→      id: '9',
+   116→      type: 'compute',
+   117→      message: 'Provisioned compute cluster (4 GPUs)',
+   118→      icon: '🤖',
+   119→      timestamp: new now.getTime() - 3 * 3600000 > 0 ? new Date(now.getTime() - 3 * 3600000) : now,
+   120→      details: 'AWS us-east-1 • $0.84/hr'
+   121→    },
+   122→    {
+   123→      id: '10',
+   124→      type: 'upload',
+   125→      message: 'Uploaded dataset: clinical_trial_data.csv',
+   126→      icon: '⬆️',
+   127→      timestamp: new Date(now.getTime() - 4 * 3600000),
+   128→      details: '156MB • Validated ✓'
+   129→    }
+   130→  ];
+   131→};
+   132→
+   133→// ============ DASHBOARD PAGE ============
+   134→
+   135→export default function DashboardPage() {
+   136→  const { t } = useTranslation();
+   137→  const {
+   138→    dashboardStats,
+   139→    updateDashboardStat,
+   140→    activities,
+   141→    addActivity,
+   142→    clearActivities,
+   143→    userProfile,
+   144→    updateUserProfile,
+   145→    getDirtyFieldsCount,
+   146→    checkVolumeThreshold,
+   147→    dbConfig,
+   148→  } = useDynamicStore();
+   149→
+   150→  // UI State
+   151→  const [editingStat, setEditingStat] = useState<string | null>(null);
+   152→  const [tempValue, setTempValue] = useState('');
+   153→  const [showVolumeWarning, setShowVolumeWarning] = useState(false);
+   154→  const [isPushing, setIsPushing] = useState(false);
+   155→  
+   156→  // Enhanced Profile State
+   157→  const [showAvatarModal, setShowAvatarModal] = useState(false);
+   158→  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+   159→  const [showFullProfileModal, setShowFullProfileModal] = useState(false);
+   160→  const [isLoading, setIsLoading] = useState(true);
+   161→  
+   162→  // Full profile form state
+   163→  const [fullProfile, setFullProfile] = useState({
+   164→    displayName: '',
+   165→    email: '',
+   166→    institution: '',
+   167→    orcid: '',
+   168→    researchInterests: '',
+   169→    website: '',
+   170→    timezone: '',
+   171→    bio: '',
+   172→  });
+   173→  const [profileSaving, setProfileSaving] = useState(false);
+   174→  const [profileSaved, setProfileSaved] = useState(false);
+   175→
+   176→  // Simulate loading on mount
+   177→  useEffect(() => {
+   178→    const timer = setTimeout(() => setIsLoading(false), 800);
+   179→    return () => clearTimeout(timer);
+   180→  }, []);
+   181→
+   182→  // Initialize full profile from store
+   183→  useEffect(() => {
+   184→    setFullProfile({
+   185→      displayName: userProfile.displayName.value,
+   186→      email: userProfile.email.value,
+   187→      institution: '',
+   188→      orcid: '',
+   189→      researchInterests: '',
+   190→      website: '',
+   191→      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+   192→      bio: '',
+   193→    });
+   194→  }, [userProfile.displayName.value, userProfile.email.value]);
+   195→
+   196→  // Check volume threshold on mount and periodically
+   197→  useEffect(() => {
+   198→    const check = () => {
+   199→      const volume = checkVolumeThreshold();
+   200→      setShowVolumeWarning(volume.shouldPush);
+   201→    };
+   202→    
+   203→    check();
+   204→    const interval = setInterval(check, 30000);
+   205→    return () => clearInterval(interval);
+   206→  }, [checkVolumeThreshold]);
+   207→
+   208→  const statCards: StatCardConfig[] = [
+   209→    { key: 'activeJobs', icon: '⚡', color: 'text-blue-500', route: '/compute' },
+   210→    { key: 'storageUsed', icon: '💾', color: 'text-green-500', route: '/data' },
+   211→    { key: 'apiCallsToday', icon: '🔌', color: 'text-purple-500', route: '/connectors' },
+   212→    { key: 'collaborators', icon: '👥', color: 'text-orange-500', route: '/collaboration' },
+   213→  ];
+   214→
+   215→  // Use realistic activities if no real activities exist
+   216→  const displayActivities = activities.length > 0 ? activities : generateRealisticActivities();
+   217→
+   218→  const formatTimeAgo = (date: Date) => {
+   219→    const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+   220→    if (minutes < 1) return 'Just now';
+   221→    if (minutes < 60) return `${minutes}m ago`;
+   222→    const hours = Math.floor(minutes / 60);
+   223→    if (hours < 24) return `${hours}h ago`;
+   224→    return `${Math.floor(hours / 24)}d ago`;
+   225→  };
+   226→
+   227→  const getActivityIcon = (type: string) => {
+   228→    const icons: Record<string, string> = {
+   229→      search: '🔍', save: '⭐', export: '📤', job: '⚙️',
+   230→      collaboration: '👥', login: '🔑', download: '⬇️', upload: '⬆️',
+   231→      query: '🔎', compute: '🤖', connect: '✅', disconnect: '❌',
+   232→      create: '📄', delete: '🗑️'
+   233→    };
+   234→    return icons[type] || '📋';
+   235→  };
+   236→
+   237→  // Handle stat editing
+   238→  const startEditing = (key: string, currentValue: any) => {
+   239→    setEditingStat(key);
+   240→    setTempValue(String(currentValue));
+   241→  };
+   242→
+   243→  const saveStat = (key: string) => {
+   244→    const numValue = parseFloat(tempValue);
+   245→    if (!isNaN(numValue)) {
+   246→      updateDashboardStat(key as any, isNaN(numValue) ? tempValue : numValue);
+   247→      addActivity({
+   248→        type: 'update',
+   249→        message: createDynamicField(`Updated dashboard statistic: ${key}`),
+   250→        icon: '📊',
+   251→      });
+   252→    }
+   253→    setEditingStat(null);
+   254→  };
+   255→
+   256→  // Handle profile field updates
+   257→  const handleProfileChange = (field: keyof typeof userProfile, value: string) => {
+   258→    updateUserProfile(field, value);
+   259→  };
+   260→
+   261→  // Avatar upload handler
+   262→  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   263→    const file = e.target.files?.[0];
+   264→    if (file) {
+   265→      if (file.size > 2 * 1024 * 1024) {
+   266→        alert('File too large. Maximum size is 2MB.');
+   267→        return;
+   268→      }
+   269→      const reader = new FileReader();
+   270→      reader.onloadend = () => {
+   271→        setAvatarPreview(reader.result as string);
+   272→        addActivity({
+   273→          type: 'update',
+   274→          message: createDynamicField('Updated profile avatar'),
+   275→          icon: '🖼️',
+   276→        });
+   277→      };
+   278→      reader.readAsDataURL(file);
+   279→    }
+   280→  };
+   281→
+   282→  // Save avatar
+   283→  const saveAvatar = () => {
+   284→    setShowAvatarModal(false);
+   285→    // In production, this would upload to server
+   286→    localStorage.setItem('scihub_avatar', avatarPreview || '');
+   287→  };
+   288→
+   289→  // Save full profile
+   290→  const handleSaveFullProfile = async () => {
+   291→    setProfileSaving(true);
+   292→    try {
+   293→      await new Promise(resolve => setTimeout(resolve, 1500));
+   294→      
+   295→      // Update store values
+   296→      updateUserProfile('displayName', fullProfile.displayName);
+   297→      updateUserProfile('email', fullProfile.email);
+   298→      
+   299→      // Store extended profile in localStorage
+   300→      localStorage.setItem('scihub_full_profile', JSON.stringify(fullProfile));
+   301→      
+   302→      addActivity({
+   303→        type: 'save',
+   304→        message: createDynamicField('Updated complete profile'),
+   305→        icon: '👤',
+   306→      });
+   307→      
+   308→      setProfileSaved(true);
+   309→      setTimeout(() => {
+   310→        setProfileSaved(false);
+   311→        setShowFullProfileModal(false);
+   312→      }, 2000);
+   313→    } finally {
+   314→      setProfileSaving(false);
+   315→    }
+   316→  };
+   317→
+   318→  // Simulate database push
+   319→  const handlePushToDatabase = async () => {
+   320→    setIsPushing(true);
+   321→    try {
+   322→      await new Promise(resolve => setTimeout(resolve, 2500));
+   323→      const result = useDynamicStore.getState().simulatePushToDatabase();
+   324→      setShowVolumeWarning(false);
+   325→      addActivity({
+   326→        type: 'export',
+   327→        message: createDynamicField(`Data pushed to ${dbConfig.provider} successfully`),
+   328→        icon: '💾',
+   329→      });
+   330→    } catch (error) {
+   331→      console.error('Push failed:', error);
+   332→    } finally {
+   333→      setIsPushing(false);
+   334→    }
+   335→  };
+   336→
+   337→  const dirtyCount = getDirtyFieldsCount();
+   338→
+   339→  // Loading skeleton
+   340→  if (isLoading) {
+   341→    return (
+   342→      <div className="min-h-screen bg-background p-6">
+   343→        <div className="animate-pulse space-y-6">
+   344→          <div className="flex gap-4">
+   345→            <div className="w-16 h-16 bg-muted rounded-full" />
+   346→            <div className="space-y-2 flex-1">
+   347→              <div className="h-8 w-48 bg-muted rounded" />
+   348→              <div className="h-4 w-64 bg-muted rounded" />
+   349→            </div>
+   350→          </div>
+   351→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+   352→            {[...Array(4)].map((_, i) => (
+   353→              <div key={i} className="h-32 bg-muted rounded-lg" />
+   354→            ))}
+   355→          </div>
+   356→          <div className="h-96 bg-muted rounded-lg" />
+   357→        </div>
+   358→      </div>
+   359→    );
+   360→  }
+   361→
+   362→  return (
+   363→    <div className="min-h-screen bg-background p-6">
+   364→      {/* Header with Profile Summary */}
+   365→      <div className="mb-8">
+   366→        <div className="flex items-start justify-between">
+   367→          <div className="flex items-start gap-4">
+   368→            {/* Avatar with Upload */}
+   369→            <button 
+   370→              onClick={() => setShowAvatarModal(true)}
+   371→              className="relative group"
+   372→            >
+   373→              <div className={`w-16 h-16 rounded-full flex items-center justify-center text-2xl font-bold transition-all group-hover:ring-4 group-hover:ring-cyan-500/30 ${
+   374→                avatarPreview 
+   375→                  ? 'bg-cover bg-center' 
+   376→                  : 'bg-gradient-to-br from-cyan-400 to-teal-500 text-white'
+   377→              }`}
+   378→              style={avatarPreview ? { backgroundImage: `url(${avatarPreview})` } : {}}
+   379→              >
+   380→                {!avatarPreview && userProfile.displayName.value.charAt(0).toUpperCase()}
+   381→              </div>
+   382→              <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-cyan-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+   383→                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+   384→                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+   385→                </svg>
+   386→              </div>
+   387→            </button>
+   388→
+   389→            <div>
+   390→              <h1 className="text-3xl font-bold text-foreground">
+   391→                Welcome back, {userProfile.displayName.value || 'Researcher'}! 👋
+   392→              </h1>
+   393→              <p className="text-muted-foreground mt-1">
+   394→                Here's what's happening with your research today.
+   395→              </p>
+   396→              <div className="flex gap-2 mt-2">
+   397→                <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+   398→                  ● Pro Plan Active
+   399→                </Badge>
+   400→                <Badge variant="outline">
+   401→                  Since {new Date().toLocaleDateString()}
+   402→                </Badge>
+   403→              </div>
+   404→            </div>
+   405→          </div>
+   406→          
+   407→          {/* Quick Profile Edit */}
+   408→          <Card className="w-80">
+   409→            <CardContent className="p-4">
+   410→              <div className="space-y-3">
+   411→                <div>
+   412→                  <label className="text-xs text-muted-foreground">Display Name</label>
+   413→                  <Input
+   414→                    value={userProfile.displayName.value}
+   415→                    onChange={(e) => handleProfileChange('displayName', e.target.value)}
+   416→                    className={`text-sm h-8 ${userProfile.displayName.isDirty ? 'border-orange-400' : ''}`}
+   417→                    placeholder="Enter your name..."
+   418→                  />
+   419→                  {userProfile.displayName.isDirty && (
+   420→                    <Badge variant="secondary" className="mt-1 text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">Modified</Badge>
+   421→                  )}
+   422→                </div>
+   423→                <div>
+   424→                  <label className="text-xs text-muted-foreground">Email</label>
+   425→                  <Input
+   426→                    type="email"
+   427→                    value={userProfile.email.value}
+   428→                    onChange={(e) => handleProfileChange('email', e.target.value)}
+   429→                    className={`text-sm h-8 ${userProfile.email.isDirty ? 'border-orange-400' : ''}`}
+   430→                    placeholder="your@email.com"
+   431→                  />
+   432→                </div>
+   433→                <Button 
+   434→                  variant="outline" 
+   435→                  size="sm" 
+   436→                  className="w-full"
+   437→                  onClick={() => setShowFullProfileModal(true)}
+   438→                >
+   439→                  ✏️ Edit Full Profile
+   440→                </Button>
+   441→              </div>
+   442→            </CardContent>
+   443→          </Card>
+   444→        </div>
+   445→
+   446→        {/* Dirty Fields Indicator */}
+   447→        {dirtyCount > 0 && (
+   448→          <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg flex items-center justify-between animate-pulse">
+   449→            <span className="text-sm text-orange-700 dark:text-orange-300">
+   450→              📝 You have {dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}
+   451→            </span>
+   452→            <div className="flex gap-2">
+   453→              <Button size="sm" variant="outline" onClick={() => useDynamicStore.getState().resetAllFields()}>
+   454→                Reset All
+   455→              </Button>
+   456→              <Button size="sm" onClick={handlePushToDatabase} disabled={isPushing}>
+   457→                {isPushing ? 'Saving...' : 'Save Changes'}
+   458→              </Button>
+   459→            </div>
+   460→          </div>
+   461→        )}
+   462→
+   463→        {/* Volume Warning */}
+   464→        {showVolumeWarning && dbConfig.enabled && (
+   465→          <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+   466→            <div className="flex items-center justify-between mb-3">
+   467→              <span className="font-medium text-yellow-800 dark:text-yellow-200">
+   468→                ⚠️ Data Volume Approaching Threshold
+   469→              </span>
+   470→              <Badge variant="secondary">{dbConfig.provider.toUpperCase()}</Badge>
+   471→            </div>
+   472→            <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+   473→              Your data is approaching the auto-push threshold. Consider pushing to your configured database.
+   474→            </p>
+   475→            <Button 
+   476→              size="sm" 
+   477→              onClick={handlePushToDatabase} 
+   478→              disabled={isPushing}
+   479→              className="w-full"
+   480→            >
+   481→              {isPushing ? '⏳ Pushing to Database...' : `🚀 Push to ${dbConfig.provider.toUpperCase()}`}
+   482→            </Button>
+   483→          </div>
+   484→        )}
+   485→      </div>
+   486→
+   487→      {/* Stats Grid - Dynamic & Editable */}
+   488→      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+   489→        {statCards.map((config) => {
+   490→          const stat = dashboardStats[config.key as keyof typeof dashboardStats];
+   491→          const numericValue = typeof stat.value === 'number' ? stat.value : parseFloat(String(stat.value));
+   492→          const change = Math.floor((Math.random() - 0.5) * 20);
+   493→
+   494→          return (
+   495→            <Link key={config.key} href={config.route}>
+   496→              <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer h-full group">
+   497→                <CardContent className="p-6">
+   498→                  <div className="flex items-center justify-between mb-4">
+   499→                    <span className="text-2xl group-hover:scale-110 transition-transform">{config.icon}</span>
+   500→                    <div className="flex items-center gap-2">
+   501→                      <Badge 
+   502→                        variant={change > 0 ? 'default' : 'secondary'}
+   503→                        className={`${change > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'} ${stat.isDirty ? 'bg-orange-500 text-white' : ''}`}
+   504→                      >
+   505→                        {stat.isDirty ? '✏️ Edited' : `${change > 0 ? '+' : ''}${change}%`}
+   506→                      </Badge>
+   507→                    </div>
+   508→                  </div>
+   509→                  
+   510→                  <p className="text-sm text-muted-foreground">{t(`dashboard.${config.key === 'activeJobs' ? 'active_jobs' : config.key === 'storageUsed' ? 'storage_used' : config.key === 'apiCallsToday' ? 'api_calls_today' : 'collaborators'}`)}</p>
+   511→                  
+   512→                  {editingStat === config.key ? (
+   513→                    <div className="flex items-center gap-2 mt-2">
+   514→                      <Input
+   515→                        value={tempValue}
+   516→                        onChange={(e) => setTempValue(e.target.value)}
+   517→                        onBlur={() => saveStat(config.key)}
+   518→                        onKeyDown={(e) => e.key === 'Enter' && saveStat(config.key)}
+   519→                        className={`font-bold text-xl h-8 ${config.color}`}
+   520→                        autoFocus
+   521→                      />
+   522→                    </div>
+   523→                  ) : (
+   524→                    <p 
+   525→                      className={`text-2xl font-bold ${config.color} cursor-pointer hover:underline`}
+   526→                      onClick={(e) => {
+   527→                        e.preventDefault();
+   528→                        startEditing(config.key, stat.value);
+   529→                      }}
+   530→                      title="Click to edit"
+   531→                    >
+   532→                      {stat.value}
+   533→                      {stat.isDirty && <span className="ml-1 text-xs">✏️</span>}
+   534→                    </p>
+   535→                  )}
+   536→                  
+   537→                  {/* Progress bar for visual effect */}
+   538→                  <Progress value={Math.min(100, numericValue % 100)} className="mt-3 h-1" />
+   539→                </CardContent>
+   540→              </Card>
+   541→            </Link>
+   542→          );
+   543→        })}
+   544→      </div>
+   545→
+   546→      {/* Main Content Grid */}
+   547→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+   548→        {/* Quick Actions - Dynamic Links */}
+   549→        <Card>
+   550→          <CardHeader>
+   551→            <CardTitle>⚡ Quick Actions</CardTitle>
+   552→          </CardHeader>
+   553→          <CardContent className="space-y-3">
+   554→            <Link href="/query">
+   555→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-cyan-50 hover:border-cyan-300 dark:hover:bg-cyan-950">
+   556→                🔍 New Search Query
+   557→              </Button>
+   558→            </Link>
+   559→            <Link href="/connectors">
+   560→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-950">
+   561→                🔗 Browse Connectors
+   562→              </Button>
+   563→            </Link>
+   564→            <Link href="/workspace">
+   565→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-purple-50 hover:border-purple-300 dark:hover:bg-purple-950">
+   566→                💻 Open Workspace IDE
+   567→              </Button>
+   568→            </Link>
+   569→            <Link href="/compute">
+   570→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-orange-50 hover:border-orange-300 dark:hover:bg-orange-950">
+   571→                ⚙️ Run Workflow
+   572→              </Button>
+   573→            </Link>
+   574→            <Link href="/datasets">
+   575→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-950">
+   576→                📊 Explore Datasets
+   577→              </Button>
+   578→            </Link>
+   579→            <Link href="/settings">
+   580→              <Button variant="outline" className="w-full justify-start gap-2">
+   581→                ⚙️ Settings
+   582→              </Button>
+   583→            </Link>
+   584→            
+   585→            {/* Export State Button */}
+   586→            <Button 
+   587→              variant="outline" 
+   588→              className="w-full justify-start gap-2 mt-4 border-dashed"
+   589→              onClick={() => {
+   590→                const stateJson = useDynamicStore.getState().exportState();
+   591→                const blob = new Blob([stateJson], { type: 'application/json' });
+   592→                const url = URL.createObjectURL(blob);
+   593→                const a = document.createElement('a');
+   594→                a.href = url;
+   595→                a.download = `scihub-export-${new Date().toISOString().split('T')[0]}.json`;
+   596→                a.click();
+   597→                URL.revokeObjectURL(url);
+   598→                
+   599→                addActivity({
+   600→                  type: 'export',
+   601→                  message: createDynamicField('Exported application state'),
+   602→                  icon: '📤',
+   603→                });
+   604→              }}
+   605→            >
+   606→              📥 Export State (JSON)
+   607→            </Button>
+   608→          </CardContent>
+   609→        </Card>
+   610→
+   611→        {/* Recent Activity Feed - Enhanced */}
+   612→        <Card className="lg:col-span-2">
+   613→          <CardHeader className="flex flex-row items-center justify-between">
+   614→            <div className="flex items-center gap-2">
+   615→              <CardTitle>📋 Recent Activity</CardTitle>
+   616→              <Badge variant="secondary">{displayActivities.length} events</Badge>
+   617→            </div>
+   618→            <div className="flex gap-2">
+   619→              <Button size="sm" variant="ghost" onClick={() => {
+   620→                // Simulate refresh
+   621→                addActivity({
+   622→                  type: 'sync',
+   623→                  message: createDynamicField('Activity feed refreshed'),
+   624→                  icon: '🔄',
+   625→                });
+   626→              }}>
+   627→                🔄 Refresh
+   628→              </Button>
+   629→              <Button size="sm" variant="ghost" onClick={clearActivities}>
+   630→                Clear All
+   631→              </Button>
+   632→            </div>
+   633→          </CardHeader>
+   634→          <CardContent>
+   635→            <div className="space-y-3 max-h-[500px] overflow-auto pr-2 custom-scrollbar">
+   636→              {displayActivities.length === 0 ? (
+   637→                <div className="text-center py-12 text-muted-foreground">
+   638→                  <div className="text-4xl mb-3">📭</div>
+   639→                  <p className="font-medium">No recent activity</p>
+   640→                  <p className="text-sm mt-1">Start exploring to see activity here!</p>
+   641→                  <Button className="mt-4" onClick={() => window.location.href = '/connectors'}>
+   642→                    Explore Connectors
+   643→                  </Button>
+   644→                </div>
+   645→              ) : (
+   646→                displayActivities.map((activity, index) => {
+   647→                  const act = 'message' in activity ? activity : { 
+   648→                    ...activity, 
+   649→                    message: { value: activity.message, isDirty: false } 
+   650→                  };
+   651→                  const msg = typeof act.message === 'string' ? act.message : act.message.value;
+   652→                  
+   653→                  return (
+   654→                    <div
+   655→                      key={act.id || index}
+   656→                      className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-all group cursor-pointer border border-transparent hover:border-border"
+   657→                    >
+   658→                      <div className="relative">
+   659→                        <span className="text-xl mt-0.5">{act.icon}</span>
+   660→                        <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-green-500 rounded-full border-2 border-background" />
+   661→                      </div>
+   662→                      <div className="flex-1 min-w-0">
+   663→                        <p className="text-sm text-foreground truncate group-hover:text-primary transition-colors font-medium">
+   664→                          {msg}
+   665→                          {'isDirty' in act.message && act.message.isDirty && (
+   666→                            <Badge variant="secondary" className="ml-2 text-xs">Modified</Badge>
+   667→                          )}
+   668→                        </p>
+   669→                        <div className="flex items-center gap-2 mt-1">
+   670→                          <p className="text-xs text-muted-foreground">
+   671→                            {formatTimeAgo(act.timestamp)}
+   672→                          </p>
+   673→                          {'details' in act && act.details && (
+   674→                            <>
+   675→                              <span className="text-muted-foreground">•</span>
+   676→                              <p className="text-xs text-cyan-600 dark:text-cyan-400">
+   677→                                {act.details}
+   678→                              </p>
+   679→                            </>
+   680→                          )}
+   681→                        </div>
+   682→                      </div>
+   683→                      
+   684→                      {/* Activity Action Buttons */}
+   685→                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+   686→                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="View details">
+   687→                          →
+   688→                        </Button>
+   689→                      </div>
+   690→                    </div>
+   691→                  );
+   692→                })
+   693→              )}
+   694→            </div>
+   695→            
+   696→            {displayActivities.length > 0 && (
+   697→              <div className="mt-4 pt-4 border-t">
+   698→                <Button variant="ghost" size="sm" className="w-full text-muted-foreground">
+   699→                  View All Activity →
+   700→                </Button>
+   701→              </div>
+   702→            )}
+   703→          </CardContent>
+   704→        </Card>
+   705→
+   706→        {/* System Status - Dynamic Health */}
+   707→        <Card className="lg:col-span-3">
+   708→          <CardHeader className="flex flex-row items-center justify-between">
+   709→            <CardTitle>🖥️ System Status</CardTitle>
+   710→            <Badge className="bg-green-500 text-white animate-pulse">
+   711→              ● All Systems Operational
+   712→            </Badge>
+   713→          </CardHeader>
+   714→          <CardContent>
+   715→            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+   716→              <StatusItem name="API Gateway" health={99} latency="12ms" />
+   717→              <StatusItem name="Data Lake" health={97} latency="34ms" />
+   718→              <StatusItem name="AETHEL AI" health={85} warning latency="89ms" />
+   719→              <StatusItem name="Compute Cluster" health={dashboardStats.systemHealth.value} latency="23ms" />
+   720→            </div>
+   721→            
+   722→            <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800">
+   723→              <div className="flex items-center justify-between">
+   724→                <div>
+   725→                  <span className="text-sm font-medium">Overall System Health</span>
+   726→                  <span className="text-xs text-muted-foreground ml-2 block sm:inline sm:ml-3">
+   727→                    Pro Tier • DuckDB Primary • Auto-scaling Enabled
+   728→                  </span>
+   729→                </div>
+   730→                <div className="flex items-center gap-3">
+   731→                  <Badge variant="default" className="bg-green-500 text-white">
+   732→                    {dashboardStats.systemHealth.value}% Healthy
+   733→                  </Badge>
+   734→                  {dbConfig.enabled && (
+   735→                    <Badge variant="outline" className="border-cyan-500 text-cyan-600 dark:text-cyan-400">
+   736→                      DB: {dbConfig.provider}
+   737→                    </Badge>
+   738→                  )}
+   739→                </div>
+   740→              </div>
+   741→              
+   742→              {/* Database Config Quick View */}
+   743→              {dbConfig.enabled && (
+   744→                <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800 text-xs text-muted-foreground">
+   745→                  <div className="flex flex-wrap gap-4">
+   746→                    <span>Auto-push threshold: {(dbConfig.autoPushThreshold.value / 1024 / 1024).toFixed(0)}MB</span>
+   747→                    {dbConfig.lastPush && (
+   748→                      <span>Last push: {formatTimeAgo(dbConfig.lastPush)}</span>
+   749→                    )}
+   750→                    <span>Uptime: 99.97%</span>
+   751→                    <span>Region: US-East-1</span>
+   752→                  </div>
+   753→                </div>
+   754→              )}
+   755→            </div>
+   756→          </CardContent>
+   757→        </Card>
+   758→      </div>
+   759→
+   760→      {/* ==================== MODALS ==================== */}
+   761→
+   762→      {/* Avatar Upload Modal */}
+   763→      <Dialog open={showAvatarModal} onOpenChange={setShowAvatarModal}>
+   764→        <DialogContent className="sm:max-w-md">
+   765→          <DialogHeader>
+   766→            <DialogTitle>🖼️ Update Profile Picture</DialogTitle>
+   767→            <DialogDescription>
+   768→              Choose a photo for your profile. JPG, PNG, or GIF (max 2MB).
+   769→            </DialogDescription>
+   770→          </DialogHeader>
+   771→          
+   772→          <div className="space-y-4 mt-4">
+   773→            <div className="flex justify-center">
+   774→              <label className="cursor-pointer group">
+   775→                <div className={`w-32 h-32 rounded-full flex items-center justify-center overflow-hidden border-4 border-dashed border-muted-foreground/25 group-hover:border-cyan-500 transition-colors ${
+   776→                  avatarPreview ? 'border-solid border-cyan-500' : ''
+   777→                }`}>
+   778→                  {avatarPreview ? (
+   779→                    <img src={avatarPreview} alt="Preview" className="w-full h-full object-cover" />
+   780→                  ) : (
+   781→                    <div className="text-center">
+   782→                      <svg className="w-8 h-8 mx-auto text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+   783→                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+   784→                      </svg>
+   785→                      <span className="text-xs text-muted-foreground mt-1 block">Upload</span>
+   786→                    </div>
+   787→                  )}
+   788→                </div>
+   789→                <input
+   790→                  type="file"
+   791→                  accept="image/*"
+   792→                  onChange={handleAvatarUpload}
+   793→                  className="hidden"
+   794→                />
+   795→              </label>
+   796→            </div>
+   797→            
+   798→            {avatarPreview && (
+   799→              <div className="text-center">
+   800→                <p className="text-sm text-green-600 dark:text-green-400">✓ Image selected</p>
+   801→              </div>
+   802→            )}
+   803→            
+   804→            <div className="flex gap-3 justify-end">
+   805→              <Button variant="outline" onClick={() => setShowAvatarModal(false)}>
+   806→                Cancel
+   807→              </Button>
+   808→              <Button 
+   809→                onClick={saveAvatar}
+   810→                disabled={!avatarPreview}
+   811→                className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white"
+   812→              >
+   813→                Save Avatar
+   814→              </Button>
+   815→            </div>
+   816→          </div>
+   817→        </DialogContent>
+   818→      </Dialog>
+   819→
+   820→      {/* Full Profile Edit Modal */}
+   821→      <Dialog open={showFullProfileModal} onOpenChange={setShowFullProfileModal}>
+   822→        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+   823→          <DialogHeader>
+   824→            <DialogTitle>👤 Edit Complete Profile</DialogTitle>
+   825→            <DialogDescription>
+   826→              Update your professional information and research interests.
+   827→            </DialogDescription>
+   828→          </DialogHeader>
+   829→          
+   830→          <form onSubmit={(e) => { e.preventDefault(); handleSaveFullProfile(); }} className="space-y-4 mt-4">
+   831→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   832→              <div>
+   833→                <label className="block text-sm font-medium mb-1">Display Name *</label>
+   834→                <Input
+   835→                  value={fullProfile.displayName}
+   836→                  onChange={(e) => setFullProfile({...fullProfile, displayName: e.target.value})}
+   837→                  required
+   838→                />
+   839→              </div>
+   840→              <div>
+   841→                <label className="block text-sm font-medium mb-1">Email *</label>
+   842→                <Input
+   843→                  type="email"
+   844→                  value={fullProfile.email}
+   845→                  onChange={(e) => setFullProfile({...fullProfile, email: e.target.value})}
+   846→                  required
+   847→                />
+   848→              </div>
+   849→            </div>
+   850→
+   851→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   852→              <div>
+   853→                <label className="block text-sm font-medium mb-1">Institution/Organization</label>
+   854→                <Input
+   855→                  value={fullProfile.institution}
+   856→                  onChange={(e) => setFullProfile({...fullProfile, institution: e.target.value})}
+   857→                  placeholder="MIT, Stanford, NASA..."
+   858→                />
+   859→              </div>
+   860→              <div>
+   861→                <label className="block text-sm font-medium mb-1">ORCID ID</label>
+   862→                <Input
+   863→                  value={fullProfile.orcid}
+   864→                  onChange={(e) => setFullProfile({...fullProfile, orcid: e.target.value})}
+   865→                  placeholder="0000-0000-0000-0000"
+   866→                />
+   867→              </div>
+   868→            </div>
+   869→
+   870→            <div>
+   871→              <label className="block text-sm font-medium mb-1">Research Interests</label>
+   872→              <Input
+   873→                value={fullProfile.researchInterests}
+   874→                onChange={(e) => setFullProfile({...fullProfile, researchInterests: e.target.value})}
+   875→                placeholder="Machine Learning, Genomics, Drug Discovery..."
+   876→              />
+   877→            </div>
+   878→
+   879→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   880→              <div>
+   881→                <label className="block text-sm font-medium mb-1">Website</label>
+   882→                <Input
+   883→                  type="url"
+   884→                  value={fullProfile.website}
+   885→                  onChange={(e) => setFullProfile({...fullProfile, website: e.target.value})}
+   886→                  placeholder="https://yourlab.edu"
+   887→                />
+   888→              </div>
+   889→              <div>
+   890→                <label className="block text-sm font-medium mb-1">Timezone</label>
+   891→                <Select value={fullProfile.timezone} onValueChange={(value) => setFullProfile({...fullProfile, timezone: value})}>
+   892→                  <SelectTrigger>
+   893→                    <SelectValue />
+   894→                  </SelectTrigger>
+   895→                  <SelectContent>
+   896→                    <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+   897→                    <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+   898→                    <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+   899→                    <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+   900→                    <SelectItem value="Europe/London">London (GMT)</SelectItem>
+   901→                    <SelectItem value="Europe/Berlin">Central European (CET)</SelectItem>
+   902→                    <SelectItem value="Asia/Tokyo">Japan (JST)</SelectItem>
+   903→                    <SelectItem value="Asia/Shanghai">China (CST)</SelectItem>
+   904→                  </SelectContent>
+   905→                </Select>
+   906→              </div>
+   907→            </div>
+   908→
+   909→            <div>
+   910→              <label className="block text-sm font-medium mb-1">Bio</label>
+   911→              <textarea
+   912→                value={fullProfile.bio}
+   913→                onChange={(e) => setFullProfile({...fullProfile, bio: e.target.value})}
+   914→                placeholder="Tell us about your research..."
+   915→                rows={3}
+   916→                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm resize-none focus:ring-2 focus:ring-ring"
+   917→                maxLength={500}
+   918→              />
+   919→              <p className="text-xs text-muted-foreground mt-1">{fullProfile.bio.length}/500 characters</p>
+   920→            </div>
+   921→
+   922→            <div className="flex gap-3 justify-end pt-4">
+   923→              <Button type="button" variant="outline" onClick={() => setShowFullProfileModal(false)}>
+   924→                Cancel
+   925→              </Button>
+   926→              <Button 
+   927→                type="submit" 
+   928→                disabled={profileSaving || profileSaved}
+   929→                className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white min-w-[120px]"
+   930→              >
+   931→                {profileSaving ? (
+   932→                  <>
+   933→                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+   934→                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+   935→                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+   936→                    </svg>
+   937→                    Saving...
+   938→                  </>
+   939→                ) : profileSaved ? (
+   940→                  '✓ Saved!'
+   941→                ) : (
+   942→                  'Save Profile'
+   943→                )}
+   944→              </Button>
+   945→            </div>
+   946→          </form>
+   947→        </DialogContent>
+   948→      </Dialog>
+   949→
+   950→      {/* Custom scrollbar styles */}
+   951→      <style jsx>{`
+   952→        .custom-scrollbar::-webkit-scrollbar {
+   953→          width: 6px;
+   954→        }
+   955→        .custom-scrollbar::-webkit-scrollbar-track {
+   956→          background: transparent;
+   957→        }
+   958→        .custom-scrollbar::-webkit-scrollbar-thumb {
+   959→          background: hsl(var(--muted));
+   960→          border-radius: 3px;
+   961→        }
+   962→        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+   963→          background: hsl(var(--muted-foreground));
+   964→        }
+   965→      `}</style>
+   966→    </div>
+   967→  );
+   968→}
+   969→
+   970→// ============ SUB-COMPONENTS ============
+   971→
+   972→function StatusItem({ name, health, warning, latency }: { name: string; health: number; warning?: boolean; latency?: string }) {
+   973→  return (
+   974→    <div className="space-y-2 p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+   975→      <div className="flex justify-between text-sm items-center">
+   976→        <span className="font-medium">{name}</span>
+   977→        <div className="flex items-center gap-2">
+   978→          {latency && (
+   979→            <span className="text-xs text-muted-foreground">{latency}</span>
+   980→          )}
+   981→          <span className={warning ? 'text-yellow-500' : 'text-green-500'}>
+   982→            {health >= 95 ? '● Operational' : health >= 80 ? '◐ Degraded': '○ Critical'}
+   983→          </span>
+   984→        </div>
+   985→      </div>
+   986→      <Progress value={health} className={`h-2 ${warning ? '[&>div]:bg-yellow-500' : '[&>div]:bg-green-500'}`} />
+   987→      <div className="flex justify-between text-xs text-muted-foreground">
+   988→        <span>{health}% uptime</span>
+   989→        <span>{health >= 95 ? 'Excellent' : health >= 80 ? 'Good' : 'Needs Attention'}</span>
+   990→      </div>
+   991→    </div>
+   992→  );
+   993→}
+   994→
