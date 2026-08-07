@@ -12,12 +12,12 @@ export const localeNames: Record<Locale, string> = {
   es: 'Español',
   de: 'Deutsch',
   fr: 'Français',
-  zh: '中文',
-  ja: '日本語',
+  zh: 'Chinese',
+  ja: 'Japanese',
   pt: 'Português',
-  ar: 'العربية',
-  hi: 'हिन्दी',
-  ko: '한국어',
+  ar: 'Arabic',
+  hi: 'Hindi',
+  ko: 'Korean',
 };
 
 export const localeFlags: Record<Locale, string> = {

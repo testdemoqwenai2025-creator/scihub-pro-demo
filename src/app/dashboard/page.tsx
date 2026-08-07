@@ -102,7 +102,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '2',
-      type: 'connect',
+      type: 'save',
       message: 'Connected to CrossRef API successfully',
       icon: '📚',
       timestamp: new Date(now.getTime() - 15 * 60000),
@@ -111,7 +111,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '3',
-      type: 'execute',
+      type: 'compute',
       message: 'Executed Python analysis script',
       icon: '💻',
       timestamp: new Date(now.getTime() - 45 * 60000),
@@ -138,7 +138,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '6',
-      type: 'collaborate',
+      type: 'collaboration',
       message: 'Shared "ML Drug Discovery" project with Dr. Sarah Chen',
       icon: '👥',
       timestamp: new Date(now.getTime() - 2 * 3600000),
@@ -147,7 +147,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '7',
-      type: 'achievement',
+      type: 'save',
       message: '🏆 Unlocked badge: "Data Explorer" - Queried 1000+ APIs',
       icon: '🏆',
       timestamp: new Date(now.getTime() - 3 * 3600000),
@@ -156,7 +156,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '8',
-      type: 'connect',
+      type: 'save',
       message: 'Connected to PubMed Central API',
       icon: '📚',
       timestamp: new Date(now.getTime() - 4 * 3600000),
@@ -174,7 +174,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '10',
-      type: 'execute',
+      type: 'compute',
       message: 'Completed R statistical analysis pipeline',
       icon: '📊',
       timestamp: new Date(now.getTime() - 6 * 3600000),
@@ -183,7 +183,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '11',
-      type: 'system',
+      type: 'job',
       message: 'Scheduled backup completed successfully',
       icon: '🔄',
       timestamp: new Date(now.getTime() - 8 * 3600000),
@@ -192,7 +192,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '12',
-      type: 'collaborate',
+      type: 'collaboration',
       message: 'Dr. James Wilson commented on your analysis',
       icon: '💬',
       timestamp: new Date(now.getTime() - 10 * 3600000),
@@ -201,7 +201,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '13',
-      type: 'achievement',
+      type: 'save',
       message: '🎯 Milestone: 50 days research streak!',
       icon: '🎯',
       timestamp: new Date(now.getTime() - 12 * 3600000),
@@ -210,7 +210,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '14',
-      type: 'system',
+      type: 'job',
       message: 'New connector available: arXiv Physics',
       icon: '✨',
       timestamp: new Date(now.getTime() - 18 * 3600000),
@@ -228,7 +228,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '16',
-      type: 'execute',
+      type: 'compute',
       message: 'Launched GPU-accelerated training job',
       icon: '🤖',
       timestamp: new Date(now.getTime() - 28 * 3600000),
@@ -246,7 +246,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '18',
-      type: 'connect',
+      type: 'save',
       message: 'OAuth token refreshed for GitHub integration',
       icon: '🔐',
       timestamp: new Date(now.getTime() - 36 * 3600000),
@@ -255,7 +255,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '19',
-      type: 'system',
+      type: 'job',
       message: 'Storage optimization completed',
       icon: '🗜️',
       timestamp: new Date(now.getTime() - 48 * 3600000),
@@ -264,7 +264,7 @@ const generateRichActivities = (): ActivityItem[] => {
     },
     {
       id: '20',
-      type: 'achievement',
+      type: 'save',
       message: '🌟 New level: "Research Pro" - Level 12',
       icon: '⭐',
       timestamp: new Date(now.getTime() - 72 * 3600000),
@@ -492,8 +492,8 @@ export default function DashboardPage() {
   useEffect(() => {
     const possibleActivities = [
       { type: 'query', message: `Searched "${['protein folding', 'neural networks', 'climate data', 'genomics'][Math.floor(Math.random() * 4)]}"`, icon: '🔍', details: 'Auto-refreshed results' },
-      { type: 'connect', message: 'API health check passed', icon: '✅', details: 'All endpoints responding' },
-      { type: 'system', message: 'Cache cleared for optimal performance', icon: '🧹', details: 'Freed 12MB memory' },
+      { type: 'save', message: 'API health check passed', icon: '✅', details: 'All endpoints responding' },
+      { type: 'job', message: 'Cache cleared for optimal performance', icon: '🧹', details: 'Freed 12MB memory' },
     ];
     
     const interval = setInterval(() => {
@@ -591,7 +591,7 @@ export default function DashboardPage() {
     setAvatarPreview(null);
     localStorage.setItem('user-avatar', emoji);
     addActivity({
-      type: 'profile',
+      type: 'save',
       message: createDynamicField(`Updated profile avatar to ${emoji}`),
       icon: emoji,
     });
@@ -617,7 +617,7 @@ export default function DashboardPage() {
     if (!isNaN(numValue)) {
       updateDashboardStat(key as any, isNaN(numValue) ? tempValue : numValue);
       addActivity({
-        type: 'update',
+        type: 'save',
         message: createDynamicField(`Updated dashboard statistic: ${key}`),
         icon: '📊',
       });
@@ -646,7 +646,7 @@ export default function DashboardPage() {
         setSelectedEmojiAvatar('');
         localStorage.setItem('user-avatar', result);
         addActivity({
-          type: 'update',
+          type: 'save',
           message: createDynamicField('Updated profile picture'),
           icon: '🖼️',
         });
@@ -1302,9 +1302,13 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 filteredActivities.slice(0, visibleActivities).map((activity, index) => {
-                  const act = 'message' in activity ? activity : { 
-                    ...activity, 
-                    message: { value: activity.message, isDirty: false } 
+                  // Handle both plain objects and DynamicField-wrapped objects
+                  const activityObj = typeof activity === 'object' && 'message' in activity && 
+                    typeof (activity as any).message !== 'string' ? activity as any : activity;
+                  
+                  const act = typeof activityObj.message === 'string' ? activityObj : { 
+                    ...activityObj, 
+                    message: { value: activityObj.message, isDirty: false } 
                   };
                   const msg = typeof act.message === 'string' ? act.message : act.message.value;
                   const isExpanded = expandedActivity === act.id;

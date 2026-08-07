@@ -326,6 +326,91 @@ const CONNECTORS: ConnectorConfig[] = [
       'E-learning courses',
       'API integration'
     ]
+  },
+
+  // ============ AI/ML STRUCTURAL BIOLOGY (NEW - AlphaFold) ============
+  {
+    id: 'alphafold',
+    name: 'AlphaFold DB (Google DeepMind)',
+    category: 'biological',
+    icon: '🧬',
+    description: 'Revolutionary AI-powered protein structure prediction database by Google DeepMind. Provides highly accurate 3D protein structure predictions for nearly all cataloged proteins. Free access with no API key required for research use.',
+    baseUrl: 'https://alphafold.ebi.ac.uk/api',
+    documentationUrl: 'https://alphafold.ebi.ac.uk/faq',
+    tier: 'free',
+    freeRateLimit: 'No strict limit (polite use recommended)',
+    features: [
+      '3D protein structure predictions',
+      'Confidence scores (pLDDT)',
+      'Multiple sequence alignments (MSA)',
+      'PDB file downloads',
+      'Structure visualization',
+      'UniProt ID lookup',
+      'Batch predictions available',
+      'Predicted Aligned Error (PAE) data'
+    ],
+    premiumFeatures: [
+      'Higher rate limits for bulk queries',
+      'Priority API access',
+      'Custom model training data access'
+    ],
+    authRequired: false,
+    authType: 'none',
+    totalRecords: '200M+ protein structures (complete proteomes)',
+    subscriptionRequired: false,
+    scientificImpact: 'Nobel Prize-level breakthrough in structural biology (2024). Reduces protein structure determination from months to minutes.'
+  },
+  {
+    id: 'esm-fold',
+    name: 'ESM-Fold (Meta AI)',
+    category: 'biological',
+    icon: '🔮',
+    description: 'Meta\'s evolutionary scale modeling for protein structure prediction. Lightning-fast inference (up to 60x faster than AlphaFold) with competitive accuracy. Ideal for high-throughput screening and large-scale proteome analysis.',
+    baseUrl: 'https://api.esmatlas.com/foldSequence/v1/',
+    documentationUrl: 'https://esmatlas.com/resources',
+    tier: 'free',
+    freeRateLimit: 'No strict limit (rate-limited by server capacity)',
+    features: [
+      'Ultra-fast structure prediction',
+      'Single sequence input (no MSA needed)',
+      'Real-time prediction API',
+      'PDB format output',
+      'Confidence metrics',
+      'Batch processing support',
+      'Open-source model weights'
+    ],
+    authRequired: false,
+    authType: 'none',
+    totalRecords: '600M+ metagenomic proteins predicted',
+    scientificImpact: 'Breakthrough speed advantage for drug discovery pipelines and large-scale structural genomics.'
+  },
+  {
+    id: 'rosettafold',
+    name: 'RoseTTAFold (Baker Lab)',
+    category: 'biological',
+    icon: '🔬',
+    description: 'Three-track neural network for protein structure prediction from the David Baker lab. Specializes in protein-protein complexes and protein-RNA interactions. Open-source implementation available.',
+    baseUrl: 'https://robetta.bakerlab.org/',
+    documentationUrl: 'https://github.com/RosettaCommons/RoseTTAFold',
+    tier: 'free',
+    freeRateLimit: 'Limited by compute availability',
+    features: [
+      'Protein complex prediction',
+      'Protein-RNA interaction modeling',
+      'Custom sequence design',
+      'Loop remodeling',
+      'Ligand docking interface',
+      'Free web server access'
+    ],
+    premiumFeatures: [
+      'Priority queue access',
+      'Custom training options',
+      'Enterprise deployment support'
+    ],
+    authRequired: false,
+    authType: 'none',
+    totalRecords: 'User-submitted predictions (on-demand)',
+    scientificImpact: 'Complementary to AlphaFold for multi-chain assemblies and non-standard residues.'
   }
 ];
 
@@ -410,7 +495,7 @@ export async function GET(request: NextRequest) {
         success: false,
         error: `Connector '${id}' not found`,
         availableIds: CONNECTORS.map(c => c.id)
-      }, 404);
+      }, { status: 404 });
     }
 
     return NextResponse.json({
@@ -456,7 +541,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           success: false,
           error: `Connector '${connectorId}' not found`
-        }, 404);
+        }, { status: 404 });
       }
 
       // Check if premium
@@ -480,7 +565,7 @@ export async function POST(request: NextRequest) {
             submitEndpoint: '/api/subscription',
             submitMethod: 'POST'
           }
-        }, 402); // Payment Required
+        }, { status: 402 }); // Payment Required
       }
 
       return NextResponse.json({
@@ -499,7 +584,7 @@ export async function POST(request: NextRequest) {
       const connector = CONNECTORS.find(c => c.id === connectorId);
 
       if (!connector) {
-        return NextResponse.json({ success: false, error: 'Connector not found' }, 404);
+        return NextResponse.json({ success: false, error: 'Connector not found' }, { status: 404 });
       }
 
       // Simulate test (in production, actually ping the API)
@@ -513,13 +598,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: false, error: 'Invalid action' }, 400);
+    return NextResponse.json({ success: false, error: 'Invalid action' }, { status: 400 });
 
   } catch (error) {
     console.error('Connectors POST error:', error);
     return NextResponse.json({
       success: false,
       error: 'Internal server error'
-    }, 500);
+    }, { status: 500 });
   }
 }

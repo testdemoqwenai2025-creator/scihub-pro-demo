@@ -391,7 +391,7 @@ export async function POST(request: NextRequest) {
           role: data.role,
           tier: data.tier
         }
-      }, 400);
+      }, { status: 400 });
     }
 
     // Simulate processing (in production: save to DB, send email, etc.)
@@ -459,7 +459,7 @@ export async function POST(request: NextRequest) {
         email: 'support@scihub.pro',
         subject: 'Subscription Request Issue'
       }
-    }, 500);
+    }, { status: 500 });
   }
 }
 

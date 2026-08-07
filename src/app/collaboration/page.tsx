@@ -123,6 +123,7 @@ export default function CollaborationPage() {
       title: 'New Project Created',
       message: `${userProfile.displayName.value} created "${newProjectName}"`,
       priority: 'medium',
+      read: false,
     });
 
     showSuccessToast('Project Created!', `"${newProjectName}" is ready for collaboration`);
@@ -148,6 +149,7 @@ export default function CollaborationPage() {
       projectId: selectedProject,
       tags: newDiscussionTags.split(',').map(t => t.trim()).filter(Boolean),
       replies: [],
+      replyCount: 0,
     });
 
     addActivity({
@@ -172,6 +174,7 @@ export default function CollaborationPage() {
     addReply(discussionId, {
       authorId: teamMembers[0]?.id || 'member-001',
       content: text,
+      reactions: {},
     });
 
     setReplyTexts({ ...replyTexts, [discussionId]: '' });
@@ -790,7 +793,7 @@ export default function CollaborationPage() {
                       <h3 className="font-semibold">{member.name}</h3>
                       <p className="text-sm text-muted-foreground">{member.role}</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        {member.institution}
+                        {member.expertise.slice(0, 2).join(' • ')} • {member.publicationsCount} publications
                       </p>
                     </div>
                   </div>

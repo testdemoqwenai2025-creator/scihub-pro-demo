@@ -16,7 +16,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
-import { useDynamicStore } from '@/store/useDynamicStore';
+import { useDynamicStore, createDynamicField } from '@/store/useDynamicStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -589,7 +589,6 @@ export default function ConnectorsPage() {
     connectors,
     toggleConnector,
     addActivity,
-    createDynamicField,
   } = useDynamicStore();
 
   // UI State
@@ -694,7 +693,7 @@ export default function ConnectorsPage() {
       setTimeout(() => {
         setConnectionState(prev => ({ ...prev, [connector.id]: true }));
         addActivity({
-          type: 'create',
+          type: 'save',
           message: createDynamicField(`Connected to ${connector.name}`),
           icon: connector.icon,
         });
@@ -704,7 +703,7 @@ export default function ConnectorsPage() {
     } else {
       setConnectionState(prev => ({ ...prev, [connector.id]: false }));
       addActivity({
-        type: 'delete',
+        type: 'save',
         message: createDynamicField(`Disconnected from ${connector.name}`),
         icon: connector.icon,
       });
@@ -725,7 +724,7 @@ export default function ConnectorsPage() {
       if (result.success || Math.random() > 0.2) {
         const latency = Math.floor(Math.random() * 200 + 50);
         addActivity({
-          type: 'sync',
+          type: 'query',
           message: createDynamicField(`${connector.name}: Connection successful! Latency: ${latency}ms`),
           icon: '✅',
         });
@@ -735,7 +734,7 @@ export default function ConnectorsPage() {
       }
     } catch {
       addActivity({
-        type: 'error',
+        type: 'job',
         message: createDynamicField(`${connector.name}: Test failed - using fallback mode`),
         icon: '⚠️',
       });
@@ -772,7 +771,7 @@ export default function ConnectorsPage() {
       if (result.success || true) {
         setSubmitSuccess(true);
         addActivity({
-          type: 'create',
+          type: 'collaboration',
           message: createDynamicField(`Subscription request for ${selectedPremiumConnector?.name}`),
           icon: '⭐',
         });

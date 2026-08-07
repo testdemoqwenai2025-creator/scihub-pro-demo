@@ -717,16 +717,16 @@ export default function Home() {
                       </div>
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <Icons.Check className="w-4 h-4 text-cyan-400" /> All languages supported
+                          <Icons.Check /> All languages supported
                         </div>
                         <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <Icons.Check className="w-4 h-4 text-cyan-400" /> Built-in version control
+                          <Icons.Check /> Built-in version control
                         </div>
                         <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <Icons.Check className="w-4 h-4 text-cyan-400" /> One-click deployment
+                          <Icons.Check /> One-click deployment
                         </div>
                         <div className="flex items-center gap-2 text-sm text-slate-300">
-                          <Icons.Check className="w-4 h-4 text-cyan-400" /> AI-assisted workflows
+                          <Icons.Check /> AI-assisted workflows
                         </div>
                       </div>
                     </div>
@@ -763,7 +763,7 @@ export default function Home() {
                     <h3 className="font-semibold text-lg text-white mb-2 group-hover:text-cyan-400 transition-colors">{feature.title}</h3>
                     <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
                     <div className="mt-4 flex items-center gap-1 text-cyan-400 text-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                      Learn more <Icons.ArrowRight className="w-4 h-4" />
+                      Learn more <Icons.ArrowRight />
                     </div>
                   </CardContent>
                 </Card>
@@ -797,7 +797,7 @@ export default function Home() {
                 
                 <div className="text-center">
                   <div className="inline-flex items-center justify-center w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500/20 to-teal-500/20 border border-cyan-500/30 mb-4 relative">
-                    <step.icon className="text-cyan-400" />
+                    <span className="text-cyan-400 flex items-center justify-center w-full h-full"><step.icon /></span>
                     <span className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-cyan-500 text-white text-sm font-bold flex items-center justify-center">
                       {step.step}
                     </span>
@@ -881,7 +881,7 @@ export default function Home() {
                   <ul className="space-y-3 mb-6">
                     {tier.features.map((feature, j) => (
                       <li key={j} className="flex items-start gap-2 text-sm">
-                        <Icons.Check className="w-4 h-4 text-cyan-400 mt-0.5 shrink-0" />
+                        <Icons.Check />
                         <span className={tier.highlighted ? 'text-slate-200' : 'text-slate-400'}>{feature}</span>
                       </li>
                     ))}
@@ -920,7 +920,7 @@ export default function Home() {
                 <CardContent className="p-6">
                   <div className="flex gap-1 mb-4">
                     {[...Array(5)].map((_, j) => (
-                      <Icons.Star key={j} className="w-4 h-4 text-yellow-500 fill-yellow-500" />
+                      <span key={j} className="w-4 h-4 text-yellow-500 flex items-center justify-center"><Icons.Star /></span>
                     ))}
                   </div>
                   <blockquote className="text-slate-300 text-sm leading-relaxed mb-6 italic">
@@ -974,7 +974,7 @@ export default function Home() {
                   >
                     {waitlistLoading ? (
                       <>
-                        <Icons.Loader2 className="mr-2 animate-spin" />
+                        <Icons.Loader2 />
                         Joining...
                       </>
                     ) : (
@@ -988,7 +988,7 @@ export default function Home() {
               ) : (
                 <div className="max-w-md mx-auto p-6 bg-green-500/10 border border-green-500/30 rounded-lg">
                   <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                    <Icons.Check className="w-6 h-6 text-green-400" />
+                    <Icons.Check />
                   </div>
                   <h3 className="text-xl font-semibold text-green-400 mb-2">You're on the list! 🎉</h3>
                   <p className="text-slate-400 text-sm">We'll notify you when SciHub Pro launches. Check your inbox for a confirmation.</p>
@@ -1069,7 +1069,7 @@ export default function Home() {
               </ul>
               <h4 className="font-semibold text-white mt-6 mb-4">Contact</h4>
               <a href="mailto:testdemoqwenai2025@gmail.com" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors flex items-center gap-2">
-                <Icons.Mail className="w-4 h-4" />
+                <Icons.Mail />
                 testdemoqwenai2025@gmail.com
               </a>
             </div>
@@ -1099,7 +1099,7 @@ export default function Home() {
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-900/20 to-teal-900/20" />
             <div className="text-center z-10">
               <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 flex items-center justify-center cursor-pointer hover:scale-110 transition-transform">
-                <Icons.Play className="w-8 h-8 text-white ml-1" />
+                <Icons.Play />
               </div>
               <p className="text-white font-medium">Demo Video Coming Soon</p>
               <p className="text-slate-400 text-sm mt-2">Full product walkthrough will be available at launch</p>
@@ -1230,7 +1230,7 @@ export default function Home() {
                 >
                   {earlyAccessLoading ? (
                     <>
-                      <Icons.Loader2 className="mr-2 animate-spin" />
+                      <Icons.Loader2 />
                       Submitting...
                     </>
                   ) : (
@@ -1242,7 +1242,7 @@ export default function Home() {
           ) : (
             <div className="text-center py-8">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                <Icons.Check className="w-8 h-8 text-green-400" />
+                <Icons.Check />
               </div>
               <h3 className="text-2xl font-semibold text-green-400 mb-2">You're In! 🎉</h3>
               <p className="text-slate-400 mb-4">Welcome to the SciHub Pro beta program. We'll be in touch within 48 hours with next steps.</p>
@@ -1310,7 +1310,7 @@ export default function Home() {
               <div className="space-y-2">
                 {['First-mover advantage in unified science platform', 'Proprietary AETH-1 orchestration engine', 'Deep domain expertise vs generic tools', 'Viral adoption through academic networks', 'Multi-sided network effects'].map((advantage, i) => (
                   <div key={i} className="flex items-center gap-2 text-sm text-slate-300">
-                    <Icons.Check className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <Icons.Check />
                     {advantage}
                   </div>
                 ))}
@@ -1369,7 +1369,7 @@ export default function Home() {
               className="w-full border-slate-600 text-white hover:bg-slate-800 h-12"
               onClick={() => { alert('GitHub Sign-In coming soon! For now, use email signup.'); }}
             >
-              <Icons.Github className="w-5 h-5 mr-2" />
+              <Icons.Github />
               Continue with GitHub
             </Button>
 
@@ -1416,11 +1416,11 @@ export default function Home() {
             <div className="bg-gradient-to-r from-cyan-900/30 to-teal-900/30 rounded-lg p-4 border border-cyan-500/20">
               <h4 className="font-semibold text-white mb-2">Pro Trial Includes:</h4>
               <ul className="space-y-1 text-sm text-slate-300">
-                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Unlimited private projects</li>
-                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> 100 hours advanced compute/month</li>
-                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Priority support</li>
-                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> AI-powered insights</li>
-                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Team collaboration (up to 10 members)</li>
+                <li className="flex items-center gap-2"><Icons.Check /> Unlimited private projects</li>
+                <li className="flex items-center gap-2"><Icons.Check /> 100 hours advanced compute/month</li>
+                <li className="flex items-center gap-2"><Icons.Check /> Priority support</li>
+                <li className="flex items-center gap-2"><Icons.Check /> AI-powered insights</li>
+                <li className="flex items-center gap-2"><Icons.Check /> Team collaboration (up to 10 members)</li>
               </ul>
             </div>
 
@@ -1670,7 +1670,7 @@ export default function Home() {
                 >
                   {enterpriseLoading ? (
                     <>
-                      <Icons.Loader2 className="mr-2 animate-spin" />
+                      <Icons.Loader2 />
                       Submitting...
                     </>
                   ) : (
@@ -1682,7 +1682,7 @@ export default function Home() {
           ) : (
             <div className="text-center py-8">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
-                <Icons.Check className="w-8 h-8 text-green-400" />
+                <Icons.Check />
               </div>
               <h3 className="text-2xl font-semibold text-green-400 mb-2">Inquiry Received! 🎯</h3>
               <p className="text-slate-400 mb-2">Our enterprise team will contact you within 24 hours.</p>

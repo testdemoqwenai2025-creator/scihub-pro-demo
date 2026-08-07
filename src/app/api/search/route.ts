@@ -322,7 +322,7 @@ export async function POST(request: NextRequest) {
       success: true,
       results: fallbackResults,
       total: fallbackResults.length,
-      query: body?.query || 'search',
+      query: 'search',
       source: 'fallback',
       queryTime: Date.now() - startTime,
       freeTierUsed: true,

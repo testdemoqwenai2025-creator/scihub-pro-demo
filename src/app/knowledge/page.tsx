@@ -5,7 +5,7 @@
  * 
  * Interactive knowledge visualization featuring:
  * - Pure SVG-based graph rendering (no external libraries)
- * - Multiple entity types (papers, genes, compounds, authors, concepts, institutions)
+ * - Multiple entity types (papers, genes, compounds, authors, concepts, domains)
  * - Rich relationship types with visual differentiation
  * - Force-directed, circular, hierarchical, and grid layouts
  * - Interactive zoom/pan controls
@@ -32,7 +32,7 @@ import {
 
 // ============ TYPES ============
 
-type NodeType = 'paper' | 'gene' | 'compound' | 'author' | 'concept' | 'institution';
+type NodeType = 'paper' | 'gene' | 'compound' | 'author' | 'concept' | 'domain';
 type EdgeType = 'cites' | 'studies' | 'interacts-with' | 'authored-by' | 'similar-to' | 'mentions';
 
 interface GraphNode {
@@ -78,7 +78,7 @@ const NODE_TYPE_CONFIG: Record<NodeType, { color: string; icon: string; label: s
   compound: { color: '#8B5CF6', icon: '⚗️', label: 'Compound' },
   author: { color: '#F59E0B', icon: '👤', label: 'Author' },
   concept: { color: '#06B6D4', icon: '💡', label: 'Concept' },
-  institution: { color: '#EC4899', icon: '🏛️', label: 'Institution' },
+  domain: { color: '#EC4899', icon: '🏛️', label: 'Institution' },
 };
 
 // Edge type configuration
@@ -116,9 +116,9 @@ const SAMPLE_NODES: Omit<GraphNode, 'x' | 'y'>[] = [
   { id: 'c3', label: 'Prime Editor', type: 'compound', connections: 4, importance: 0.82, description: 'Next-generation editing system for precise DNA modifications.' },
   
   // Authors
-  { id: 'a1', label: 'Doudna, J.', type: 'author', connections: 5, importance: 0.95, description: 'Jennifer Doudna - Nobel laureate, co-inventor of CRISPR-Cas9 technology.' },
-  { id: 'a2', label: 'Charpentier, E.', type: 'author', connections: 5, importance: 0.93, description: 'Emmanuelle Charpentier - Nobel laureate, co-inventor of CRISPR-Cas9 technology.' },
-  { id: 'a3', label: 'Zhang, F.', type: 'author', connections: 4, importance: 0.87, description: 'Feng Zhang - Pioneer in CRISPR applications for mammalian cells.' },
+  { id: 'a1', label: 'Doudna, J.', type: 'domain', connections: 5, importance: 0.95, description: 'Jennifer Doudna - Nobel laureate, co-inventor of CRISPR-Cas9 technology.' },
+  { id: 'a2', label: 'Charpentier, E.', type: 'domain', connections: 5, importance: 0.93, description: 'Emmanuelle Charpentier - Nobel laureate, co-inventor of CRISPR-Cas9 technology.' },
+  { id: 'a3', label: 'Zhang, F.', type: 'domain', connections: 4, importance: 0.87, description: 'Feng Zhang - Pioneer in CRISPR applications for mammalian cells.' },
   
   // Concepts
   { id: 'k1', label: 'Gene Therapy', type: 'concept', connections: 7, importance: 0.88, description: 'Therapeutic approach using genes to treat or prevent disease.' },
@@ -126,9 +126,9 @@ const SAMPLE_NODES: Omit<GraphNode, 'x' | 'y'>[] = [
   { id: 'k3', label: 'Genome Engineering', type: 'concept', connections: 6, importance: 0.85, description: 'Direct manipulation of an organism\'s genetic material.' },
   
   // Institutions
-  { id: 'i1', label: 'UC Berkeley', type: 'institution', connections: 4, importance: 0.78, description: 'University of California, Berkeley - Leading research institution in gene editing.' },
-  { id: 'i2', label: 'MIT', type: 'institution', connections: 3, importance: 0.75, description: 'Massachusetts Institute of Technology - Hub for biotechnology innovation.' },
-  { id: 'i3', label: 'Max Planck', type: 'institution', connections: 3, importance: 0.73, description: 'Max Planck Institute - European leader in molecular biology research.' },
+  { id: 'i1', label: 'UC Berkeley', type: 'domain', connections: 4, importance: 0.78, description: 'University of California, Berkeley - Leading research domain in gene editing.' },
+  { id: 'i2', label: 'MIT', type: 'domain', connections: 3, importance: 0.75, description: 'Massachusetts Institute of Technology - Hub for biotechnology innovation.' },
+  { id: 'i3', label: 'Max Planck', type: 'domain', connections: 3, importance: 0.73, description: 'Max Planck Institute - European leader in molecular biology research.' },
 ];
 
 const SAMPLE_EDGES: GraphEdge[] = [
@@ -272,7 +272,7 @@ function applyCircularLayout(nodes: GraphNode[]): GraphNode[] {
 
 function applyHierarchicalLayout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   // Group nodes by type for hierarchical arrangement
-  const typeOrder: NodeType[] = ['concept', 'paper', 'gene', 'compound', 'author', 'institution'];
+  const typeOrder: NodeType[] = ['concept', 'paper', 'gene', 'compound', 'author', 'domain'];
   const groups: Record<string, GraphNode[]> = {};
   
   typeOrder.forEach(type => {
@@ -393,8 +393,14 @@ export default function KnowledgePage() {
         y: SVG_HEIGHT / 2 + (Math.random() - 0.5) * 200,
       }));
       
-      initializedNodes.forEach(node => addGraphNode(node));
-      SAMPLE_EDGES.forEach(edge => addGraphEdge(edge));
+      initializedNodes.forEach(node => addGraphNode({
+        ...node,
+        label: typeof node.label === 'string' ? createDynamicField(node.label) : node.label,
+      } as any));
+      SAMPLE_EDGES.forEach(edge => addGraphEdge({
+        ...edge,
+        strength: edge.weight || 1,
+      } as any));
       setIsInitialized(true);
       
       addActivity({
@@ -585,7 +591,7 @@ export default function KnowledgePage() {
               {t('knowledge.title') || 'Knowledge Graph'}
             </h1>
             <p className="text-muted-foreground mt-1 text-sm">
-              Explore relationships between papers, genes, compounds, authors, and institutions
+              Explore relationships between papers, genes, compounds, authors, and domains
             </p>
           </div>
           

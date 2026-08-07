@@ -128,7 +128,8 @@ const LIMITS = {
 function getUserTier(request: NextRequest): 'free' | 'pro' | 'enterprise' {
   // In production, extract from JWT/session
   const tier = request.headers.get('x-user-tier');
-  return (tier && ['free', 'pro', 'enterprise'].includes(tier)) ? tier : 'free';
+  const validTiers: readonly ('free' | 'pro' | 'enterprise')[] = ['free', 'pro', 'enterprise'];
+  return (tier && validTiers.includes(tier as 'free' | 'pro' | 'enterprise')) ? tier as 'free' | 'pro' | 'enterprise' : 'free';
 }
 
 function formatBytes(bytes: number): string {
@@ -154,7 +155,7 @@ export async function GET(request: NextRequest) {
     const dataset = datasets.get(id);
 
     if (!dataset) {
-      return NextResponse.json({ success: false, error: 'Dataset not found' }, 404);
+      return NextResponse.json({ success: false, error: 'Dataset not found' }, { status: 404 });
     }
 
     return NextResponse.json({
@@ -227,7 +228,7 @@ export async function POST(request: NextRequest) {
         success: false, 
         error: 'Dataset name is required',
         upgradeRequired: false 
-      }, 400);
+      }, { status: 400 });
     }
 
     // Check limits
@@ -255,7 +256,7 @@ export async function POST(request: NextRequest) {
             ]
           }
         } : {})
-      }, needsUpgrade ? 402 : 400); // Payment Required if upgrade available
+      }, { status: needsUpgrade ? 402 : 400 }); // Payment Required if upgrade available
     }
 
     // Check private dataset permission
@@ -268,7 +269,7 @@ export async function POST(request: NextRequest) {
           message: 'Upgrade to create private datasets!',
           formUrl: '/api/subscription?action=form'
         }
-      }, 402);
+      }, { status: 402 });
     }
 
     // Create dataset
@@ -304,14 +305,14 @@ export async function POST(request: NextRequest) {
         currentCount: datasets.size,
         maxCount: userLimits.maxDatasets
       }
-    }, 201);
+    }, { status: 201 });
 
   } catch (error) {
     console.error('Dataset creation error:', error);
     return NextResponse.json({
       success: false,
       error: 'Failed to create dataset'
-    }, 500);
+    }, { status: 500 });
   }
 }
 
@@ -320,12 +321,12 @@ export async function PUT(request: NextRequest) {
     const { id, ...updates } = await request.json();
     
     if (!id) {
-      return NextResponse.json({ success: false, error: 'Dataset ID required' }, 400);
+      return NextResponse.json({ success: false, error: 'Dataset ID required' }, { status: 400 });
     }
 
     const existing = datasets.get(id);
     if (!existing) {
-      return NextResponse.json({ success: false, error: 'Dataset not found' }, 404);
+      return NextResponse.json({ success: false, error: 'Dataset not found' }, { status: 404 });
     }
 
     const updated = { ...existing, ...updates, updatedAt: new Date().toISOString() };
@@ -338,7 +339,7 @@ export async function PUT(request: NextRequest) {
     });
 
   } catch (error) {
-    return NextResponse.json({ success: false, error: 'Update failed' }, 500);
+    return NextResponse.json({ success: false, error: 'Update failed' }, { status: 500 });
   }
 }
 
@@ -347,13 +348,13 @@ export async function DELETE(request: NextRequest) {
   const id = searchParams.get('id');
 
   if (!id) {
-    return NextResponse.json({ success: false, error: 'Dataset ID required' }, 400);
+    return NextResponse.json({ success: false, error: 'Dataset ID required' }, { status: 400 });
   }
 
   const deleted = datasets.delete(id);
   
   if (!deleted) {
-    return NextResponse.json({ success: false, error: 'Dataset not found' }, 404);
+    return NextResponse.json({ success: false, error: 'Dataset not found' }, { status: 404 });
   }
 
   return NextResponse.json({

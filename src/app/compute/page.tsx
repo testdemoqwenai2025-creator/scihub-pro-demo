@@ -258,7 +258,6 @@ export default function ComputePage() {
     createJob({
       name: createDynamicField(newJobName),
       type: createDynamicField(newJobType),
-      status: createDynamicField('queued'),
       priority: createDynamicField(newJobPriority),
       submitter: createDynamicField('You'),
       config: {
@@ -268,7 +267,6 @@ export default function ComputePage() {
         notifications: createDynamicField(true),
         retryCount: createDynamicField(3),
       },
-      progress: createDynamicField(0),
       computeHoursUsed: createDynamicField(0),
       computeHoursTotal: createDynamicField(estimatedHours),
       gpusAllocated: createDynamicField(0),
@@ -298,7 +296,7 @@ export default function ComputePage() {
       cancelJob(jobId);
       
       addActivity({
-        type: 'update',
+        type: 'compute',
         message: createDynamicField(`Cancelled job "${job.name}"`),
         icon: '🛑',
       });

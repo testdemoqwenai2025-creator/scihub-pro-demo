@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { DataLakeSkeleton, CardSkeleton, StatsCardSkeleton } from '@/components/SkeletonComponents';
-import { showSuccessToast, showErrorToast, showLoadingToast } from '@/lib/toast-utils';
+import { showSuccessToast, showErrorToast, showLoadingToast, showInfoToast } from '@/lib/toast-utils';
 
 // ============ TYPES ============
 
@@ -167,14 +167,19 @@ export default function DataLakePage() {
   };
 
   const saveEdit = (id: string, field: string) => {
-    updateDataset(id, {
-      [field]: {
-        ...datasets.find(d => d.id === id)?.[field as keyof typeof datasets[0]],
-        value: tempValue,
-        isDirty: true,
-        lastModified: new Date(),
-      }
-    });
+    const dataset = datasets.find(d => d.id === id);
+    if (dataset) {
+      const currentValue = dataset[field as keyof typeof dataset];
+      updateDataset(id, {
+        [field]: {
+          // Handle DynamicField or plain value
+          ...(typeof currentValue === 'object' && currentValue !== null ? currentValue : { value: currentValue }),
+          value: tempValue,
+          isDirty: true,
+          lastModified: new Date(),
+        }
+      });
+    }
     setEditingField(null);
   };
 
