@@ -1,0 +1,2002 @@
+     1→================================================================================
+     2→                    SCIHUB PRO - CURRENT STATE BUILD FINALIZATION
+     3→                         COMPLETE DYNAMIC ACTIVATION PLAN
+     4→================================================================================
+     5→
+     6→Document: CurrentStateBuildFinal.txt
+     7→Version: 1.0
+     8→Date: August 2026
+     9→Project: SciHub Pro v2.0.0
+    10→Purpose: Complete activation plan for ALL CTA buttons, forms, and interactive elements
+    11→
+    12→================================================================================
+    13→                           EXECUTIVE SUMMARY
+    14→================================================================================
+    15→
+    16→This document provides a bullet-point action plan for making EVERY call-to-action
+    17→(CTA) button and interactive element in SciHub Pro fully dynamic and functional.
+    18→
+    19→CORE PRINCIPLE:
+    20→┌─────────────────────────────────────────────────────────────────────────────┐
+    21→│  "NEVER LET THE USER HIT A WALL"                                            │
+    22→│                                                                             │
+    23→│  Every CTA must either:                                                     │
+    24→│  ✓ Open a functional form/dialog for user input                             │
+    25→│  ✓ Perform a real action with loading state & success feedback               │
+    26→│  ✓ Show "Coming Soon" / "In Progress" with estimated timeline                │
+    27→│  ✗ NEVER show an error, do nothing, or leave user confused                  │
+    28→└─────────────────────────────────────────────────────────────────────────────┘
+    29→
+    30→
+    31→================================================================================
+    32→              SECTION 1: LANDING PAGE (app/page.tsx) - 824 LINES
+    33→================================================================================
+    34→
+    35→CURRENT STATE: Marketing landing page with hero, features, pricing preview,
+    36→                testimonials, and email waitlist form.
+    37→
+    38→--------------------------------------------------------------------------------
+    39→1.1 HERO SECTION CTAs
+    40→--------------------------------------------------------------------------------
+    41→
+    42→CTA #1: "Start Free" Button (Primary Hero)
+    43→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+    44→│ • Location: Line ~367-370                                                    │
+    45→│ • Current: No onClick handler, button does nothing                            │
+    46→│ • Styling: Large gradient button (cyan to teal)                              │
+    47→└──────────────────────────────────────────────────────────────────────────────┘
+    48→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+    49→│ ACTION: Navigate to Registration/Onboarding Flow                              │
+    50→│                                                                              │
+    51→│ IMPLEMENTATION:                                                              │
+    52→│ □ Add onClick={() => router.push('/register')} OR open registration modal    │
+    53→│ □ Create /register page if not exists (see Section 13)                       │
+    54→│ □ Show loading spinner during navigation                                     │
+    55→│ □ Track conversion event (analytics)                                         │
+    56→│                                                                              │
+    57→│ FALLBACK (if no auth yet):                                                   │
+    58→│ → Scroll to pricing section                                                  │
+    59→│ → Show highlighted Free tier card                                           │
+    60→│ → Display toast: "Get started with our Free tier - no credit card!"          │
+    61→└──────────────────────────────────────────────────────────────────────────────┘
+    62→
+    63→CTA #2: "Watch Demo" Button (Secondary Hero)
+    64→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+    65→│ • Location: Line ~371-374                                                    │
+    66→│ • Current: No onClick handler                                                │
+    67→│ • Styling: Outline button variant                                            │
+    68→└──────────────────────────────────────────────────────────────────────────────┘
+    69→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+    70→│ ACTION: Open Demo Video Modal or Redirect to Demo                             │
+    71→│                                                                              │
+    72→│ IMPLEMENTATION:                                                              │
+    73→│ □ Open Dialog/Modal with embedded video player                               │
+    74→│ □ Video options:                                                             │
+    75→│   - YouTube/Vimeo embed (if video exists)                                    │
+    76→│   - Screen recording walkthrough                                             │
+    77→│   - Interactive product tour (step-by-step guided)                            │
+    78→│ □ Modal contents:                                                            │
+    79→│   - Video player (16:9 aspect ratio)                                        │
+    80→│   - Chapter markers for sections                                             │
+    81→│   - "Try it yourself" CTA at end                                             │
+    82→│   - Close (X) button + click outside to close                                │
+    83→│                                                                              │
+    84→│ FALLBACK (no video available):                                               │
+    85→│ → Show "Demo Coming Soon" dialog                                             │
+    86→│ → Include screenshot carousel of key features                                │
+    87→│ → Form to request demo notification when ready                               │
+    88→│ → Fields: Name, Email, Institution, Role                                    │
+    89→└──────────────────────────────────────────────────────────────────────────────┘
+    90→
+    91→CTA #3: "Investor Portal" Button (Header)
+    92→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+    93→│ • Location: Line ~41                                                          │
+    94→│ • Current: No onClick handler                                                │
+    95→└──────────────────────────────────────────────────────────────────────────────┘
+    96→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+    97→│ ACTION: Show Investor Information Modal/Page                                  │
+    98→│                                                                              │
+    99→│ IMPLEMENTATION:                                                              │
+   100→│ □ Open Dialog with investor-focused content:                                 │
+   101→│   - Team bios & backgrounds                                                 │
+   102→│   - Traction metrics (users, growth rate)                                   │
+   103→│   - Market opportunity size                                                  │
+   104→│   - Competitive advantages                                                   │
+   105→│   - Funding round information (if any)                                       │
+   106→│ □ Contact form for investor inquiries:                                       │
+   107→│   - Firm name, Investment focus, Portfolio companies                        │
+   108→│   - Contact person, Email, Phone                                            │
+   109→│   - Message/Interest area                                                   │
+   110→│ □ Download pitch deck button (PDF)                                          │
+   111→│                                                                              │
+   112→│ FALLBACK:                                                                   │
+   113→│ → Show "Investor Relations Coming Soon"                                      │
+   114→│ → Email capture: "Notify me when investor info is available"                 │
+   115→└──────────────────────────────────────────────────────────────────────────────┘
+   116→
+   117→CTA #4: "Get Early Access" Button (Header)
+   118→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   119→│ • Location: Line ~43                                                          │
+   120→│ • Current: No onClick handler                                                │
+   121→└──────────────────────────────────────────────────────────────────────────────┘
+   122→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   123→│ ACTION: Open Early Access Registration Form                                   │
+   124→│                                                                              │
+   125→│ IMPLEMENTATION:                                                              │
+   126→│ □ Open Modal with expanded registration form:                                │
+   127→│   Fields:                                                                    │
+   128→│   - Full Name *                                                              │
+   129→│   - Email Address *                                                          │
+   130→│   - Institution/Organization *                                              │
+   131→│   - Role (dropdown): Student, Researcher, PI, Industry, Other               │
+   132→│   - Primary Research Field (multi-select)                                    │
+   133→│   - How did you hear about us? (dropdown)                                    │
+   134→│   - What feature are you most excited about? (text)                          │
+   135→│   - Agree to beta terms checkbox *                                          │
+   136→│                                                                              │
+   137→│ □ Form validation (real-time)                                                │
+   138→│ □ Submit → POST to /api/subscription or new /api/waitlist endpoint           │
+   139→│ □ Success state: "You're on the list! We'll be in touch soon."               │
+   140→│ □ Failure state: Error message with retry option                             │
+   141→│                                                                              │
+   142→│ DATA HANDLING:                                                               │
+   143→│ → Store in localStorage as backup                                           │
+   144→│ → Send to API endpoint                                                      │
+   145→│ → Trigger welcome email sequence (when email service ready)                   │
+   146→└──────────────────────────────────────────────────────────────────────────────┘
+   147→
+   148→--------------------------------------------------------------------------------
+   149→1.2 PRICING SECTION CTAs
+   150→--------------------------------------------------------------------------------
+   151→
+   152→CTA #5: "Get Started" (Free Tier Card)
+   153→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   154→│ • Location: Line ~656-661                                                    │
+   155→│ • Current: No onClick handler inside pricing card                             │
+   156→└──────────────────────────────────────────────────────────────────────────────┘
+   157→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   158→│ ACTION: Start Free Tier Onboarding                                            │
+   159→│                                                                              │
+   160→│ IMPLEMENTATION:                                                              │
+   161→│ □ Navigate to /dashboard with 'tier=free' query param                        │
+   162→│ □ Or open quick signup modal (minimal fields):                               │
+   163→│   - Email only (magic link authentication)                                   │
+   164→│   - "Continue with Google/GitHub/ORCID" buttons                              │
+   165→│ □ After signup: Redirect to dashboard with free tier activated               │
+   166→│ □ Show onboarding tooltip tour (first visit only)                            │
+   167→│                                                                              │
+   168→│ SUCCESS FEEDBACK:                                                            │
+   169→│ → Toast: "Welcome to SciHub Pro! You're on the Free tier."                  │
+   170→│ → Highlight free tier features in sidebar                                   │
+   171→│ → Show "Upgrade to Pro" subtle prompt after 5 min usage                      │
+   172→└──────────────────────────────────────────────────────────────────────────────┘
+   173→
+   174→CTA #6: "Start Free Trial" (Pro Tier Card)
+   175→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   176→│ • Location: Line ~233 (cta property in pricing data)                          │
+   177→│ • Current: Renders button but non-functional                                  │
+   178→└──────────────────────────────────────────────────────────────────────────────┘
+   179→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   180→│ ACTION: Initiate Pro Trial with Payment Setup                                 │
+   181→│                                                                              │
+   182→│ IMPLEMENTATION:                                                              │
+   183→│ □ Open Pro Trial Signup Dialog:                                              │
+   184→│   Step 1: Account Info (if not logged in)                                    │
+   185→│     - Name, Email, Password, Institution                                     │
+   186→│   Step 2: Payment Method (Stripe integration)                                │
+   187→│     - Card number, Expiry, CVC                                              │
+   188→│     - "Start trial - won't charge for 14 days"                               │
+   189→│   Step 3: Confirmation                                                       │
+   190→│     - Trial duration reminder                                                │
+   191→│     - What's included summary                                               │
+   192→│     - Cancel anytime notice                                                  │
+   193→│                                                                              │
+   194→│ □ Form validation at each step                                               │
+   195→│ □ Loading states during Stripe tokenization                                  │
+   196→│ □ Success: Redirect to dashboard with Pro badge active                       │
+   197→│ □ Error: Show specific error message (card declined, etc.)                   │
+   198→│                                                                              │
+   199→│ FALLBACK (no Stripe yet):                                                    │
+   200→│ → Open /subscription page with Pro tier pre-selected                         │
+   201→│ → Show subscription request form (existing implementation)                   │
+   202→│ → Note: "Payment processing coming soon. Sign up for early access!"          │
+   203→└──────────────────────────────────────────────────────────────────────────────┘
+   204→
+   205→CTA #7: "Contact Sales" (Enterprise Tier Card)
+   206→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   207→│ • Location: Line ~242 (cta property in pricing data)                          │
+   208→│ • Current: Non-functional button                                             │
+   209→└──────────────────────────────────────────────────────────────────────────────┘
+   210→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   211→│ ACTION: Open Enterprise Sales Inquiry Form                                    │
+   212→│                                                                              │
+   213→│ IMPLEMENTATION:                                                              │
+   214→│ □ Open Dialog with comprehensive enterprise form:                             │
+   215→│   Section 1: Company Information                                             │
+   216→│   - Company/Institution name *                                               │
+   217→│   - Website URL                                                              │
+   218→│   - Industry (Academic, Pharma, Biotech, Gov, Other)                        │
+   219→│   - Country/Region                                                           │
+   220→│                                                                              │
+   221→│   Section 2: Technical Requirements                                          │
+   222→│   - Expected number of users *                                               │
+   223→│   - Estimated monthly API calls                                              │
+   224→│   - Storage needs (estimate)                                                 │
+   225→│   - Integration requirements (SSO, SAML, on-prem)                            │
+   226→│   - Compliance requirements (HIPAA, FedRAMP, SOC2)                          │
+   227→│                                                                              │
+   228→│   Section 3: Decision Maker Info                                             │
+   229→│   - Your name *                                                              │
+   230→│   - Job title *                                                              │
+   231→│   - Work email *                                                             │
+   232→│   - Phone (optional)                                                         │
+   233→│   - Best time to contact                                                     │
+   234→│                                                                              │
+   235→│   Section 4: Additional Notes                                                 │
+   236→│   - Timeline for decision                                                    │
+   237→│   - Budget range (if willing to share)                                      │
+   238→│   - Specific questions or requirements                                      │
+   239→│                                                                              │
+   240→│ □ Submit → POST to /api/subscription with type='enterprise_lead'            │
+   241→│ □ Auto-response: "Our enterprise team will contact you within 24 hours"      │
+   242→│ □ Internal notification to sales team (email/webhook)                        │
+   243→└──────────────────────────────────────────────────────────────────────────────┘
+   244→
+   245→--------------------------------------------------------------------------------
+   246→1.3 WAITLIST / NEWSLETTER SECTION
+   247→--------------------------------------------------------------------------------
+   248→
+   249→CTA #8: "Join Waitlist" (Email Form Submit)
+   250→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   251→│ • Location: Line ~734-735                                                    │
+   252→│ • Current: Inside <form> tag but no onSubmit handler                          │
+   253→│ • Has email input field                                                      │
+   254→└──────────────────────────────────────────────────────────────────────────────┘
+   255→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   256→│ ACTION: Capture Email & Add to Waitlist                                      │
+   257→│                                                                              │
+   258→│ IMPLEMENTATION:                                                              │
+   259→│ □ Add onSubmit handler to form:                                              │
+   260→│                                                                              │
+   261→│   const handleWaitlistSubmit = async (e) => {                                │
+   262→│     e.preventDefault();                                                      │
+   263→│     const email = e.target.email.value;                                      │
+   264→│                                                                              │
+   265→│     // Validate email format                                                 │
+   266→│     if (!email.includes('@')) {                                             │
+   267→│       setError('Please enter a valid email');                                │
+   268→│       return;                                                                │
+   269→│     }                                                                       │
+   270→│                                                                              │
+   271→│     setLoading(true);                                                        │
+   272→│                                                                              │
+   273→│     try {                                                                   │
+   274→│       // Call waitlist API                                                   │
+   275→│       const res = await fetch('/api/waitlist', {                             │
+   276→│         method: 'POST',                                                     │
+   277→│         body: JSON.stringify({ email, source: 'landing_page' })             │
+   278→│       });                                                                  │
+   279→│                                                                              │
+   280→│       if (res.ok) {                                                         │
+   281→│         setSuccess(true); // Show success state                              │
+   282→│         // Confetti animation optional                                       │
+   283→│       } else {                                                              │
+   284→│         setError('Something went wrong. Please try again.');                 │
+   285→│       }                                                                     │
+   286→│     } catch {                                                               │
+   287→│       // Fallback: store locally, sync later                                 │
+   288→│       localStorage.setItem('scihub_waitlist_email', email);                  │
+   289→│       setSuccess(true); // Optimistic update                                 │
+   290→│     } finally {                                                             │
+   291→│       setLoading(false);                                                     │
+   292→│     }                                                                       │
+   293→│   };                                                                        │
+   294→│                                                                              │
+   295→│ □ Create /api/waitlist route if not exists:                                  │
+   296→│   - Store emails in array/file                                              │
+   297→│   - Deduplicate by email                                                    │
+   298→│   - Return success/error                                                    │
+   299→│   - Rate limit (max 5 submissions/hour per IP)                              │
+   300→│                                                                              │
+   301→│ □ UI States:                                                                │
+   302→│   - Default: Email input + "Join Waitlist" button                            │
+   303→│   - Loading: Spinner on button, disabled input                               │
+   304→│   - Success: Green checkmark + "You're on the list! 🎉"                     │
+   305→│   - Error: Red message + retry option                                       │
+   306→│                                                                              │
+   307→│ □ Bonus: Add checkbox "I want early access" vs "Just updates"               │
+   308→└──────────────────────────────────────────────────────────────────────────────┘
+   309→
+   310→--------------------------------------------------------------------------------
+   311→1.4 FEATURE CARDS (6 cards)
+   312→--------------------------------------------------------------------------------
+   313→
+   314→Each feature card should be clickable:
+   315→
+   316→FEATURE CARD CLICK ACTIONS:
+   317→┌────────────────────────┬─────────────────────────────────────────────────────┐
+   318→│ Package Discovery      │ → Scroll to /connectors page, highlight relevant    │
+   319→│ Reproducible Env      │ → Open /workspace with environment modal            │
+   320→│ Collaborative Workspace│ → Navigate to /collaboration                       │
+   321→│ Scalable Compute      │ → Navigate to /compute with "Try it" tooltip        │
+   322→│ AI-Powered Insights   │ → Navigate to /aethel with suggested prompt loaded  │
+   323→│ Enterprise Security   │ → Open security features modal (coming soon)        │
+   324→└────────────────────────┴─────────────────────────────────────────────────────┘
+   325→
+   326→IMPLEMENTATION:
+   327→□ Wrap each CardContent in <Link href={targetUrl}> or onClick handler
+   328→□ Add hover effect: scale(1.02), shadow increase, border color change
+   329→□ Add arrow icon (→) on hover to indicate clickability
+   330→□ Track which features get most clicks (analytics)
+   331→
+   332→
+   333→================================================================================
+   334→              SECTION 2: DASHBOARD (app/dashboard/page.tsx) - 436 LINES
+   335→================================================================================
+   336→
+   337→CURRENT STATE: Main dashboard with stats, profile editing, activity feed.
+   338→
+   339→--------------------------------------------------------------------------------
+   340→2.1 PROFILE EDITING FORM
+   341→--------------------------------------------------------------------------------
+   342→
+   343→FORM: User Profile Editor (Lines ~140-210)
+   344→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   345→│ • Has inputs: Name, Email                                                    │
+   346→│ • Has "Reset" and "Push to Database" buttons                                 │
+   347→│ • Push calls simulatePushToDatabase() from useDynamicStore                   │
+   348→│ • Shows dirty field indicators                                               │
+   349→└──────────────────────────────────────────────────────────────────────────────┘
+   350→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   351→│ ACTION: Real Profile Save with Validation & Feedback                          │
+   352→│                                                                              │
+   353→│ ENHANCEMENTS NEEDED:                                                         │
+   354→│                                                                              │
+   355→│ 1. EXPAND FORM FIELDS:                                                       │
+   356→│    □ Display Name * (currently exists)                                       │
+   357→│    □ Email Address * (currently exists, read-only display)                   │
+   358→│    □ Institution/Organization                                               │
+   359→│    □ ORCID ID (with validation link to orcid.org)                           │
+   360→│    □ Research Interests (tags input)                                        │
+   361→│    □ Website/Personal Page URL                                               │
+   362→│    □ Timezone (auto-detect + manual override)                               │
+   363→│    □ Bio (textarea, max 500 chars)                                          │
+   364→│                                                                              │
+   365→│ 2. REAL-TIME VALIDATION:                                                     │
+   366→│    □ Email: Format check + debounce API check (is email already used?)       │
+   367→│    □ ORCID: Format check (0000-0000-0000-0000) + API validate               │
+   368→│    □ URL: Format check + HEAD request (does URL exist?)                     │
+   369→│    □ Required fields: Visual indicator + prevent save                        │
+   370→│                                                                              │
+   371→│ 3. SAVE ACTION:                                                              │
+   372→│    □ "Save Changes" button (rename from "Push to Database")                  │
+   373→│    □ Loading state: Spinner + "Saving..." text                               │
+   374→│    □ Success: Toast "Profile updated successfully!" + green checkmark        │
+   375→│    □ Error: Toast with specific message + retry option                       │
+   376→│    □ Auto-save toggle (optional, every 30s if changes detected)              │
+   377→│                                                                              │
+   378→│ 4. AVATAR UPLOAD:                                                            │
+   379→│    □ Click avatar to upload new image                                        │
+   380→│    □ Accept: JPG, PNG, GIF (max 2MB)                                        │
+   381→│    □ Preview before save                                                    │
+   382→│    □ Crop tool (integrate react-cropper or similar)                          │
+   383→│    □ Store as base64 in localStorage / send to API                           │
+   384→│                                                                              │
+   385→│ 5. UNDO/REDO:                                                                │
+   386→│    □ Ctrl+Z support for form edits                                          │
+   387→│    □ "Discard Changes" button with confirmation                              │
+   388→│    □ "Undo last edit" option                                                │
+   389→└──────────────────────────────────────────────────────────────────────────────┘
+   390→
+   391→--------------------------------------------------------------------------------
+   392→2.2 STAT CARDS (4 cards)
+   393→--------------------------------------------------------------------------------
+   394→
+   395→STAT CARDS: Active Jobs, Storage Used, API Calls, Collaborators
+   396→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   397→│ • Display static/simulated numbers                                           │
+   398→│ • Some have refresh capability via store                                     │
+   399→│ • Not clickable                                                              │
+   400→└──────────────────────────────────────────────────────────────────────────────┘
+   401→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   402→│ ACTION: Make Stats Interactive with Drill-down                                │
+   403→│                                                                              │
+   404→│ 1. CLICK BEHAVIOR:                                                           │
+   405→│    □ Each card clickable → Open detail modal/sidebar                         │
+   406→│    □ Active Jobs → Navigate to /compute with filter                          │
+   407→│    □ Storage Used → Navigate to /data with usage breakdown                  │
+   408→│    □ API Calls → Open API usage chart (daily/weekly/monthly)                │
+   409→│    □ Collaborators → Navigate to /collaboration members tab                 │
+   410→│                                                                              │
+   411→│ 2. REFRESH FUNCTIONALITY:                                                    │
+   412→│    □ Hover shows "Click to refresh" tooltip                                  │
+   413→│    □ Click refresh icon → Show loading spinner                               │
+   414→│    □ Fetch fresh data from API/store                                         │
+   415→│    □ Number animate transition (count up/down)                               │
+   416→│    □ Last updated timestamp ("Updated 2 min ago")                            │
+   417→│                                                                              │
+   418→│ 3. CUSTOMIZATION:                                                            │
+   419→│    □ Drag to reorder cards (drag-and-drop)                                  │
+   420→│    □ Settings gear icon → Choose which stats to show                         │
+   421→│    □ Add custom stat cards (user-created queries)                           │
+   422→│    □ Collapse/expand card detail                                            │
+   423→│                                                                              │
+   424→│ 4. THRESHOLD ALERTS:                                                         │
+   425→│    □ Storage > 80% → Yellow warning border                                   │
+   426→│    □ Storage > 95% → Red alert border + upgrade prompt                       │
+   427→│    □ API calls near limit → Show "Upgrade for more" CTA                     │
+   428→│    □ Pulse animation on alert cards                                         │
+   429→└──────────────────────────────────────────────────────────────────────────────┘
+   430→
+   431→--------------------------------------------------------------------------------
+   432→2.3 QUICK ACTIONS PANEL
+   433→--------------------------------------------------------------------------------
+   434→
+   435→QUICK ACTIONS: Dashboard shortcut buttons
+   436→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   437→│ • Buttons exist but may have minimal functionality                            │
+   438→│ • Lines ~273-295                                                             │
+   439→└──────────────────────────────────────────────────────────────────────────────┘
+   440→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   441→│ ACTION: Each Quick Action Should Perform Meaningful Task                      │
+   442→│                                                                              │
+   443→│ QUICK ACTION BUTTONS:                                                        │
+   444→│                                                                              │
+   445→│ 1. "New Search" → Navigate to /query with focused search input              │
+   446→│    □ Pre-fill common search term based on user's field                      │
+   447→│    □ Show search tips tooltip on first use                                   │
+   448→│                                                                              │
+   449→│ 2. "Upload Data" → Open /data with upload dialog auto-opened                │
+   450→│    □ Support drag-and-drop zone                                             │
+   451→│    □ Show file type accepted (.csv, .json, .xlsx, .fasta)                   │
+   452→│    □ Progress bar during upload                                             │
+   453→│                                                                              │
+   454→│ 3. "Run Analysis" → Navigate to /workspace with template selector            │
+   455→│    □ Show popular analysis templates                                        │
+   456→│    □ Quick start: "Blank Notebook", "Data Import", "Visualization"          │
+   457→│                                                                              │
+   458→│ 4. "Invite Member" → Open invite member dialog/collaboration                 │
+   459→│    □ Email invitation form                                                  │
+   460→│    □ Generate invite link (copyable)                                        │
+   461→│    □ Set permission level (view/edit/admin)                                 │
+   462→│                                                                              │
+   463→│ 5. "View Reports" → Open reports/analytics modal                             │
+   464→│    □ Usage statistics charts                                                │
+   465→│    □ Activity timeline                                                      │
+   466→│    □ Export report (PDF/CSV)                                                │
+   467→│                                                                              │
+   468→│ VISUAL ENHANCEMENTS:                                                         │
+   469→│ □ Icon + label + keyboard shortcut hint (⌘N, ⌘U, etc.)                    │
+   470→│ □ Hover: Darken background + show description                               │
+   471→│ □ Click: Ripple effect + navigation/loading                                 │
+   472→│ □ Recently used actions appear first (adaptive ordering)                    │
+   473→└──────────────────────────────────────────────────────────────────────────────┘
+   474→
+   475→--------------------------------------------------------------------------------
+   476→2.4 ACTIVITY FEED
+   477→--------------------------------------------------------------------------------
+   478→
+   479→ACTIVITY FEED: Recent actions list
+   480→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   481→│ • Shows activities from store                                                │
+   482→│ • Has "Clear Activities" button                                             │
+   483→│ • Basic timestamp display                                                   │
+   484→└──────────────────────────────────────────────────────────────────────────────┘
+   485→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   486→│ ACTION: Rich Activity Feed with Filtering & Actions                           │
+   487→│                                                                              │
+   488→│ 1. ACTIVITY TYPES WITH ICONS:                                               │
+   489→│    □ 🔍 Search completed → Link to search results                           │
+   490→│    ▓📊 Dataset uploaded → Link to dataset                                   │
+   491→│    ▶️ Job completed → Link to job output                                    │
+   492→│    💬 Comment posted → Link to discussion                                   │
+   493→│    👥 Member joined → Link to profile                                       │
+   494→│    ⚙️ Setting changed → Show what changed                                  │
+   495→│    ⭐ Upgrade triggered → Link to subscription page                          │
+   496→│                                                                              │
+   497→│ 2. FILTERING:                                                               │
+   498→│    □ Filter by type (tabs: All, Searches, Data, Collaboration)              │
+   499→│    □ Filter by date range (Today, This Week, This Month, All)              │
+   500→│    □ Search within activities                                               │
+   501→│    □ Unread activities badge count                                          │
+   502→│                                                                              │
+   503→│ 3. INTERACTIONS:                                                             │
+   504→│    □ Click activity → Expand details panel                                  │
+   505→│    □ Dismiss individual activity (× button)                                 │
+   506→│    □ Mark all as read button                                                │
+   507→│    □ "Load more" pagination (infinite scroll option)                        │
+   508→│                                                                              │
+   509→│ 4. REAL-TIME UPDATES:                                                        │
+   510→│    □ New activity appears with slide-in animation                           │
+   511→│    □ Badge counter increments                                               │
+   512→│    □ Optional sound notification (can toggle off)                           │
+   513→│    □ "Pause live updates" button                                           │
+   514→└──────────────────────────────────────────────────────────────────────────────┘
+   515→
+   516→--------------------------------------------------------------------------------
+   517→2.5 EXPORT STATE BUTTON
+   518→--------------------------------------------------------------------------------
+   519→
+   520→BUTTON: "Export State" (Line ~299-320)
+   521→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   522→│ • Opens download with JSON blob                                             │
+   523→│ • Uses useDynamicStore.getState()                                           │
+   524→└──────────────────────────────────────────────────────────────────────────────┘
+   525→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   526→│ ACTION: Enhanced Export with Multiple Formats                                 │
+   527→│                                                                              │
+   528→│ 1. EXPORT OPTIONS DIALOG:                                                    │
+   529→│    □ Format selection:                                                       │
+   530→│      - JSON (current, works)                                                │
+   531→│      - CSV (for spreadsheets)                                               │
+   532→│      - PDF (formatted report)                                                │
+   533→│    □ Date range: All time / Custom range                                    │
+   534→│    □ Sections to include: Profile, Settings, Activity, Data, etc.           │
+   535→│    □ Include sensitive data checkbox (passwords, tokens)                    │
+   536→│                                                                              │
+   537→│ 2. EXPORT PROCESS:                                                           │
+   538→│    □ Show progress modal during generation                                  │
+   539→│    □ Large exports: Background processing + notification when ready         │
+   540→│    □ Auto-download when complete                                            │
+   541→│    □ "Copy to clipboard" option for small exports                           │
+   542→│                                                                              │
+   543→│ 3. IMPORT SYMMETRY:                                                          │
+   544→│    □ "Import State" button (pair with export)                               │
+   545→│    □ Accept same formats                                                    │
+   546→│    □ Preview import data before confirming                                  │
+   547→│    □ Merge vs replace option                                                │
+   548→│    □ Backup current state before import                                     │
+   549→└──────────────────────────────────────────────────────────────────────────────┘
+   550→
+   551→
+   552→================================================================================
+   553→           SECTION 3: WORKSPACE / CODE IDE (app/workspace/page.tsx) - 1334 LINES
+   554→================================================================================
+   555→
+   556→CURRENT STATE: Code editor with file management, templates, execution.
+   557→
+   558→--------------------------------------------------------------------------------
+   559→3.1 FILE OPERATIONS
+   560→--------------------------------------------------------------------------------
+   561→
+   562→ACTION: "Create New File" (Line ~1283)
+   563→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   564→│ • Opens dialog with filename input                                          │
+   565→│ • Creates file in store on confirm                                          │
+   566→│ • Has basic validation                                                      │
+   567→└──────────────────────────────────────────────────────────────────────────────┘
+   568→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   569→│ ACTION: Enhanced File Creation with Templates                                │
+   570→│                                                                              │
+   571→│ ENHANCEMENTS:                                                               │
+   572→│ □ File type selector BEFORE naming:                                         │
+   573→│   - Python (.py)                                                            │
+   574→│   - R (.R)                                                                 │
+   575→│   - SQL (.sql)                                                             │
+   576→│   - JavaScript (.js)                                                        │
+   577→│   - TypeScript (.ts)                                                        │
+   578→│   - Markdown (.md)                                                          │
+   579→│   - YAML (.yml)                                                             │
+   580→│   - Shell (.sh)                                                             │
+   581→│ □ Based on selection:                                                       │
+   582→│   - Show appropriate template options                                       │
+   583→│   - Set default filename extension                                         │
+   584→│   - Apply syntax highlighting automatically                                 │
+   585→│ □ Advanced options (collapsible):                                           │
+   586→│   - Add to existing project?                                                │
+   587→│   - Initial content template                                                │
+   588→│   - File description/notes                                                 │
+   589→│ □ Duplicate existing file option (from context menu)                        │
+   590→└──────────────────────────────────────────────────────────────────────────────┘
+   591→
+   592→ACTION: "Execute Code" (Run Button, Line ~1155)
+   593→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   594→│ • Calls handleExecute() function                                            │
+   595→│ • Shows simulated output in console                                         │
+   596→│ • No actual code execution                                                  │
+   597→└──────────────────────────────────────────────────────────────────────────────┘
+   598→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   599→│ ACTION: Code Execution with Real Feedback                                    │
+   600→│                                                                              │
+   601→│ IMMEDIATE (Client-side possible):                                            │
+   602→│ □ JavaScript/TypeScript: Execute using eval() or Function() constructor     │
+   603→│   - Sandboxed iframe for security                                          │
+   604→│   - Console.log captures to output panel                                    │
+   605→│   - Timeout protection (max 30 sec execution)                               │
+   606→│   - Memory limits                                                          │
+   607→│                                                                              │
+   608→│ □ SQL: Parse and explain (client-side validation)                           │
+   609→│   - Syntax highlighting errors                                             │
+   610→│   - Table/column suggestions                                               │
+   611→│   - "This would run against [dataset_name]" note                            │
+   612→│   - Explain plan visualization                                             │
+   613→│                                                                              │
+   614→│ □ Python/R: Show "Server Execution Required" dialog                         │
+   615→│   - Explain need for backend                                               │
+   616→│   - Option to submit to job queue (/compute)                                │
+   617→│   - Show estimated queue time                                              │
+   618→│   - Email when complete option                                             │
+   619→│                                                                              │
+   620→│ EXECUTION UI STATES:                                                         │
+   621→│ □ Idle: Ready to run (green play button)                                    │
+   622→│ □ Running: Spinning icon + elapsed timer + "Stop" button                    │
+   623→│ □ Complete: Output in console + execution time + memory used               │
+   624→│ □ Error: Red error message + line number + suggestion                       │
+   625→│ □ Timeout: "Execution timed out (30s limit)" + partial output option        │
+   626→│                                                                              │
+   627→│ OUTPUT PANEL ENHANCEMENTS:                                                   │
+   628→│ □ Tabs: Output, Logs, Errors, Warnings                                     │
+   629→│ □ Syntax highlighting for output (ANSI colors)                             │
+   630→│ □ Copy output to clipboard                                                  │
+   631→│ □ Download output as file                                                   │
+   632→│ □ Clear console button                                                      │
+   633→│ □ Max output length with "Show full output" expand                         │
+   634→└──────────────────────────────────────────────────────────────────────────────┘
+   635→
+   636→ACTION: "Use Template" (Line ~1066)
+   637→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   638→│ • Shows template gallery                                                     │
+   639→│ • Clicking creates file with template content                                │
+   640→│ • Good foundation, can enhance                                              │
+   641→└──────────────────────────────────────────────────────────────────────────────┘
+   642→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   643→│ ACTION: Rich Template System with Preview & Categories                       │
+   644→│                                                                              │
+   645→│ TEMPLATE CATEGORIES:                                                         │
+   646→│ □ Getting Started:                                                           │
+   647→│   - Hello World (each language)                                            │
+   648→│   - Project skeleton                                                        │
+   649→│   - Configuration file template                                            │
+   650→│                                                                              │
+   651→│ □ Data Analysis:                                                             │
+   652→│   - CSV loader + basic stats                                               │
+   653→│   - Data cleaning pipeline                                                 │
+   654→│   - Plotting template (matplotlib/ggplot2)                                  │
+   655→│   - Statistical test template                                               │
+   656→│                                                                              │
+   657→│ □ Bioinformatics:                                                            │
+   658→│   - Sequence parser (FASTA/FASTQ)                                          │
+   659→│   - BLAST result parser                                                     │
+   660→│   - Gene ontology analysis                                                 │
+   661→│   - Phylogenetic tree template                                             │
+   662→│                                                                              │
+   663→│ □ Machine Learning:                                                          │
+   664→│   - Model training skeleton                                                │
+   665→│   - Data preprocessing pipeline                                            │
+   666→│   - Cross-validation setup                                                 │
+   667→│   - Model evaluation template                                              │
+   668→│                                                                              │
+   669→│ □ Visualization:                                                             │
+   670→│   - Interactive plot (Plotly/Bokeh)                                        │
+   671→│   - Heatmap generator                                                      │
+   672→│   - Network graph template                                                  │
+   673→│   - Dashboard layout                                                        │
+   674→│                                                                              │
+   675→│ TEMPLATE CARD FEATURES:                                                      │
+   676→│ □ Preview thumbnail (screenshot or icon representation)                     │
+   677→│ □ Language badge                                                            │
+   678→│ □ Difficulty level (Beginner/Intermediate/Advanced)                         │
+   679→│ □ Estimated completion time                                                │
+   680→│ □ "Use this template" CTA                                                  │
+   681→│ □ Star/favorite template                                                    │
+   682→│ □ "Report issue" on template                                                │
+   683→│ □ Community contribution count ("Used 234 times")                           │
+   684→└──────────────────────────────────────────────────────────────────────────────┘
+   685→
+   686→--------------------------------------------------------------------------------
+   687→3.2 FILE TREE & MANAGEMENT
+   688→--------------------------------------------------------------------------------
+   689→
+   690→FILE TREE INTERACTIONS:
+   691→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   692→│ • Shows file list from store                                                 │
+   693→│ • Click to switch active file                                               │
+   694→│ • Right-click context menu (delete)                                          │
+   695→└──────────────────────────────────────────────────────────────────────────────┘
+   696→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   697→│ ACTION: Full File Explorer Functionality                                      │
+   698→│                                                                              │
+   699→│ 1. FILE OPERATIONS (Right-click context menu):                               │
+   700→│    □ Rename (inline editing with Enter to confirm)                          │
+   701→│    □ Duplicate (filename copy)                                              │
+   702→│    □ Download (save to local machine)                                       │
+   703→│    □ Share (generate shareable link)                                        │
+   704→│    □ Move to folder (drag-drop or dialog)                                   │
+   705→│    □ Delete (with confirmation dialog)                                      │
+   706→│    □ View history (version list)                                            │
+   707→│    □ Compare versions (diff view)                                           │
+   708→│                                                                              │
+   709→│ 2. FOLDER SUPPORT:                                                           │
+   710→│    □ Create folder (right-click in tree)                                    │
+   711→│    □ Nested folders (expand/collapse)                                       │
+   712→│    □ Drag files between folders                                            │
+   713→│    □ Breadcrumb navigation                                                 │
+   714→│    □ Sort options (name, date, type, size)                                 │
+   715→│                                                                              │
+   716→│ 3. FILE STATUS INDICATORS:                                                   │
+   717→│    ● Modified (blue dot)                                                    │
+   718→│    ● Saved (green check)                                                    │
+   719→│    ● Has error (red exclamation)                                            │
+   720→│    ● Running (spinning icon)                                               │
+   721→│    ● Shared (link icon)                                                     │
+   722→│                                                                              │
+   723→│ 4. SEARCH FILES:                                                             │
+   724→│    □ Search box above file tree                                            │
+   725→│    □ Search filenames AND content                                           │
+   726→│    □ Highlight matches in results                                          │
+   727→│    □ Jump to match on click                                                 │
+   728→│    □ Replace in files (advanced)                                           │
+   729→└──────────────────────────────────────────────────────────────────────────────┘
+   730→
+   731→
+   732→================================================================================
+   733→           SECTION 4: QUERY / SEARCH (app/query/page.tsx) - 933 LINES
+   734→================================================================================
+   735→
+   736→CURRENT STATE: Literature search with CrossRef/OpenAlex/arXiv integration.
+   737→
+   738→--------------------------------------------------------------------------------
+   739→4.1 SEARCH FUNCTIONALITY
+   740→--------------------------------------------------------------------------------
+   741→
+   742→SEARCH FORM & SUBMISSION:
+   743→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   744→│ • Has search input field                                                     │
+   745→│ • Integrates with real APIs (CrossRef, OpenAlex, arXiv)                     │
+   746→│ • Shows results with fallback to synthetic data                              │
+   747→│ • Has filters (year, type, source)                                          │
+   748→└──────────────────────────────────────────────────────────────────────────────┘
+   749→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   750→│ ACTION: Full-Featured Scientific Search Experience                           │
+   751→│                                                                              │
+   752→│ 1. SEARCH INPUT ENHANCEMENTS:                                                │
+   753→│    □ Auto-complete suggestions (debounced, 300ms)                           │
+   754→│      - Recent searches from history                                         │
+   755→│      - Trending searches (from API)                                        │
+   756→│      - Author name suggestions                                             │
+   757→│      - DOI/PMID lookup on paste                                            │
+   758→│    □ Search mode toggle:                                                     │
+   759→│      - "Smart Search" (natural language)                                    │
+   760→│      - "Advanced" (boolean operators, field-specific)                       │
+   761→│      - "By DOI/PMID" (exact lookup)                                        │
+   762→│    □ Keyboard shortcuts:                                                    │
+   763→│      - / Focus search                                                       │
+   764→│      - Enter to search                                                      │
+   765→│      - ↑/↓ navigate suggestions                                            │
+   766→│      - Esc clear search                                                    │
+   767→│                                                                              │
+   768→│ 2. SEARCH EXECUTION STATES:                                                  │
+   769→│    □ Idle: Ready state                                                      │
+   770→│    □ Searching: Animated spinner + "Searching 3 sources..."                │
+   771→│    □ Results: Count + time taken ("1,234 results in 0.8s")                │
+   772→│    □ No results: "No matches found" + suggestions                           │
+   773→│    □ Error: "Search failed" + retry button + "Try different terms"         │
+   774→│    □ Rate limited: "Too many requests" + countdown timer                   │
+   775→│                                                                              │
+   776→│ 3. RESULT INTERACTIONS:                                                      │
+   777→│    □ Click result → Expand abstract panel (side panel or accordion)         │
+   778→│    □ Save to library (star icon) → Immediate visual feedback                │
+   779→│    □ Export single result (BibTeX, RIS, APA, MLA)                          │
+   780→│    □ Cite this paper (copy citation)                                       │
+   781→│    □ Find related papers (click → new search for similar)                   │
+   782→│    □ View full text (link to publisher/prefetch if available)               │
+   783→│    □ Authors clickable → search by author                                  │
+   784→│    □ Journal clickable → browse journal                                    │
+   785→│                                                                              │
+   786→│ 4. SAVE TO LIBRARY FLOW:                                                     │
+   787→│    □ Click star/save → Show collection selector:                            │
+   788→│      - My Library (default)                                                │
+   789→│      - Project A, Project B (user collections)                              │
+   790→│      - + Create new collection                                             │
+   791→│    □ Saved indicator (filled star)                                         │
+   792→│    □ Access saved items from dashboard or dedicated /library page           │
+   793→│    □ Organize: Tagging, notes, reading status                               │
+   794→│                                                                              │
+   795→│ 5. EXPORT OPTIONS:                                                           │
+   796→│    □ Export selected (checkbox multi-select)                                │
+   797→│    □ Export all (current search results)                                    │
+   798→│    □ Formats: CSV, BibTeX, RIS, EndNote, JSON                              │
+   799→│    □ Include abstracts option                                              │
+   800→│    □ Download file + "Copied to clipboard" toast                            │
+   801→│                                                                              │
+   802→│ 6. SEARCH HISTORY:                                                           │
+   803→│    □ Save every search query automatically                                  │
+   804→│    □ "Recent Searches" dropdown under search box                            │
+   805→│    □ Clear history option                                                   │
+   806→│    □ Pin important searches                                                │
+   807→│    □ Re-run search (check for new results since last run)                   │
+   808→│    □ Alert for new matches (Pro feature)                                   │
+   809→└──────────────────────────────────────────────────────────────────────────────┘
+   810→
+   811→--------------------------------------------------------------------------------
+   812→4.2 FILTERS & FACETS
+   813→--------------------------------------------------------------------------------
+   814→
+   815→FILTER PANEL:
+   816→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   817→│ • Has year range, type, source filters                                       │
+   818→│ • Basic implementation                                                       │
+   819→└──────────────────────────────────────────────────────────────────────────────┘
+   820→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   821→│ ACTION: Rich Faceted Search Filters                                          │
+   822→│                                                                              │
+   823→│ FILTER CATEGORIES:                                                           │
+   824→│ □ Publication Year:                                                          │
+   825→│   - Range slider (2020-2026)                                                │
+   826→│   - Preset ranges (Last year, Last 5 years, All time)                      │
+   827→│   - Show result count per year (histogram bar)                              │
+   828→│                                                                              │
+   829→│ □ Publication Type:                                                          │
+   830→│   - Journal Article, Preprint, Book, Conference, Thesis                     │
+   831→│   - Checkbox multi-select                                                   │
+   832→│   - Show count per type                                                      │
+   833→│                                                                              │
+   834→│ □ Data Source:                                                               │
+   835→│   - CrossRef, OpenAlex, arXiv, PubMed, etc.                                │
+   836→│   - Toggle individual sources on/off                                       │
+   837→│   - Show response time per source                                           │
+   838→│                                                                              │
+   839→│ □ Language:                                                                  │
+   840→│   - English, Chinese, Spanish, German, French, etc.                         │
+   841→│   - Top 10 languages + "More..."                                           │
+   842→│                                                                              │
+   843→│ □ Open Access:                                                               │
+   844→│   - Only Open Access toggle                                                │
+   845→│   - Show OA availability percentage                                         │
+   846→│                                                                              │
+   847→│ □ Subject Area:                                                              │
+   848→│   - Computer Science, Biology, Medicine, Chemistry, Physics                 │
+   849→│   - Hierarchical category browser                                           │
+   850→│                                                                              │
+   851→│ FILTER UI PATTERNS:                                                          │
+   852→│ □ Applied filters shown as tags/chips (× to remove)                        │
+   853→│ □ "Clear all filters" button                                               │
+   854→│ □ Filter combinations saved as "Search Profiles"                            │
+   855→│ □ URL encodes filters (shareable search URLs)                               │
+   856→│ □ Result count updates dynamically as filters change                       │
+   857→└──────────────────────────────────────────────────────────────────────────────┘
+   858→
+   859→
+   860→================================================================================
+   861→           SECTION 5: DATA LAKE (app/data/page.tsx) - 686 LINES
+   862→================================================================================
+   863→
+   864→CURRENT STATE: Dataset management with CRUD operations.
+   865→
+   866→--------------------------------------------------------------------------------
+   867→5.1 DATASET UPLOAD
+   868→--------------------------------------------------------------------------------
+   869→
+   870→UPLOAD FUNCTIONALITY:
+   871→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   872→│ • Upload button exists but likely simulated                                   │
+   873→│ • Shows dataset list from store                                              │
+   874→└──────────────────────────────────────────────────────────────────────────────┘
+   875→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   876→│ ACTION: Real File Upload with Processing Pipeline                             │
+   877→│                                                                              │
+   878→│ 1. UPLOAD ZONE (Drag & Drop):                                                │
+   879→│    □ Large drop zone ("Drop files here or click to browse")                 │
+   880→│    □ Accepted formats: .csv, .xlsx, .json, .fasta, .pdb, .xml              │
+   881→│    □ Max file size: Free 100MB, Pro 1GB, Enterprise unlimited               │
+   882→│    □ Multiple file upload support                                           │
+   883→│    □ Drag-over visual feedback (border highlight, "+ Add files")            │
+   884→│                                                                              │
+   885→│ 2. UPLOAD PROCESS:                                                           │
+   886→│    □ File validation (format check, size check)                             │
+   887→│    □ Progress bar with percentage + speed estimate                          │
+   888→│    □ Cancel upload option                                                   │
+   889→│    □ Pause/resume (for large files, if supported)                           │
+   890→│    □ Post-upload processing:                                                │
+   891→│      - Auto-detect columns/types (CSV)                                     │
+   892→│      - Generate data preview (first 50 rows)                               │
+   893→│      - Calculate basic stats (row count, column count, null %)              │
+   894→│      - Detect encoding automatically                                        │
+   895→│                                                                              │
+   896→│ 3. DATASET METADATA FORM (after upload):                                     │
+   897→│    □ Dataset name * (auto-suggest from filename)                            │
+   898→│    □ Description * (required, min 20 chars)                                │
+   899→│    □ Tags (multi-select from suggestions + custom)                          │
+   900→│    □ Category: Tabular, Text, Image, Sequence, Structure                   │
+   901→│    □ License: CC0, CC-BY, CC-BY-SA, Proprietary, Other                    │
+   902→│    □ Visibility: Public, Private (Pro), Shared (link)                      │
+   903→│    □ Related publications (DOI lookup)                                     │
+   904→│    □ Methodology notes (optional textarea)                                 │
+   905→│                                                                              │
+   906→│ 4. DATA PREVIEW:                                                             │
+   907→│    □ Table view with sortable columns                                      │
+   908→│    □ Pagination (25, 50, 100 rows per page)                                │
+   909→│    □ Column type indicators (number, text, date, categorical)               │
+   910→│    □ Search within dataset                                                 │
+   911→│    □ Column statistics (click header → distribution chart)                  │
+   912→└──────────────────────────────────────────────────────────────────────────────┘
+   913→
+   914→--------------------------------------------------------------------------------
+   915→5.2 DATASET ACTIONS
+   916→--------------------------------------------------------------------------------
+   917→
+   918→DATASET CARD/BUTTON ACTIONS:
+   919→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   920→│ • Basic CRUD operations via store                                            │
+   921→│ • Grid/table view toggle                                                    │
+   922→└──────────────────────────────────────────────────────────────────────────────┘
+   923→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   924→│ ACTION: Comprehensive Dataset Management                                     │
+   925→│                                                                              │
+   926→│ PER-DATASET ACTIONS:                                                         │
+   927→│                                                                              │
+   928→│ 1. VIEW:                                                                     │
+   929→│    □ Open dataset detail page/modal                                         │
+   930→│    □ Full data table with all rows                                         │
+   931→│    □ Metadata sidebar                                                       │
+   932→│    □ Version history                                                        │
+   933→│    □ Activity log (who changed what, when)                                 │
+   934→│                                                                              │
+   935→│ 2. EDIT:                                                                     │
+   936→│    □ Edit metadata (name, description, tags)                               │
+   937→│    □ Edit data (in-cell editing for table view)                            │
+   938→│    □ Add/remove columns                                                    │
+   939→│    □ Transform column (rename, type cast, calculate)                        │
+   940→│    □ Undo/redo for changes                                                 │
+   941→│                                                                              │
+   942→│ 3. QUERY (SQL-like interface):                                              │
+   943→│    □ Query editor with syntax highlighting                                 │
+   944→│    □ Autocomplete for table/column names                                    │
+   945→│    □ Run query button → results below                                       │
+   946→│    □ Save query as "View"                                                   │
+   947→│    □ Query history                                                          │
+   948→│    □ Export query results                                                   │
+   949→│                                                                              │
+   950→│ 4. EXPORT:                                                                   │
+   951→│    □ Format: Original, CSV, JSON, Excel, Parquet                           │
+   952→│    □ Options: All data / Filtered / Selected rows                           │
+   953→│    □ Include metadata option                                               │
+   954→│    □ Download + "Export complete" toast                                    │
+   955→│                                                                              │
+   956→│ 5. SHARE:                                                                    │
+   957→│    □ Generate shareable link (with expiry option)                           │
+   958→│    □ Set permissions: View, View+Comment, Edit                             │
+   959→│    □ QR code for link (mobile sharing)                                     │
+   960→│    □ Email invite option                                                   │
+   961→│    □ Embed code (iframe for websites)                                      │
+   962→│                                                                              │
+   963→│ 6. DELETE:                                                                   │
+   964→│    □ Confirmation dialog: "Delete 'Dataset Name'?"                         │
+   965→│    □ Show impact: "This will affect 2 analyses and 1 dashboard"            │
+   966→│    □ Soft delete option (recoverable for 30 days) - Pro feature            │
+   967→│    □ Permanent delete with typing confirmation                              │
+   968→│                                                                              │
+   969→│ 7. DUPLICATE:                                                                │
+   970→│    □ Create copy with "(Copy)" suffix                                      │
+   971→│    □ Option to include data or just schema/metadata                        │
+   972→│    □ "Duplicated!" toast with link to new copy                             │
+   973→└──────────────────────────────────────────────────────────────────────────────┘
+   974→
+   975→
+   976→================================================================================
+   977→           SECTION 6: COMPUTE JOBS (app/compute/page.tsx) - 707 LINES
+   978→================================================================================
+   979→
+   980→CURRENT STATE: Job queue management with status tracking.
+   981→
+   982→--------------------------------------------------------------------------------
+   983→6.1 JOB CREATION & SUBMISSION
+   984→--------------------------------------------------------------------------------
+   985→
+   986→CREATE JOB FORM (Line ~393-490):
+   987→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   988→│ • Opens form with job name input                                            │
+   989→│ • Creates job in store                                                      │
+   990→│ • Basic validation                                                          │
+   991→└──────────────────────────────────────────────────────────────────────────────┘
+   992→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   993→│ ACTION: Rich Job Submission Form with Configuration                          │
+   994→│                                                                              │
+   995→│ JOB CREATION FORM FIELDS:                                                    │
+   996→│                                                                              │
+   997→│ 1. BASIC INFO:                                                               │
+   998→│    □ Job name *                                                              │
+   999→│    □ Description (what this job does)                                       │
+  1000→│    □ Project association (dropdown: select project)                         │
+  1001→│    □ Tags for organization                                                  │
+  1002→│                                                                              │
+  1003→│ 2. JOB TYPE SELECTOR:                                                        │
+  1004→│    □ Type cards with icons:                                                  │
+  1005→│      - Python Script (🐍)                                                   │
+  1006→│      - R Analysis (📊)                                                     │
+  1007→│      - SQL Query (🗃️)                                                     │
+  1008→│      - Shell Command (⚙️)                                                  │
+  1009→│      - Container/Docker (🐳)                                               │
+  1010→│      - Workflow/Pipeline (🔄)                                              │
+  1011→│    □ Selection changes form fields below                                    │
+  1012→│                                                                              │
+  1013→│ 3. CONFIGURATION (based on job type):                                        │
+  1014→│    □ Code/Script editor (embedded mini workspace)                           │
+  1015→│    □ Input dataset selector (from Data Lake)                                │
+  1016→│    □ Parameters (key-value pairs, type-aware)                               │
+  1017→│    □ Environment variables (secrets masked)                                 │
+  1018→│    □ Resource requirements:                                                 │
+  1019→│      - CPU cores (1, 2, 4, 8, 16)                                         │
+  1020→│      - Memory (1GB, 2GB, 4GB, 8GB, 16GB, 32GB)                            │
+  1021→│      - GPU (None, T4, V100, A100) - Pro feature                            │
+  1022→│      - Storage (10GB, 50GB, 100GB, 500GB)                                 │
+  1023→│    □ Timeout (1h, 4h, 12h, 24h, 48h, Custom)                               │
+  1024→│    □ Retry policy (0, 1, 3, 5 retries)                                     │
+  1025→│                                                                              │
+  1026→│ 4. SCHEDULING:                                                               │
+  1027→│    □ Run now (default)                                                      │
+  1028→│    □ Schedule: Date/time picker + cron expression builder                  │
+  1029→│    □ Recurring: Daily, Weekly, Monthly + custom                             │
+  1030→│    □ Dependencies: Run after job X completes                                │
+  1031→│                                                                              │
+  1032→│ 5. NOTIFICATIONS:                                                            │
+  1033→│    □ Email on completion                                                    │
+  1034→│    □ Email on failure                                                       │
+  1035→│    □ Webhook URL (POST on completion)                                      │
+  1036→│    □ Slack/Teams notification (Pro)                                        │
+  1037→│                                                                              │
+  1038→│ SUBMIT ACTION:                                                               │
+  1039→│ □ Validate all required fields                                             │
+  1040→│ □ Estimate cost/time (show user)                                           │
+  1041→│ □ Confirm dialog: "Submit job 'JobName'? Est. runtime: ~15min"             │
+  1042→│ □ Loading: Creating job...                                                 │
+  1043→│ □ Success: "Job submitted! ID: job_abc123" + redirect to job detail         │
+  1044→│ □ Error: Specific validation messages                                      │
+  1045→└──────────────────────────────────────────────────────────────────────────────┘
+  1046→
+  1047→--------------------------------------------------------------------------------
+  1048→6.2 JOB STATUS & ACTIONS
+  1049→--------------------------------------------------------------------------------
+  1050→
+  1051→JOB LIST ACTIONS (Lines ~505-635):
+  1052→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1053→│ • Select job to view details                                                 │
+  1054→│ • Cancel job button                                                          │
+  1055→│ • View logs button                                                           │
+  1056→│ • Basic status display                                                      │
+  1057→└──────────────────────────────────────────────────────────────────────────────┘
+  1058→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1059→│ ACTION: Rich Job Monitoring & Management                                     │
+  1060→│                                                                              │
+  1061→│ JOB DETAIL PANEL/MODAL:                                                      │
+  1062→│                                                                              │
+  1063→│ 1. STATUS DISPLAY:                                                           │
+  1064→│    □ Visual status indicator:                                                │
+  1065→│      - Queued: Gray clock icon                                             │
+  1066→│      - Running: Blue spinning icon + elapsed timer                         │
+  1067→│      - Completed: Green checkmark + total time                              │
+  1068→│      - Failed: Red X + error summary                                       │
+  1069→│      - Cancelled: Strikethrough text                                       │
+  1070→│    □ Progress bar (if applicable)                                           │
+  1071→│    □ Percentage complete                                                   │
+  1072→│    □ Current step ("Step 3/5: Processing data...")                          │
+  1073→│                                                                              │
+  1074→│ 2. OUTPUT SECTION:                                                           │
+  1075→│    □ stdout/stderr tabs in log viewer                                       │
+  1076→│    □ Syntax highlighting for logs                                          │
+  1077→│    □ Search within logs                                                     │
+  1078→│    □ Download full logs (txt file)                                         │
+  1079→│    □ Clear logs button                                                     │
+  1080→│    □ Live log streaming (if job still running)                              │
+  1081→│                                                                              │
+  1082→│ 3. RESULTS SECTION (on completion):                                          │
+  1083→│    □ Output files list (downloadable)                                       │
+  1084→│    □ Result preview (images, tables, plots)                                 │
+  1085→│    □ Metrics/Statistics summary                                            │
+  1086→│    □ Compare with previous runs                                            │
+  1087→│    □ Publish results option                                                │
+  1088→│                                                                              │
+  1089→│ 4. RESOURCE USAGE:                                                           │
+  1090→│    □ CPU utilization over time chart                                       │
+  1091→│    □ Memory usage chart                                                    │
+  1092→│    □ Disk I/O metrics                                                      │
+  1093→│    □ Network transfer (if applicable)                                      │
+  1094→│    □ Cost breakdown (Pro/Enterprise: actual $)                              │
+  1095→│                                                                              │
+  1096→│ JOB ACTION BUTTONS:                                                          │
+  1097→│ □ CANCEL: Confirmation dialog + reason dropdown (optional)                  │
+  1098→│ □ RESTART: "Restart from beginning?" or "Resume from checkpoint?"          │
+  1099→│ □ DUPLICATE: "Create copy with same settings"                               │
+  1100→│ □ SHARE: Generate results share link                                        │
+  1101→│ □ DELETE: Soft delete with recovery option                                 │
+  1102→│ □ CLONE TO TEMPLATE: Save as reusable job template                          │
+  1103→└──────────────────────────────────────────────────────────────────────────────┘
+  1104→
+  1105→
+  1106→================================================================================
+  1107→        SECTION 7: KNOWLEDGE GRAPH (app/knowledge/page.tsx) - 677 LINES
+  1108→================================================================================
+  1109→
+  1110→CURRENT STATE: Node-edge graph visualization (simulated).
+  1111→
+  1112→--------------------------------------------------------------------------------
+  1113→7.1 GRAPH INTERACTIONS
+  1114→--------------------------------------------------------------------------------
+  1115→
+  1116→GRAPH CONTROLS (Lines ~461-497):
+  1117→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1118→│ • Toggle labels, edges                                                      │
+  1119→│ • Save graph button                                                         │
+  1120→│ • Canvas click handling                                                     │
+  1121→│ • Layout options                                                            │
+  1122→└──────────────────────────────────────────────────────────────────────────────┘
+  1123→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1124→│ ACTION: Fully Interactive Knowledge Graph                                    │
+  1125→│                                                                              │
+  1126→│ 1. NODE INTERACTIONS:                                                        │
+  1127→│    □ Click node → Show detail panel:                                        │
+  1128→│      - Entity name, type, description                                      │
+  1129→│      - Connected entities list                                              │
+  1130→│      - Source data (which API/database)                                    │
+  1131→│      - Related external links (PubMed, UniProt, etc.)                      │
+  1132→│      - Add note/tag to entity                                              │
+  1133→│    □ Double-click → Expand node (show connected nodes 1 level deeper)       │
+  1134→│    □ Right-click → Context menu:                                           │
+  1135→│      - Focus on this node (center view)                                    │
+  1136→│      - Hide node (and connections)                                         │
+  1137→│      - Fix/unfix position                                                 │
+  1138→│      - Export subgraph                                                     │
+  1139→│      - Search for this entity externally                                   │
+  1140→│    □ Hover: Highlight connected edges + show tooltip preview                │
+  1141→│    □ Drag node to reposition                                              │
+  1142→│    □ Scroll to zoom (pinch on touch)                                       │
+  1143→│                                                                              │
+  1144→│ 2. EDGE INTERACTIONS:                                                        │
+  1145→│    □ Click edge → Show relationship details:                               │
+  1146→│      - Source entity                                                       │
+  1147→│      - Target entity                                                       │
+  1148→│      - Relationship type (cites, interacts_with, etc.)                     │
+  1149→│      - Confidence score (if from ML prediction)                            │
+  1150→│      - Source evidence (paper DOI, database entry)                          │
+  1151→│    □ Hover edge: Thicken + show label                                      │
+  1152→│                                                                              │
+  1153→│ 3. GRAPH CONTROLS ENHANCED:                                                  │
+  1154→│    □ Layout algorithms:                                                    │
+  1155→│      - Force-directed (current)                                            │
+  1156→│      - Circular/radial                                                    │
+  1157→│      - Hierarchical/tree                                                   │
+  1158→│      - Geographic (if location data)                                       │
+  1159→│      - Timeline (if temporal data)                                         │
+  1160→│    □ Zoom controls (+/-/fit)                                               │
+  1161→│    □ Mini-map overview (small version in corner)                            │
+  1162→│    □ Fullscreen mode                                                       │
+  1163→│    □ Screenshot/export (PNG, SVG)                                          │
+  1164→│                                                                              │
+  1165→│ 4. SEARCH WITHIN GRAPH:                                                     │
+  1166→│    □ Search box: Find entities by name                                     │
+  1167→│    □ Results highlight matching nodes                                      │
+  1168→│    □ Jump to first result                                                  │
+  1169→│    □ Cycle through results                                                 │
+  1170→│    □ Filter by entity type (show/hide categories)                          │
+  1171→│                                                                              │
+  1172→│ 5. DATA IMPORT/EXPORT:                                                      │
+  1173→│    □ Import from:                                                           │
+  1174→│      - CSV/JSON (node list + edge list)                                    │
+  1175→│      - PubMed search results (auto-extract entities)                        │
+  1176→│      - Own dataset (map columns to nodes)                                  │
+  1177→│    □ Export to:                                                             │
+  1178→│      - GraphML, GEXF, JSON, CSV                                           │
+  1179→│      - Image (PNG, SVG for presentations)                                  │
+  1180→│      - Shareable link (embeddable viewer)                                  │
+  1181→│                                                                              │
+  1182→│ 6. SAVE/LOAD GRAPHS:                                                        │
+  1183→│    □ Save current graph state (layout, visibility, notes)                  │
+  1184→│    □ Named graphs ("Gene Network - Cancer Study")                          │
+  1185→│    □ Load saved graphs                                                     │
+  1186→│    □ Graph version history                                                 │
+  1187→│    □ Auto-save toggle                                                      │
+  1188→└──────────────────────────────────────────────────────────────────────────────┘
+  1189→
+  1190→
+  1191→================================================================================
+  1192→       SECTION 8: COLLABORATION (app/collaboration/page.tsx) - 879 LINES
+  1193→================================================================================
+  1194→
+  1195→CURRENT STATE: Team projects, members, discussions.
+  1196→
+  1197→--------------------------------------------------------------------------------
+  1198→8.1 PROJECT MANAGEMENT
+  1199→--------------------------------------------------------------------------------
+  1200→
+  1201→PROJECT CRUD (Lines ~265-450):
+  1202→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1203→│ • Create project dialog with name                                            │
+  1204→│ • Select project to view details                                            │
+  1205→│ • Basic member/discussion management                                       │
+  1206→└──────────────────────────────────────────────────────────────────────────────┘
+  1207→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1208→│ ACTION: Full Project Management Features                                    │
+  1209→│                                                                              │
+  1210→│ PROJECT CREATION FORM (Enhanced):                                           │
+  1211→│ □ Project name *                                                            │
+  1212→│ □ Description (rich text editor)                                           │
+  1213→│ □ Project type: Research, Course, Personal, Lab Group                      │
+  1214→│ □ Visibility: Private (default), Team, Public                              │
+  1215→│ □ Template: Blank, Standard Research, Grant Tracking, Paper Writing         │
+  1216→│ □ Default workflow/settings preset                                        │
+  1217→│                                                                              │
+  1218→│ PROJECT DETAIL VIEW:                                                         │
+  1219→│ □ Overview tab:                                                             │
+  1220→│   - Project stats (members, discussions, files, activity)                  │
+  1221→│   - Progress bar (customizable milestones)                                 │
+  1222→│   - Recent activity feed                                                   │
+  1223→│   - Quick actions (add member, create discussion, upload file)              │
+  1224→│                                                                              │
+  1225→│ □ Members tab:                                                              │
+  1226→│   - Member list with avatars, roles, join dates                            │
+  1227→│   - Role badges: Owner, Admin, Editor, Viewer                             │
+  1228→│   - Invite member button (email invite form)                               │
+  1229→│   - Change role dropdown (if permission)                                   │
+  1230→│   - Remove member (with confirmation)                                      │
+  1231→│   - Member activity contribution chart                                     │
+  1232→│                                                                              │
+  1233→│ □ Discussions tab:                                                          │
+  1234→│   - Discussion list with titles, authors, reply counts, timestamps         │
+  1235→│   - Create discussion: Title, body, tags, pinned status                   │
+  1236→│   - Thread view with replies                                              │
+  1237→│   - Reply with rich text, @mentions, file attachments                     │
+  1238→│   - Mark as resolved, pin important threads                               │
+  1239→│   - Subscribe to thread notifications                                     │
+  1240→│                                                                              │
+  1241→│ □ Files tab (NEW):                                                          │
+  1242→│   - File library for project                                                │
+  1243→│   - Upload, organize in folders                                           │
+  1244→│   - Version history                                                        │
+  1245→│   - Link to datasets from Data Lake                                       │
+  1246→│                                                                              │
+  1247→│ □ Settings tab:                                                             │
+  1248→│   - Edit project details                                                   │
+  1249→│   - Archive/delete project                                                │
+  1250→│   - Export project data                                                    │
+  1251→│   - Transfer ownership                                                    │
+  1252→└──────────────────────────────────────────────────────────────────────────────┘
+  1253→
+  1254→--------------------------------------------------------------------------------
+  1255→8.2 MEMBER INVITATION
+  1256→--------------------------------------------------------------------------------
+  1257→
+  1258→INVITE MEMBER FLOW:
+  1259→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1260→│ • May have basic add member functionality                                   │
+  1261→│ • Limited invitation system                                                │
+  1262→└──────────────────────────────────────────────────────────────────────────────┘
+  1263→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1264→│ ACTION: Multi-Channel Member Invitation System                               │
+  1265→│                                                                              │
+  1266→│ INVITATION METHODS:                                                          │
+  1267→│                                                                              │
+  1268→│ 1. EMAIL INVITE:                                                             │
+  1269→│    □ Form: Email *, Role (dropdown), Personal message (optional)           │
+  1270→│    □ Send invitation email with:                                           │
+  1271→│      - Project name and description                                        │
+  1272→│      - Inviter name                                                        │
+  1273→│      - Accept/decline links                                               │
+  1274→│      - Role explanation                                                   │
+  1275→│    □ Pending invitations list:                                            │
+  1276→│      - Status: Pending, Accepted, Expired, Declined                       │
+  1277→│      - Sent date, expires in 7 days                                       │
+  1278→│      - Resend option, cancel option                                       │
+  1279→│                                                                              │
+  1280→│ 2. LINK INVITE:                                                             │
+  1281→│    □ Generate unique invite link                                           │
+  1282→│    □ Set expiration: Never, 1 day, 7 days, 30 days, custom               │
+  1283→│    □ Set max uses: Unlimited, 1, 5, 10, custom                           │
+  1284→│    □ Set default role for joiners                                         │
+  1285→│    □ Copy link + QR code                                                  │
+  1286→│    □ Revoke link option                                                   │
+  1287→│                                                                              │
+  1288→│ 3. CODE INVITE:                                                             │
+  1289→│    □ Generate short alphanumeric code (e.g., SCI-HUB-XK9P)                │
+  1290→│    □ Share verbally or in chat                                            │
+  1291→│    □ Single use or multi-use option                                       │
+  1292→│                                                                              │
+  1293→│ ON ACCEPTANCE:                                                               │
+  1294→│ □ Redirect to project with welcome banner                                  │
+  1295→│ □ "Welcome to [Project]! You've been added as [Role]."                    │
+  1296→│ □ Suggest next steps: "Introduce yourself in #general"                    │
+  1297→│ □ Notify project owner                                                    │
+  1298→│ □ Add to project activity feed                                            │
+  1299→└──────────────────────────────────────────────────────────────────────────────┘
+  1300→
+  1301→--------------------------------------------------------------------------------
+  1302→8.3 DISCUSSION SYSTEM
+  1303→--------------------------------------------------------------------------------
+  1304→
+  1305→DISCUSSION FORUM (Lines ~550-750):
+  1306→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1307→│ • Create discussion with title                                               │
+  1308→│ • Add replies                                                               │
+  1309→│ • Basic threading                                                          │
+  1310→└──────────────────────────────────────────────────────────────────────────────┘
+  1311→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1312→│ ACTION: Full Forum/Discussion Features                                      │
+  1313→│                                                                              │
+  1314→│ DISCUSSION CREATION:                                                         │
+  1315→│ □ Title *                                                                  │
+  1316→│ □ Category/Tag (select or create):                                          │
+  1317→│   - General, Question, Idea, Work in Progress, Help wanted                │
+  1318→│   - Custom project tags                                                   │
+  1319→│ □ Body (rich text editor):                                                  │
+  1320→│   - Bold, italic, code, lists                                             │
+  1321→│   - @mention members (autocomplete)                                       │
+  1322→│   - File attachments                                                       │
+  1323→│   - Code blocks with syntax highlighting                                 │
+  1324→│   - LaTeX math support ($$E = mc^2$$)                                     │
+  1325→│ □ Options:                                                                 │
+  1326→│   - Pinned (stays at top)                                                 │
+  1327→│   - Requires response (track who hasn't replied)                          │
+  1328→│   - Private (only specific members can see) - Pro feature                 │
+  1329→│                                                                              │
+  1330→│ REPLY SYSTEM:                                                                │
+  1331→│ □ Threaded replies (reply to specific comment, not just OP)                │
+  1332→│ □ Mark as answer (OP or admin can mark best answer)                        │
+  1333→│ □ Reaction emojis (👍 👎 ❤️ 😆 🎉 ? — like Stack Overflow)               │
+  1334→│ □ Edit own replies (with "edited" timestamp)                              │
+  1335→│ □ Delete (soft delete with moderator visibility)                           │
+  1336→│ □ Quote/reply to specific part of comment                                  │
+  1337→│                                                                              │
+  1338→│ NOTIFICATIONS:                                                               │
+  1339→│ □ @mentioned users get notified                                           │
+  1340→│ □ Thread subscribers get notified on new reply                            │
+  1341→│ □ Unread count badge on Discussions tab                                   │
+  1342→│ □ Mark all read / Mark thread read                                         │
+  1343→└──────────────────────────────────────────────────────────────────────────────┘
+  1344→
+  1345→
+  1346→================================================================================
+  1347→         SECTION 9: CONNECTORS HUB (app/connectors/page.tsx) - 865 LINES
+  1348→================================================================================
+  1349→
+  1350→CURRENT STATE: Most functional page with 12 free + 3 premium connectors.
+  1351→
+  1352→--------------------------------------------------------------------------------
+  1353→9.1 CONNECTOR TOGGLE/ACTION
+  1354→--------------------------------------------------------------------------------
+  1355→
+  1356→CONNECT/TOGGLE BUTTONS:
+  1357→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1358→│ • Toggle connection status                                                  │
+  1359→│ • Premium connectors show subscription form                                 │
+  1360→│ • Good implementation already                                               │
+  1361→└──────────────────────────────────────────────────────────────────────────────┘
+  1362→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1363→│ ACTION: Enhanced Connector Management                                        │
+  1364→│                                                                              │
+  1365→│ FREE CONNECTOR ACTIONS:                                                      │
+  1366→│ □ Connect → Test connection (real API ping):                               │
+  1367→│   - Show "Testing..." with spinner                                        │
+  1368→│   - Success: "Connected! Latency: 245ms" + green dot                      │
+  1369→│   - Failed: "Connection failed" + error message + retry button             │
+  1370→│   - Show last tested timestamp                                           │
+  1371→│                                                                              │
+  1372→│ □ Configure (gear icon):                                                   │
+  1373→│   - Custom parameters (API key if needed, rate limit prefs)                │
+  1374→│   - Default dataset/database selection                                    │
+  1375→│   - Response format preferences                                           │
+  1376→│   - Cache settings                                                        │
+  1377→│                                                                              │
+  1378→│ □ Documentation link (external icon):                                      │
+  1379→│   - Open official API docs in new tab                                     │
+  1380→│   - Show "Quick Start Guide" inline tooltip                               │
+  1381→│                                                                              │
+  1382→│ □ Usage stats:                                                             │
+  1383→│   - Requests today/this month                                             │
+  1384→│   - Rate limit remaining (visual: "4,234 / 10,000 remaining")             │
+  1385→│   - Last successful request time                                          │
+  1386→│                                                                              │
+  1387→│ PREMIUM CONNECTOR ACTIONS:                                                   │
+  1388→│ □ "Request Access" → Open subscription form (already implemented ✅)       │
+  1389→│ □ Show feature comparison (free vs premium data)                           │
+  1390→│ □ Sample data preview (what premium adds)                                  │
+  1391→│ □ "Notify when available" (email capture without full signup)              │
+  1392→│                                                                              │
+  1393→│ CONNECTOR HEALTH DASHBOARD:                                                  │
+  1394→│ □ Overall status: All operational / Some degraded / Major outage           │
+  1395→│ □ Individual connector uptime percentage                                   │
+  1396→│ □ Response time trends (sparkline chart)                                   │
+  1397→│ □ Incident history (if any)                                                │
+  1398→│ □ Scheduled maintenance notices                                            │
+  1399→└──────────────────────────────────────────────────────────────────────────────┘
+  1400→
+  1401→
+  1402→================================================================================
+  1403→          SECTION 10: SETTINGS (app/settings/page.tsx) - 948 LINES
+  1404→================================================================================
+  1405→
+  1406→CURRENT STATE: Comprehensive settings with multiple sections.
+  1407→
+  1408→--------------------------------------------------------------------------------
+  1409→10.1 SETTINGS SECTIONS
+  1410→--------------------------------------------------------------------------------
+  1411→
+  1412→SETTINGS ACTIONS:
+  1413→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1414→│ • Multiple setting categories                                                │
+  1415→│ • Some persist to store                                                     │
+  1416→│ • Good structure, needs polish                                              │
+  1417→└──────────────────────────────────────────────────────────────────────────────┘
+  1418→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1419→│ ACTION: Complete Settings with Persistence & Validation                     │
+  1420→│                                                                              │
+  1421→│ EACH SETTING SHOULD HAVE:                                                    │
+  1422→│ □ Immediate visual feedback on change (toggle switch, color preview)        │
+  1423→│ □ "Save" button that enables only when changes detected                    │
+  1424→│ □ "Reset to defaults" option per section                                   │
+  1425→│ □ "Discard changes" confirmation if unsaved changes                        │
+  1426→│ □ Persistence: Save to localStorage + sync to account (when auth ready)    │
+  1427→│ □ Undo recent changes (Ctrl+Z support)                                    │
+  1428→│                                                                              │
+  1429→│ SPECIFIC SETTINGS ACTIONS:                                                   │
+  1430→│                                                                              │
+  1431→│ APPEARANCE:                                                                  │
+  1432→│ □ Theme (Light/Dark/System): Immediate preview, smooth transition          │
+  1433→│ □ Font size: Slider with live preview text                                 │
+  1434→│ □ Accent color: Color picker with preset palette                           │
+  1435→│ □ Density: Comfortable / Compact (affects padding throughout app)           │
+  1436→│ □ Border radius: None / Rounded / Circular preview                         │
+  1437→│                                                                              │
+  1438→│ LANGUAGE:                                                                   │
+  1439→│ □ Language selector: Dropdown with native language names                   │
+  1440→│ □ Show "Translating... brief while switching                              │
+  1441→│ □ Incomplete translations: Show "[English]" fallback indicator             │
+  1442→│ □ "Help translate" link (Crowdin/CPO link)                                 │
+  1443→│                                                                              │
+  1444→│ NOTIFICATIONS:                                                               │
+  1445→│ □ Email notifications toggles per category                                 │
+  1446→│ □ Push notification permission (browser API)                              │
+  1447→│ □ Digest frequency: Real-time / Daily / Weekly                             │
+  1448→│ □ Quiet hours (don't disturb during night)                                 │
+  1449→│ □ Sound effects toggle                                                    │
+  1450→│                                                                              │
+  1451→│ DATA & PRIVACY:                                                             │
+  1452→│ □ Export all data (zip download)                                           │
+  1453→│ □ Import data (from backup file)                                           │
+  1454→│ □ Delete account (with strong confirmation: type "DELETE" to confirm)       │
+  1455→│ □ GDPR data download request                                              │
+  1456→│ □ Cookie preferences (if analytics added)                                  │
+  1457→│                                                                              │
+  1458→│ CONNECTIONS:                                                                │
+  1459→│ □ API key management (show/hide, regenerate, revoke)                      │
+  1460→│ □ Connected services (Google, GitHub, ORCID) with unlink option            │
+  1461→│ □ WebAuthn / Passkey setup (modern auth)                                  │
+  1462→│ □ Active sessions list with "Revoke other sessions" button                 │
+  1463→└──────────────────────────────────────────────────────────────────────────────┘
+  1464→
+  1465→
+  1466→================================================================================
+  1467→          SECTION 11: SUBSCRIPTION (app/subscription/page.tsx) - 569 LINES
+  1468→================================================================================
+  1469→
+  1470→CURRENT STATE: Functional pricing page with form (already good!).
+  1471→
+  1472→--------------------------------------------------------------------------------
+  1473→11.1 SUBSCRIPTION ACTIONS
+  1474→--------------------------------------------------------------------------------
+  1475→
+  1476→PRICING & SIGNUP:
+  1477→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1478→│ • 3-tier pricing cards functional                                           │
+  1479→│ • Subscription form with validation                                         │
+  1480→│ • FAQ section                                                              │
+  1481→│ • One of the most complete pages                                           │
+  1482→└──────────────────────────────────────────────────────────────────────────────┘
+  1483→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1484→│ ACTION: Polish & Enhance Already-Good Implementation                          │
+  1485→│                                                                              │
+  1486→│ ENHANCEMENTS NEEDED:                                                         │
+  1487→│                                                                              │
+  1488→│ 1. PRICING CALCULATOR:                                                       │
+  1489→│    □ "Calculate my price" widget:                                           │
+  1490→│      - Number of users slider                                              │
+  1491→│      - Expected API calls/month                                            │
+  1492→│      - Storage needed                                                      │
+  1493→│      - Recommended tier highlights                                         │
+  1494→│      - Estimated monthly cost                                              │
+  1495→│    □ Annual vs Monthly toggle with savings calculation                    │
+  1496→│    □ Team discount calculator (5+ users = 10%, 20+ = 20%)                  │
+  1497→│                                                                              │
+  1498→│ 2. PLAN COMPARISON:                                                          │
+  1499→│    □ Interactive comparison table (checkmarks for features)                 │
+  1500→│    □ "Compare all plans" expandable detailed view                           │
+  1501→│    □ Feature tooltips explaining what each means                           │
+  1502→│    □ "Most popular" badge based on actual signups                          │
+  1503→│                                                                              │
+  1504→│ 3. TRIAL EXPERIENCE:                                                         │
+  1505→│    □ "Start 14-day free trial" prominent on Pro card                       │
+  1506→│    □ No credit card required for trial badge                               │
+  1507→│    □ Trial usage meter ("8 of 14 days remaining")                          │
+  1508→│    □ Upgrade prompt during trial (last 3 days)                             │
+  1509→│    □ Trial → Paid seamless transition (keep all data)                      │
+  1510→│                                                                              │
+  1511→│ 4. FORM ENHANCEMENTS:                                                        │
+  1512→│    □ Progressive disclosure (show fields as user progresses)               │
+  1513→│    □ Social proof near submit: "Joined by 5,000+ researchers"              │
+  1514→│    □ Trust badges: SSL secure, GDPR compliant, Cancel anytime              │
+  1515→│    □ Coupon/referral code input field                                      │
+  1516→│    □ Company/institution info for invoice (optional)                       │
+  1517→│                                                                              │
+  1518→│ 5. FAQ IMPROVEMENTS:                                                         │
+  1519→│    □ Search/filter questions                                              │
+  1520→│    □ Category tabs (Billing, Features, Technical, Account)                 │
+  1521→│    □ "Still have questions?" → Contact form / Live chat CTA               │
+  1522→│    □ Vote on questions (show popular ones first)                           │
+  1523→└──────────────────────────────────────────────────────────────────────────────┘
+  1524→
+  1525→
+  1526→================================================================================
+  1527→          SECTION 12: AETHEL AI ASSISTANT (app/aethel/page.tsx) - 579 LINES
+  1528→================================================================================
+  1529→
+  1530→CURRENT STATE: AI chat interface with model selection.
+  1531→
+  1532→--------------------------------------------------------------------------------
+  1533→12.1 AI INTERACTIONS
+  1534→--------------------------------------------------------------------------------
+  1535→
+  1536→CHAT INTERFACE:
+  1537→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+  1538→│ • Send queries to AI                                                        │
+  1539→│ • Model selection (free/pro)                                                │
+  1540→│ • Suggested prompts                                                         │
+  1541→│ • History management                                                        │
+  1542→└──────────────────────────────────────────────────────────────────────────────┘
+  1543→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+  1544→│ ACTION: Full-Featured AI Assistant Experience                               │
+  1545→│                                                                              │
+  1546→│ 1. QUERY SUBMISSION:                                                         │
+  1547→│    □ Input field enhancements:                                              │
+  1548→│      - Character count (for models with token limits)                      │
+  1549→│      - Auto-resize textarea (grow with content)                            │
+  1550→│      - Paste image support (vision models) - Pro feature                   │
+  1551→│      - @mention datasets/context from your Data Lake                       │
+  1552→│    □ Send button states:                                                    │
+  1553→│      - Idle: Send icon                                                     │
+  1554→│      - Typing: Enabled                                                     │
+  1555→│      - Sending: Spinner + disable input                                    │
+  1556→│      - Streaming: Pulsing dots while receiving                             │
+  1557→│      - Error: Retry button + "Regenerate response"                         │
+  1558→│                                                                              │
+  1559→│ 2. RESPONSE DISPLAY:                                                         │
+  1560→│    □ Typing animation (stream character by character)                      │
+  1561→│    □ Markdown rendering (code blocks, tables, lists)                      │
+  1562→│    □ Code blocks with copy button + syntax highlighting                   │
+  1563→│    □ Tables rendered properly                                             │
+  1564→│    □ Math/LaTeX rendering ($$ ... $$)                                     │
+  1565→│    □ Citation links (click to search paper)                                │
+  1566→│    □ "Thumbs up/down" feedback on responses                               │
+  1567→│    □ "Copy response" button                                               │
+  1568→│    □ "Share conversation" link                                            │
+  1569→│    □ "Regenerate" button (get alternative answer)                          │
+  1570→│                                                                              │
+  1571→│ 3. CONVERSATION MANAGEMENT:                                                  │
+  1572→│    □ Auto-title conversation (generated from first query)                  │
+  1573→│    □ Rename conversation (editable title)                                 │
+  1574→│    □ Star/favorite conversations                                          │
+  1575→│    □ Archive (hide from main list)                                        │
+  1576→│    □ Delete (with confirmation)                                           │
+  1577→│    □ Export conversation (Markdown, PDF, JSON)                            │
+  1578→│    □ Branch conversation (try different path from point)                   │
+  1579→│                                                                              │
+  1580→│ 4. CONTEXT AWARENESS:                                                        │
+  1581→│    □ Attach files from Data Lake as context                               │
+  1582→│    □ Reference previous queries in conversation                            │
+  1583→│    □ "Analyze this dataset" → Pull data into context                       │
+  1584→│    □ "Explain these results" → Reference search results                   │
+  1585→│    □ Persistent context across sessions (Pro)                              │
+  1586→│                                                                              │
+  1587→│ 5. SUGGESTED PROMPTS:                                                        │
+  1588→│    □ Dynamic suggestions based on:                                        │
+  1589→│      - Current page context (if opened from elsewhere)                    │
+  1590→│      - User's research field (from profile)                               │
+  1591→│      - Recent searches/activities                                          │
+  1592→│      - Time-based (morning: literature review, evening: summarize)        │
+  1593→│    □ Custom prompt templates (user-created, save for reuse)               │
+  1594→│    □ Prompt library (community-contributed prompts)                       │
+  1595→│                                                                              │
+  1596→│ 6. TOKEN/USAGE TRACKING:                                                     │
+  1597→│    □ Show tokens used per query                                           │
+  1598→│    □ Remaining quota for free tier                                        │
+  1599→│    □ Pro: Higher limits + faster models + priority queue                   │
+  1600→│    □ "Upgrade for more AI access" prompt when near limit                   │
+  1601→│    □ Usage chart (daily/weekly)                                            │
+  1602→└──────────────────────────────────────────────────────────────────────────────┘
+  1603→
+  1604→
+  1605→================================================================================
+  1606→          SECTION 13: MISSING FEATURES - "IN PROGRESS" HANDLING
+  1607→================================================================================
+  1608→
+  1609→For features not yet implemented, show professional "In Progress" states:
+  1610→
+  1611→--------------------------------------------------------------------------------
+  1612→13.1 "COMING SOON" PATTERN
+  1613→--------------------------------------------------------------------------------
+  1614→
+  1615→UNIMPLEMENTED FEATURE TEMPLATE:
+  1616→┌─────────────────────────────────────────────────────────────────────────────┐
+  1617→│                                                                              │
+  1618→│   ┌─────────────────────────────────────────────────────────────────┐       │
+  1619→│   │  🚧 Coming Soon                                                  │       │
+  1620→│   ├─────────────────────────────────────────────────────────────────┤       │
+  1621→│   │                                                                  │       │
+  1622→│   │  [Feature Name] is currently under development.                  │       │
+  1623→│   │                                                                  │       │
+  1624→│   │  We're working hard to bring you:                                │       │
+  1625→│   │  • Benefit 1 of the feature                                      │       │
+  1626→│   │  • Benefit 2 of the feature                                      │       │
+  1627→│   │  • Benefit 3 of the feature                                      │       │
+  1628→│   │                                                                  │       │
+  1629→│   │  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━                         │       │
+  1630→│   │                                                                  │       │
+  1631→│   │  Estimated Availability: [Timeline]                              │       │
+  1632→│   │  Progress: ████████░░░░ 75%                                     │       │
+  1633→│   │                                                                  │       │
+  1634→│   │  ┌──────────────────────────────────────┐                       │       │
+  1635→│   │  │  🔔 Notify Me When It's Ready        │                       │       │
+  1636→│   │  │  [Enter email_____________________]  │                       │       │
+  1637→│   │  │  [ Notify Me          ]              │                       │       │
+  1638→│   │  └──────────────────────────────────────┘                       │       │
+  1639→│   │                                                                  │       │
+  1640→│   │  In the meantime, try: [Alternative Feature Link]               │       │
+  1641→│   │                                                                  │       │
+  1642→│   └─────────────────────────────────────────────────────────────────┘       │
+  1643→│                                                                              │
+  1644→└──────────────────────────────────────────────────────────────────────────────┘
+  1645→
+  1646→COMPONENT IMPLEMENTATION:
+  1647→```tsx
+  1648→// components/ComingSoon.tsx
+  1649→interface ComingSoonProps {
+  1650→  featureName: string;
+  1651→  benefits: string[];
+  1652→  estimatedDate: string;
+  1653→  progress: number; // 0-100
+  1654→  alternativeLink?: { label: string; href: string };
+  1655→  notifyApiEndpoint: string;
+  1656→}
+  1657→
+  1658→export function ComingSoon({ 
+  1659→  featureName, 
+  1660→  benefits, 
+  1661→  estimatedDate, 
+  1662→  progress,
+  1663→  alternativeLink,
+  1664→  notifyApiEndpoint 
+  1665→}: ComingSoonProps) {
+  1666→  const [email, setEmail] = useState('');
+  1667→  const [notified, setNotified] = useState(false);
+  1668→  const [loading, setLoading] = useState(false);
+  1669→
+  1670→  const handleNotify = async () => {
+  1671→    setLoading(true);
+  1672→    try {
+  1673→      await fetch(notifyApiEndpoint, {
+  1674→        method: 'POST',
+  1675→        body: JSON.stringify({ email, feature: featureName })
+  1676→      });
+  1677→      setNotified(true);
+  1678→    } catch {
+  1679→      // Optimistic update
+  1680→      setNotified(true);
+  1681→    }
+  1682→    setLoading(false);
+  1683→  };
+  1684→
+  1685→  return (
+  1686→    <Dialog>
+  1687→      <DialogContent>
+  1688→        <DialogTitle>🚧 {featureName}</DialogTitle>
+  1689→        <div className="space-y-4">
+  1690→          <p className="text-muted-foreground">
+  1691→            This feature is under development.
+  1692→          </p>
+  1693→          
+  1694→          <ul className="space-y-2">
+  1695→            {benefits.map((b, i) => (
+  1696→              <li key={i} className="flex items-center gap-2">
+  1697→                <span className="text-green-500">✓</span> {b}
+  1698→              </li>
+  1699→            ))}
+  1700→          </ul>
+  1701→
+  1702→          <div>
+  1703→            <p className="text-sm font-medium mb-2">Progress</p>
+  1704→            <Progress value={progress} />
+  1705→            <p className="text-xs text-muted-foreground mt-1">
+  1706→              Estimated: {estimatedDate}
+  1707→            </p>
+  1708→          </div>
+  1709→
+  1710→          {!notified ? (
+  1711→            <div className="space-y-2">
+  1712→              <Input
+  1713→                placeholder="your@email.com"
+  1714→                value={email}
+  1715→                onChange={(e) => setEmail(e.target.value)}
+  1716→              />
+  1717→              <Button 
+  1718→                onClick={handleNotify} 
+  1719→                disabled={!email || loading}
+  1720→                className="w-full"
+  1721→              >
+  1722→                {loading ? '...' : 'Notify Me'}
+  1723→              </Button>
+  1724→            </div>
+  1725→          ) : (
+  1726→            <div className="bg-green-50 p-3 rounded-lg text-green-700 text-sm">
+  1727→              ✓ We'll notify you when it's ready!
+  1728→            </div>
+  1729→          )}
+  1730→
+  1731→          {alternativeLink && (
+  1732→            <p className="text-sm text-center">
+  1733→              Try <Link href={alternativeLink.href}>{alternativeLink.label}</Link>
+  1734→            </p>
+  1735→          )}
+  1736→        </div>
+  1737→      </DialogContent>
+  1738→    </Dialog>
+  1739→  );
+  1740→}
+  1741→```
+  1742→
+  1743→--------------------------------------------------------------------------------
+  1744→13.2 FEATURES TO SHOW "IN PROGRESS"
+  1745→--------------------------------------------------------------------------------
+  1746→
+  1747→USE THIS PATTERN FOR:
+  1748→
+  1749→| Feature | Benefits | Timeline | Alt Link |
+  1750→|---------|----------|----------|----------|
+  1751→| **Real-time Collaboration** | Simultaneous editing, Cursor presence, Live comments | Q4 2026 | /collaboration |
+  1752→| **Mobile App** | Research on-the-go, Push notifications, Offline mode | Q1 2027 | Use PWA |
+  1753→| **Python Code Execution** | Run analyses directly, See results instantly | Available now | /workspace |
+  1754→| **Citation Manager** | Auto-format references, PDF annotation, Bibliography | Q3 2026 | Manual export |
+  1755→| **Grant Tracker** | Deadline reminders, Budget tracking, Team collaboration | Q4 2026 | /collaboration |
+  1756→| **Lab Notebook** | Experiment logging, Protocol templates, Compliance | Q1 2027 | /data |
+  1757→| **Plugin Marketplace** | Extend functionality, Community contributions | Q2 2027 | /connectors |
+  1758→| **Video Conferencing** | Built-in calls, Screen sharing, Recording | Q1 2027 | External link |
+  1759→
+  1760→BUTTON TRIGGER: When user clicks unimplemented feature:
+  1761→```tsx
+  1762→<Button 
+  1763→  onClick={() => setComingSoonFeature({
+  1764→    name: 'Real-time Collaboration',
+  1765→    benefits: [
+  1766→      'Edit documents together simultaneously',
+  1767→      'See team cursors in real-time',
+  1768→      'Built-in video and chat'
+  1769→    ],
+  1770→    estimatedDate: 'Q4 2026',
+  1771→    progress: 65,
+  1772→    alternativeLink: { label: 'Basic collaboration', href: '/collaboration' },
+  1773→    notifyApiEndpoint: '/api/waitlist'
+  1774→  })}
+  1775→>
+  1776→  Launch App
+  1777→</Button>
+  1778→```
+  1779→
+  1780→--------------------------------------------------------------------------------
+  1781→13.3 ERROR BOUNDARY PATTERN
+  1782→--------------------------------------------------------------------------------
+  1783→
+  1784→WHEN SOMETHING GOES WRONG (NOT "IN PROGRESS", BUT BROKEN):
+  1785→
+  1786→┌─────────────────────────────────────────────────────────────────────────────┐
+  1787→│                                                                              │
+  1788→│   ┌─────────────────────────────────────────────────────────────────┐       │
+  1789→│   │  ⚠️ Something Went Wrong                                        │       │
+  1790→│   ├─────────────────────────────────────────────────────────────────┤       │
+  1791→│   │                                                                  │       │
+  1792→│   │  We encountered an unexpected error.                             │       │
+  1793→│   │                                                                  │       │
+  1794→│   │  Error code: ERR_ACTION_FAILED (for support reference)          │       │
+  1795→│   │                                                                  │       │
+  1796→│   │  ┌──────────────────────────────────────────────┐               │       │
+  1797→│   │  │  [ Try Again ]  [ Report Issue ]  [ Go Back ]│               │       │
+  1798→│   │  └──────────────────────────────────────────────┘               │       │
+  1799→│   │                                                                  │       │
+  1800→│   │  💡 If this keeps happening:                                    │       │
+  1801→│   │  • Check your internet connection                                │       │
+  1802→│   │  • Refresh the page                                              │       │
+  1803→│   │  • Clear cache and cookies                                       │       │
+  1804→│   │  • Contact support: support@scihub.pro                            │       │
+  1805→│   │                                                                  │       │
+  1806→│   └─────────────────────────────────────────────────────────────────┘       │
+  1807→│                                                                              │
+  1808→└──────────────────────────────────────────────────────────────────────────────┘
+  1809→
+  1810→KEY PRINCIPLE: Never show raw error messages or blank screens to users!
+  1811→
+  1812→
+  1813→================================================================================
+  1814→          SECTION 14: GLOBAL UI PATTERNS TO IMPLEMENT
+  1815→================================================================================
+  1816→
+  1817→--------------------------------------------------------------------------------
+  1818→14.1 LOADING STATES
+  1819→--------------------------------------------------------------------------------
+  1820→
+  1821→EVERY ASYNCHRONOUS ACTION NEEDS:
+  1822→
+  1823→1. BUTTON LOADING:
+  1824→   □ Spinner replaces icon
+  1825→   □ Text changes to "Loading...", "Saving...", "Submitting..."
+  1826→   □ Button disabled during load
+  1827→   □ Prevent double-click (debounce)
+  1828→
+  1829→2. PAGE LOADING:
+  1830→   □ Skeleton screens matching final layout
+  1831→   □ Pulse/shimmer animation
+  1832→   □ Content loads progressively (above fold first)
+  1833→
+  1834→3. DATA FETCHING:
+  1835→   □ Inline spinners for specific sections
+  1836→   □ Optimistic updates where possible (assume success, rollback on error)
+  1837→   □ Background refresh with subtle indicator
+  1838→
+  1839→--------------------------------------------------------------------------------
+  1840→14.2 SUCCESS/ERROR FEEDBACK
+  1841→--------------------------------------------------------------------------------
+  1842→
+  1843→TOAST NOTIFICATION SYSTEM:
+  1844→┌─────────────────────────────────────────────────────────────────────────────┐
+  1845→│  SUCCESS (Green, auto-dismiss 3s):                                          │
+  1846→│  ✓ Profile updated successfully!                                           │
+  1847→│  ✓ Dataset uploaded (3 files, 2.4MB)                                       │
+  1848→│  ✓ Job submitted - ID: job_abc123                                          │
+  1849→│  ✓ Invitation sent to jane@university.edu                                   │
+  1850→│  ✓ Changes saved                                                            │
+  1851→│                                                                              │
+  1852→│  ERROR (Red, persistent until dismissed):                                   │
+  1853→│  ✗ Failed to save. Please try again. [Retry]                                │
+  1854→│  ✗ Connection timeout. Check your network. [Retry]                          │
+  1855→│  ✗ File too large. Maximum: 100MB on Free tier. [Upgrade]                   │
+  1856→│  ✗ Rate limit exceeded. Try again in 2:34. [Timer]                          │
+  1857→│                                                                              │
+  1858→│  INFO (Blue, auto-dismiss 5s):                                             │
+  1859→│  ℹ You have 3 unread notifications                                         │
+  1860→│  ℹ Session expires in 5 minutes                                            │
+  1861→│  ℹ New features available! Check out What's New                             │
+  1862→│                                                                              │
+  1863→│  WARNING (Yellow, persistent):                                             │
+  1864→│  ⚠ Storage at 85% capacity. Consider upgrading. [View Storage] [Dismiss]   │
+  1865→│  ⚠ Unsaved changes will be lost. [Save] [Discard]                          │
+  1866→└──────────────────────────────────────────────────────────────────────────────┘
+  1867→
+  1868→--------------------------------------------------------------------------------
+  1869→14.3 EMPTY STATES
+  1870→--------------------------------------------------------------------------------
+  1871→
+  1872→WHEN NO DATA EXISTS:
+  1873→
+  1874→┌─────────────────────────────────────────────────────────────────────────────┐
+  1875→│                                                                              │
+  1876→│   ┌─────────────────────────────────────────────────────────────────┐       │
+  1877→│   │                                                                  │       │
+  1878→│   │     [Illustration: Relevant icon/graphic]                        │       │
+  1879→│   │                                                                  │       │
+  1880→│   │     No [Items] Yet                                              │       │
+  1881→│   │                                                                  │       │
+  1882→│   │     Get started by [action description].                         │       │
+  1883→│   │                                                                  │       │
+  1884→│   │     [Primary Action Button]  [Secondary Action]                  │       │
+  1885→│   │                                                                  │       │
+  1886→│   │     ── or ──                                                    │       │
+  1887→│   │     [Video tutorial link]                                        │       │
+  1888→│   │                                                                  │       │
+  1889→│   └─────────────────────────────────────────────────────────────────┘       │
+  1890→│                                                                              │
+  1891→└──────────────────────────────────────────────────────────────────────────────┘
+  1892→
+  1893→EMPTY STATE EXAMPLES:
+  1894→• No datasets → "Upload your first dataset" + Upload button
+  1895→• No jobs → "Run your first analysis" + Create Job button  
+  1896→• No projects → "Create a project to collaborate" + New Project button
+  1897→• No searches → "Search for papers, datasets, or protocols" + Search CTA
+  1898→• No collaborators → "Invite team members" + Invite button
+  1899→• No notifications → "All caught up! You're up to date."
+  1900→
+  1901→--------------------------------------------------------------------------------
+  1902→14.4 CONFIRMATION DIALOGS
+  1903→--------------------------------------------------------------------------------
+  1904→
+  1905→DESTRUCTIVE ACTIONS REQUIRE CONFIRMATION:
+  1906→
+  1907→```tsx
+  1908→// Pattern for delete, cancel, remove actions
+  1909→<AlertDialog>
+  1910→  <Trigger><Button variant="destructive">Delete</Button></Trigger>
+  1911→  <Content>
+  1912→    <Title>Delete "Dataset Name"?</Title>
+  1913→    <Description>
+  1914→      This action cannot be undone. This will permanently delete 
+  1915→      the dataset and all associated analyses (3 items).
+  1916→    </Description>
+  1917→    <Field>
+  1918→      <Label>Type DELETE to confirm</Label>
+  1919→      <Input value={confirmText} onChange={setConfirmText} />
+  1920→    </Field>
+  1921→    <Action 
+  1922→      disabled={confirmText !== 'DELETE'} 
+  1923→      variant="destructive"
+  1924→    >
+  1925→      Delete
+  1926→    </Action>
+  1927→    <Cancel>Cancel</Cancel>
+  1928→  </Content>
+  1929→</AlertDialog>
+  1930→```
+  1931→
+  1932→
+  1933→================================================================================
+  1934→                    SECTION 15: IMPLEMENTATION PRIORITY MATRIX
+  1935→================================================================================
+  1936→
+  1937→ORDER OF IMPLEMENTATION (Do these first for maximum impact):
+  1938→
+  1939→┌───────┬─────────────────────────────┬──────────┬────────────────────────────┐
+  1940→│ PRIORITY │ FEATURE                    │ EFFORT   │ IMPACT                      │
+  1941→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1942→│ P0     │ Landing Page CTAs           │ Medium   │ First impression, conversions│
+  1943→│        │ - Start Free → Register     │          │                             │
+  1944→│        │ - Watch Demo → Video modal  │          │                             │
+  1945→│        │ - Join Waitlist → Form      │          │                             │
+  1946→│        │ - Pricing CTAs → Actions    │          │                             │
+  1947→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1948→│ P0     │ Search/Query Enhancements    │ High     │ Core functionality           │
+  1949→│        │ - Real search execution     │          │                             │
+  1950→│        │ - Save to library           │          │                             │
+  1951→│        │ - Export results            │          │                             │
+  1952→│        │ - Search history            │          │                             │
+  1953→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1954→│ P1     │ Dashboard Interactivity     │ Medium   │ Daily driver for users       │
+  1955→│        │ - Stat cards drill-down     │          │                             │
+  1956→│        │ - Quick actions work        │          │                             │
+  1957→│        │ - Activity feed filtering   │          │                             │
+  1958→│        │ - Profile save with feedback│          │                             │
+  1959→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1960→│ P1     │ Data Lake Upload Flow       │ High     │ Key user action              │
+  1961→│        │ - Real drag-drop upload     │          │                             │
+  1962→│        │ - Data preview              │          │                             │
+  1963→│        │ - Metadata form             │          │                             │
+  1964→│        │ - Dataset actions           │          │                             │
+  1965→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1966→│ P1     │ Workspace/Code Execution    │ High     │ Differentiator feature       │
+  1967→│        │ - JS execution works        │          │                             │
+  1968→│        │ - SQL validation            │          │                             │
+  1969→│        │ - Python/R → job queue     │          │                             │
+  1970→│        │ - Output panel enhanced     │          │                             │
+  1971→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1972→│ P2     │ Compute Jobs Enhancement    │ Medium   │ Power user feature           │
+  1973→│        │ - Rich job creation form    │          │                             │
+  1974→│        │ - Job monitoring            │          │                             │
+  1975→│        │ - Log viewer                │          │                             │
+  1976→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1977→│ P2     │ Collaboration Features      │ High     │ Social/network effects       │
+  1978→│        │ - Invite flow               │          │                             │
+  1979→│        │ - Discussion enhancements   │          │                             │
+  1980→│        │ - Project detail view        │          │                             │
+  1981→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1982→│ P2     │ Knowledge Graph Interactions│ Medium   │ Visual/cool factor           │
+  1983→│        │ - Node click details        │          │                             │
+  1984→│        │ - Graph search              │          │                             │
+  1985→│        │ - Import/export             │          │                             │
+  1986→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1987→│ P3     │ AI Assistant Enhancements   │ Medium   │ Future-looking feature        │
+  1988→│        │ - Streaming responses       │          │                             │
+  1989→│        │ - Context awareness         │          │                             │
+  1990→│        │ - Conversation management   │          │                             │
+  1991→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1992→│ P3     │ "Coming Soon" Pattern       │ Low      │ Professional incomplete     │
+  1993→│        │ - Global component          │          │ states                      │
+  1994→│        │ - Notify me capture         │          │                             │
+  1995→│        │ - Alternative suggestions   │          │                             │
+  1996→├───────┼─────────────────────────────┼──────────┼────────────────────────────┤
+  1997→│ P3     │ Settings Persistence        │ Low      │ Polish                     │
+  1998→│        │ - All settings save         │          │                             │
+  1999→│        │ - Reset to defaults         │          │                             │
+  2000→│        │ - Export/import             │          │                             │
+
+[showing lines 1-2000 of 2039; use offset=2001 with limit to continue reading]

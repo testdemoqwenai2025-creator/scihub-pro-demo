@@ -1,0 +1,502 @@
+     1→     1→================================================================================
+     2→     2→                    SCIHUB PRO - CURRENT STATE BUILD FINALIZATION
+     3→     3→                         COMPLETE DYNAMIC ACTIVATION PLAN
+     4→     4→================================================================================
+     5→     5→
+     6→     6→Document: CurrentStateBuildFinal.txt
+     7→     7→Version: 1.0
+     8→     8→Date: August 2026
+     9→     9→Project: SciHub Pro v2.0.0
+    10→    10→Purpose: Complete activation plan for ALL CTA buttons, forms, and interactive elements
+    11→    11→
+    12→    12→================================================================================
+    13→    13→                           EXECUTIVE SUMMARY
+    14→    14→================================================================================
+    15→    15→
+    16→    16→This document provides a bullet-point action plan for making EVERY call-to-action
+    17→    17→(CTA) button and interactive element in SciHub Pro fully dynamic and functional.
+    18→    18→
+    19→    19→CORE PRINCIPLE:
+    20→    20→┌─────────────────────────────────────────────────────────────────────────────┐
+    21→    21→│  "NEVER LET THE USER HIT A WALL"                                            │
+    22→    22→│                                                                             │
+    23→    23→│  Every CTA must either:                                                     │
+    24→    24→│  ✓ Open a functional form/dialog for user input                             │
+    25→    25→│  ✓ Perform a real action with loading state & success feedback               │
+    26→    26→│  ✓ Show "Coming Soon" / "In Progress" with estimated timeline                │
+    27→    27→│  ✗ NEVER show an error, do nothing, or leave user confused                  │
+    28→    28→└─────────────────────────────────────────────────────────────────────────────┘
+    29→    29→
+    30→    30→
+    31→    31→================================================================================
+    32→    32→              SECTION 1: LANDING PAGE (app/page.tsx) - 824 LINES
+    33→    33→================================================================================
+    34→    34→
+    35→    35→CURRENT STATE: Marketing landing page with hero, features, pricing preview,
+    36→    36→                testimonials, and email waitlist form.
+    37→    37→
+    38→    38→--------------------------------------------------------------------------------
+    39→    39→1.1 HERO SECTION CTAs
+    40→    40→--------------------------------------------------------------------------------
+    41→    41→
+    42→    42→CTA #1: "Start Free" Button (Primary Hero)
+    43→    43→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+    44→    44→│ • Location: Line ~367-370                                                    │
+    45→    45→│ • Current: No onClick handler, button does nothing                            │
+    46→    46→│ • Styling: Large gradient button (cyan to teal)                              │
+    47→    47→└──────────────────────────────────────────────────────────────────────────────┘
+    48→    48→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+    49→    49→│ ACTION: Navigate to Registration/Onboarding Flow                              │
+    50→    50→│                                                                              │
+    51→    51→│ IMPLEMENTATION:                                                              │
+    52→    52→│ □ Add onClick={() => router.push('/register')} OR open registration modal    │
+    53→    53→│ □ Create /register page if not exists (see Section 13)                       │
+    54→    54→│ □ Show loading spinner during navigation                                     │
+    55→    55→│ □ Track conversion event (analytics)                                         │
+    56→    56→│                                                                              │
+    57→    57→│ FALLBACK (if no auth yet):                                                   │
+    58→    58→│ → Scroll to pricing section                                                  │
+    59→    59→│ → Show highlighted Free tier card                                           │
+    60→    60→│ → Display toast: "Get started with our Free tier - no credit card!"          │
+    61→    61→└──────────────────────────────────────────────────────────────────────────────┘
+    62→    62→
+    63→    63→CTA #2: "Watch Demo" Button (Secondary Hero)
+    64→    64→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+    65→    65→│ • Location: Line ~371-374                                                    │
+    66→    66→│ • Current: No onClick handler                                                │
+    67→    67→│ • Styling: Outline button variant                                            │
+    68→    68→└──────────────────────────────────────────────────────────────────────────────┘
+    69→    69→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+    70→    70→│ ACTION: Open Demo Video Modal or Redirect to Demo                             │
+    71→    71→│                                                                              │
+    72→    72→│ IMPLEMENTATION:                                                              │
+    73→    73→│ □ Open Dialog/Modal with embedded video player                               │
+    74→    74→│ □ Video options:                                                             │
+    75→    75→│   - YouTube/Vimeo embed (if video exists)                                    │
+    76→    76→│   - Screen recording walkthrough                                             │
+    77→    77→│   - Interactive product tour (step-by-step guided)                            │
+    78→    78→│ □ Modal contents:                                                            │
+    79→    79→│   - Video player (16:9 aspect ratio)                                        │
+    80→    80→│   - Chapter markers for sections                                             │
+    81→    81→│   - "Try it yourself" CTA at end                                             │
+    82→    82→│   - Close (X) button + click outside to close                                │
+    83→    83→│                                                                              │
+    84→    84→│ FALLBACK (no video available):                                               │
+    85→    85→│ → Show "Demo Coming Soon" dialog                                             │
+    86→    86→│ → Include screenshot carousel of key features                                │
+    87→    87→│ → Form to request demo notification when ready                               │
+    88→    88→│ → Fields: Name, Email, Institution, Role                                    │
+    89→    89→└──────────────────────────────────────────────────────────────────────────────┘
+    90→    90→
+    91→    91→CTA #3: "Investor Portal" Button (Header)
+    92→    92→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+    93→    93→│ • Location: Line ~41                                                          │
+    94→    94→│ • Current: No onClick handler                                                │
+    95→    95→└──────────────────────────────────────────────────────────────────────────────┘
+    96→    96→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+    97→    97→│ ACTION: Show Investor Information Modal/Page                                  │
+    98→    98→│                                                                              │
+    99→    99→│ IMPLEMENTATION:                                                              │
+   100→   100→│ □ Open Dialog with investor-focused content:                                 │
+   101→   101→│   - Team bios & backgrounds                                                 │
+   102→   102→│   - Traction metrics (users, growth rate)                                   │
+   103→   103→│   - Market opportunity size                                                  │
+   104→   104→│   - Competitive advantages                                                   │
+   105→   105→│   - Funding round information (if any)                                       │
+   106→   106→│ □ Contact form for investor inquiries:                                       │
+   107→   107→│   - Firm name, Investment focus, Portfolio companies                        │
+   108→   108→│   - Contact person, Email, Phone                                            │
+   109→   109→│   - Message/Interest area                                                   │
+   110→   110→│ □ Download pitch deck button (PDF)                                          │
+   111→   111→│                                                                              │
+   112→   112→│ FALLBACK:                                                                   │
+   113→   113→│ → Show "Investor Relations Coming Soon"                                      │
+   114→   114→│ → Email capture: "Notify me when investor info is available"                 │
+   115→   115→└──────────────────────────────────────────────────────────────────────────────┘
+   116→   116→
+   117→   117→CTA #4: "Get Early Access" Button (Header)
+   118→   118→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   119→   119→│ • Location: Line ~43                                                          │
+   120→   120→│ • Current: No onClick handler                                                │
+   121→   121→└──────────────────────────────────────────────────────────────────────────────┘
+   122→   122→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   123→   123→│ ACTION: Open Early Access Registration Form                                   │
+   124→   124→│                                                                              │
+   125→   125→│ IMPLEMENTATION:                                                              │
+   126→   126→│ □ Open Modal with expanded registration form:                                │
+   127→   127→│   Fields:                                                                    │
+   128→   128→│   - Full Name *                                                              │
+   129→   129→│   - Email Address *                                                          │
+   130→   130→│   - Institution/Organization *                                              │
+   131→   131→│   - Role (dropdown): Student, Researcher, PI, Industry, Other               │
+   132→   132→│   - Primary Research Field (multi-select)                                    │
+   133→   133→│   - How did you hear about us? (dropdown)                                    │
+   134→   134→│   - What feature are you most excited about? (text)                          │
+   135→   135→│   - Agree to beta terms checkbox *                                          │
+   136→   136→│                                                                              │
+   137→   137→│ □ Form validation (real-time)                                                │
+   138→   138→│ □ Submit → POST to /api/subscription or new /api/waitlist endpoint           │
+   139→   139→│ □ Success state: "You're on the list! We'll be in touch soon."               │
+   140→   140→│ □ Failure state: Error message with retry option                             │
+   141→   141→│                                                                              │
+   142→   142→│ DATA HANDLING:                                                               │
+   143→   143→│ → Store in localStorage as backup                                           │
+   144→   144→│ → Send to API endpoint                                                      │
+   145→   145→│ → Trigger welcome email sequence (when email service ready)                   │
+   146→   146→└──────────────────────────────────────────────────────────────────────────────┘
+   147→   147→
+   148→   148→--------------------------------------------------------------------------------
+   149→   149→1.2 PRICING SECTION CTAs
+   150→   150→--------------------------------------------------------------------------------
+   151→   151→
+   152→   152→CTA #5: "Get Started" (Free Tier Card)
+   153→   153→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   154→   154→│ • Location: Line ~656-661                                                    │
+   155→   155→│ • Current: No onClick handler inside pricing card                             │
+   156→   156→└──────────────────────────────────────────────────────────────────────────────┘
+   157→   157→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   158→   158→│ ACTION: Start Free Tier Onboarding                                            │
+   159→   159→│                                                                              │
+   160→   160→│ IMPLEMENTATION:                                                              │
+   161→   161→│ □ Navigate to /dashboard with 'tier=free' query param                        │
+   162→   162→│ □ Or open quick signup modal (minimal fields):                               │
+   163→   163→│   - Email only (magic link authentication)                                   │
+   164→   164→│   - "Continue with Google/GitHub/ORCID" buttons                              │
+   165→   165→│ □ After signup: Redirect to dashboard with free tier activated               │
+   166→   166→│ □ Show onboarding tooltip tour (first visit only)                            │
+   167→   167→│                                                                              │
+   168→   168→│ SUCCESS FEEDBACK:                                                            │
+   169→   169→│ → Toast: "Welcome to SciHub Pro! You're on the Free tier."                  │
+   170→   170→│ → Highlight free tier features in sidebar                                   │
+   171→   171→│ → Show "Upgrade to Pro" subtle prompt after 5 min usage                      │
+   172→   172→└──────────────────────────────────────────────────────────────────────────────┘
+   173→   173→
+   174→   174→CTA #6: "Start Free Trial" (Pro Tier Card)
+   175→   175→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   176→   176→│ • Location: Line ~233 (cta property in pricing data)                          │
+   177→   177→│ • Current: Renders button but non-functional                                  │
+   178→   178→└──────────────────────────────────────────────────────────────────────────────┘
+   179→   179→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   180→   180→│ ACTION: Initiate Pro Trial with Payment Setup                                 │
+   181→   181→│                                                                              │
+   182→   182→│ IMPLEMENTATION:                                                              │
+   183→   183→│ □ Open Pro Trial Signup Dialog:                                              │
+   184→   184→│   Step 1: Account Info (if not logged in)                                    │
+   185→   185→│     - Name, Email, Password, Institution                                     │
+   186→   186→│   Step 2: Payment Method (Stripe integration)                                │
+   187→   187→│     - Card number, Expiry, CVC                                              │
+   188→   188→│     - "Start trial - won't charge for 14 days"                               │
+   189→   189→│   Step 3: Confirmation                                                       │
+   190→   190→│     - Trial duration reminder                                                │
+   191→   191→│     - What's included summary                                               │
+   192→   192→│     - Cancel anytime notice                                                  │
+   193→   193→│                                                                              │
+   194→   194→│ □ Form validation at each step                                               │
+   195→   195→│ □ Loading states during Stripe tokenization                                  │
+   196→   196→│ □ Success: Redirect to dashboard with Pro badge active                       │
+   197→   197→│ □ Error: Show specific error message (card declined, etc.)                   │
+   198→   198→│                                                                              │
+   199→   199→│ FALLBACK (no Stripe yet):                                                    │
+   200→   200→│ → Open /subscription page with Pro tier pre-selected                         │
+   201→   201→│ → Show subscription request form (existing implementation)                   │
+   202→   202→│ → Note: "Payment processing coming soon. Sign up for early access!"          │
+   203→   203→└──────────────────────────────────────────────────────────────────────────────┘
+   204→   204→
+   205→   205→CTA #7: "Contact Sales" (Enterprise Tier Card)
+   206→   206→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   207→   207→│ • Location: Line ~242 (cta property in pricing data)                          │
+   208→   208→│ • Current: Non-functional button                                             │
+   209→   209→└──────────────────────────────────────────────────────────────────────────────┘
+   210→   210→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   211→   211→│ ACTION: Open Enterprise Sales Inquiry Form                                    │
+   212→   212→│                                                                              │
+   213→   213→│ IMPLEMENTATION:                                                              │
+   214→   214→│ □ Open Dialog with comprehensive enterprise form:                             │
+   215→   215→│   Section 1: Company Information                                             │
+   216→   216→│   - Company/Institution name *                                               │
+   217→   217→│   - Website URL                                                              │
+   218→   218→│   - Industry (Academic, Pharma, Biotech, Gov, Other)                        │
+   219→   219→│   - Country/Region                                                           │
+   220→   220→│                                                                              │
+   221→   221→│   Section 2: Technical Requirements                                          │
+   222→   222→│   - Expected number of users *                                               │
+   223→   223→│   - Estimated monthly API calls                                              │
+   224→   224→│   - Storage needs (estimate)                                                 │
+   225→   225→│   - Integration requirements (SSO, SAML, on-prem)                            │
+   226→   226→│   - Compliance requirements (HIPAA, FedRAMP, SOC2)                          │
+   227→   227→│                                                                              │
+   228→   228→│   Section 3: Decision Maker Info                                             │
+   229→   229→│   - Your name *                                                              │
+   230→   230→│   - Job title *                                                              │
+   231→   231→│   - Work email *                                                             │
+   232→   232→│   - Phone (optional)                                                         │
+   233→   233→│   - Best time to contact                                                     │
+   234→   234→│                                                                              │
+   235→   235→│   Section 4: Additional Notes                                                 │
+   236→   236→│   - Timeline for decision                                                    │
+   237→   237→│   - Budget range (if willing to share)                                      │
+   238→   238→│   - Specific questions or requirements                                      │
+   239→   239→│                                                                              │
+   240→   240→│ □ Submit → POST to /api/subscription with type='enterprise_lead'            │
+   241→   241→│ □ Auto-response: "Our enterprise team will contact you within 24 hours"      │
+   242→   242→│ □ Internal notification to sales team (email/webhook)                        │
+   243→   243→└──────────────────────────────────────────────────────────────────────────────┘
+   244→   244→
+   245→   245→--------------------------------------------------------------------------------
+   246→   246→1.3 WAITLIST / NEWSLETTER SECTION
+   247→   247→--------------------------------------------------------------------------------
+   248→   248→
+   249→   249→CTA #8: "Join Waitlist" (Email Form Submit)
+   250→   250→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   251→   251→│ • Location: Line ~734-735                                                    │
+   252→   252→│ • Current: Inside <form> tag but no onSubmit handler                          │
+   253→   253→│ • Has email input field                                                      │
+   254→   254→└──────────────────────────────────────────────────────────────────────────────┘
+   255→   255→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   256→   256→│ ACTION: Capture Email & Add to Waitlist                                      │
+   257→   257→│                                                                              │
+   258→   258→│ IMPLEMENTATION:                                                              │
+   259→   259→│ □ Add onSubmit handler to form:                                              │
+   260→   260→│                                                                              │
+   261→   261→│   const handleWaitlistSubmit = async (e) => {                                │
+   262→   262→│     e.preventDefault();                                                      │
+   263→   263→│     const email = e.target.email.value;                                      │
+   264→   264→│                                                                              │
+   265→   265→│     // Validate email format                                                 │
+   266→   266→│     if (!email.includes('@')) {                                             │
+   267→   267→│       setError('Please enter a valid email');                                │
+   268→   268→│       return;                                                                │
+   269→   269→│     }                                                                       │
+   270→   270→│                                                                              │
+   271→   271→│     setLoading(true);                                                        │
+   272→   272→│                                                                              │
+   273→   273→│     try {                                                                   │
+   274→   274→│       // Call waitlist API                                                   │
+   275→   275→│       const res = await fetch('/api/waitlist', {                             │
+   276→   276→│         method: 'POST',                                                     │
+   277→   277→│         body: JSON.stringify({ email, source: 'landing_page' })             │
+   278→   278→│       });                                                                  │
+   279→   279→│                                                                              │
+   280→   280→│       if (res.ok) {                                                         │
+   281→   281→│         setSuccess(true); // Show success state                              │
+   282→   282→│         // Confetti animation optional                                       │
+   283→   283→│       } else {                                                              │
+   284→   284→│         setError('Something went wrong. Please try again.');                 │
+   285→   285→│       }                                                                     │
+   286→   286→│     } catch {                                                               │
+   287→   287→│       // Fallback: store locally, sync later                                 │
+   288→   288→│       localStorage.setItem('scihub_waitlist_email', email);                  │
+   289→   289→│       setSuccess(true); // Optimistic update                                 │
+   290→   290→│     } finally {                                                             │
+   291→   291→│       setLoading(false);                                                     │
+   292→   292→│     }                                                                       │
+   293→   293→│   };                                                                        │
+   294→   294→│                                                                              │
+   295→   295→│ □ Create /api/waitlist route if not exists:                                  │
+   296→   296→│   - Store emails in array/file                                              │
+   297→   297→│   - Deduplicate by email                                                    │
+   298→   298→│   - Return success/error                                                    │
+   299→   299→│   - Rate limit (max 5 submissions/hour per IP)                              │
+   300→   300→│                                                                              │
+   301→   301→│ □ UI States:                                                                │
+   302→   302→│   - Default: Email input + "Join Waitlist" button                            │
+   303→   303→│   - Loading: Spinner on button, disabled input                               │
+   304→   304→│   - Success: Green checkmark + "You're on the list! 🎉"                     │
+   305→   305→│   - Error: Red message + retry option                                       │
+   306→   306→│                                                                              │
+   307→   307→│ □ Bonus: Add checkbox "I want early access" vs "Just updates"               │
+   308→   308→└──────────────────────────────────────────────────────────────────────────────┘
+   309→   309→
+   310→   310→--------------------------------------------------------------------------------
+   311→   311→1.4 FEATURE CARDS (6 cards)
+   312→   312→--------------------------------------------------------------------------------
+   313→   313→
+   314→   314→Each feature card should be clickable:
+   315→   315→
+   316→   316→FEATURE CARD CLICK ACTIONS:
+   317→   317→┌────────────────────────┬─────────────────────────────────────────────────────┐
+   318→   318→│ Package Discovery      │ → Scroll to /connectors page, highlight relevant    │
+   319→   319→│ Reproducible Env      │ → Open /workspace with environment modal            │
+   320→   320→│ Collaborative Workspace│ → Navigate to /collaboration                       │
+   321→   321→│ Scalable Compute      │ → Navigate to /compute with "Try it" tooltip        │
+   322→   322→│ AI-Powered Insights   │ → Navigate to /aethel with suggested prompt loaded  │
+   323→   323→│ Enterprise Security   │ → Open security features modal (coming soon)        │
+   324→   324→└────────────────────────┴─────────────────────────────────────────────────────┘
+   325→   325→
+   326→   326→IMPLEMENTATION:
+   327→   327→□ Wrap each CardContent in <Link href={targetUrl}> or onClick handler
+   328→   328→□ Add hover effect: scale(1.02), shadow increase, border color change
+   329→   329→□ Add arrow icon (→) on hover to indicate clickability
+   330→   330→□ Track which features get most clicks (analytics)
+   331→   331→
+   332→   332→
+   333→   333→================================================================================
+   334→   334→              SECTION 2: DASHBOARD (app/dashboard/page.tsx) - 436 LINES
+   335→   335→================================================================================
+   336→   336→
+   337→   337→CURRENT STATE: Main dashboard with stats, profile editing, activity feed.
+   338→   338→
+   339→   339→--------------------------------------------------------------------------------
+   340→   340→2.1 PROFILE EDITING FORM
+   341→   341→--------------------------------------------------------------------------------
+   342→   342→
+   343→   343→FORM: User Profile Editor (Lines ~140-210)
+   344→   344→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   345→   345→│ • Has inputs: Name, Email                                                    │
+   346→   346→│ • Has "Reset" and "Push to Database" buttons                                 │
+   347→   347→│ • Push calls simulatePushToDatabase() from useDynamicStore                   │
+   348→   348→│ • Shows dirty field indicators                                               │
+   349→   349→└──────────────────────────────────────────────────────────────────────────────┘
+   350→   350→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   351→   351→│ ACTION: Real Profile Save with Validation & Feedback                          │
+   352→   352→│                                                                              │
+   353→   353→│ ENHANCEMENTS NEEDED:                                                         │
+   354→   354→│                                                                              │
+   355→   355→│ 1. EXPAND FORM FIELDS:                                                       │
+   356→   356→│    □ Display Name * (currently exists)                                       │
+   357→   357→│    □ Email Address * (currently exists, read-only display)                   │
+   358→   358→│    □ Institution/Organization                                               │
+   359→   359→│    □ ORCID ID (with validation link to orcid.org)                           │
+   360→   360→│    □ Research Interests (tags input)                                        │
+   361→   361→│    □ Website/Personal Page URL                                               │
+   362→   362→│    □ Timezone (auto-detect + manual override)                               │
+   363→   363→│    □ Bio (textarea, max 500 chars)                                          │
+   364→   364→│                                                                              │
+   365→   365→│ 2. REAL-TIME VALIDATION:                                                     │
+   366→   366→│    □ Email: Format check + debounce API check (is email already used?)       │
+   367→   367→│    □ ORCID: Format check (0000-0000-0000-0000) + API validate               │
+   368→   368→│    □ URL: Format check + HEAD request (does URL exist?)                     │
+   369→   369→│    □ Required fields: Visual indicator + prevent save                        │
+   370→   370→│                                                                              │
+   371→   371→│ 3. SAVE ACTION:                                                              │
+   372→   372→│    □ "Save Changes" button (rename from "Push to Database")                  │
+   373→   373→│    □ Loading state: Spinner + "Saving..." text                               │
+   374→   374→│    □ Success: Toast "Profile updated successfully!" + green checkmark        │
+   375→   375→│    □ Error: Toast with specific message + retry option                       │
+   376→   376→│    □ Auto-save toggle (optional, every 30s if changes detected)              │
+   377→   377→│                                                                              │
+   378→   378→│ 4. AVATAR UPLOAD:                                                            │
+   379→   379→│    □ Click avatar to upload new image                                        │
+   380→   380→│    □ Accept: JPG, PNG, GIF (max 2MB)                                        │
+   381→   381→│    □ Preview before save                                                    │
+   382→   382→│    □ Crop tool (integrate react-cropper or similar)                          │
+   383→   383→│    □ Store as base64 in localStorage / send to API                           │
+   384→   384→│                                                                              │
+   385→   385→│ 5. UNDO/REDO:                                                                │
+   386→   386→│    □ Ctrl+Z support for form edits                                          │
+   387→   387→│    □ "Discard Changes" button with confirmation                              │
+   388→   388→│    □ "Undo last edit" option                                                │
+   389→   389→└──────────────────────────────────────────────────────────────────────────────┘
+   390→   390→
+   391→   391→--------------------------------------------------------------------------------
+   392→   392→2.2 STAT CARDS (4 cards)
+   393→   393→--------------------------------------------------------------------------------
+   394→   394→
+   395→   395→STAT CARDS: Active Jobs, Storage Used, API Calls, Collaborators
+   396→   396→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   397→   397→│ • Display static/simulated numbers                                           │
+   398→   398→│ • Some have refresh capability via store                                     │
+   399→   399→│ • Not clickable                                                              │
+   400→   400→└──────────────────────────────────────────────────────────────────────────────┘
+   401→   401→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   402→   402→│ ACTION: Make Stats Interactive with Drill-down                                │
+   403→   403→│                                                                              │
+   404→   404→│ 1. CLICK BEHAVIOR:                                                           │
+   405→   405→│    □ Each card clickable → Open detail modal/sidebar                         │
+   406→   406→│    □ Active Jobs → Navigate to /compute with filter                          │
+   407→   407→│    □ Storage Used → Navigate to /data with usage breakdown                  │
+   408→   408→│    □ API Calls → Open API usage chart (daily/weekly/monthly)                │
+   409→   409→│    □ Collaborators → Navigate to /collaboration members tab                 │
+   410→   410→│                                                                              │
+   411→   411→│ 2. REFRESH FUNCTIONALITY:                                                    │
+   412→   412→│    □ Hover shows "Click to refresh" tooltip                                  │
+   413→   413→│    □ Click refresh icon → Show loading spinner                               │
+   414→   414→│    □ Fetch fresh data from API/store                                         │
+   415→   415→│    □ Number animate transition (count up/down)                               │
+   416→   416→│    □ Last updated timestamp ("Updated 2 min ago")                            │
+   417→   417→│                                                                              │
+   418→   418→│ 3. CUSTOMIZATION:                                                            │
+   419→   419→│    □ Drag to reorder cards (drag-and-drop)                                  │
+   420→   420→│    □ Settings gear icon → Choose which stats to show                         │
+   421→   421→│    □ Add custom stat cards (user-created queries)                           │
+   422→   422→│    □ Collapse/expand card detail                                            │
+   423→   423→│                                                                              │
+   424→   424→│ 4. THRESHOLD ALERTS:                                                         │
+   425→   425→│    □ Storage > 80% → Yellow warning border                                   │
+   426→   426→│    □ Storage > 95% → Red alert border + upgrade prompt                       │
+   427→   427→│    □ API calls near limit → Show "Upgrade for more" CTA                     │
+   428→   428→│    □ Pulse animation on alert cards                                         │
+   429→   429→└──────────────────────────────────────────────────────────────────────────────┘
+   430→   430→
+   431→   431→--------------------------------------------------------------------------------
+   432→   432→2.3 QUICK ACTIONS PANEL
+   433→   433→--------------------------------------------------------------------------------
+   434→   434→
+   435→   435→QUICK ACTIONS: Dashboard shortcut buttons
+   436→   436→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   437→   437→│ • Buttons exist but may have minimal functionality                            │
+   438→   438→│ • Lines ~273-295                                                             │
+   439→   439→└──────────────────────────────────────────────────────────────────────────────┘
+   440→   440→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   441→   441→│ ACTION: Each Quick Action Should Perform Meaningful Task                      │
+   442→   442→│                                                                              │
+   443→   443→│ QUICK ACTION BUTTONS:                                                        │
+   444→   444→│                                                                              │
+   445→   445→│ 1. "New Search" → Navigate to /query with focused search input              │
+   446→   446→│    □ Pre-fill common search term based on user's field                      │
+   447→   447→│    □ Show search tips tooltip on first use                                   │
+   448→   448→│                                                                              │
+   449→   449→│ 2. "Upload Data" → Open /data with upload dialog auto-opened                │
+   450→   450→│    □ Support drag-and-drop zone                                             │
+   451→   451→│    □ Show file type accepted (.csv, .json, .xlsx, .fasta)                   │
+   452→   452→│    □ Progress bar during upload                                             │
+   453→   453→│                                                                              │
+   454→   454→│ 3. "Run Analysis" → Navigate to /workspace with template selector            │
+   455→   455→│    □ Show popular analysis templates                                        │
+   456→   456→│    □ Quick start: "Blank Notebook", "Data Import", "Visualization"          │
+   457→   457→│                                                                              │
+   458→   458→│ 4. "Invite Member" → Open invite member dialog/collaboration                 │
+   459→   459→│    □ Email invitation form                                                  │
+   460→   460→│    □ Generate invite link (copyable)                                        │
+   461→   461→│    □ Set permission level (view/edit/admin)                                 │
+   462→   462→│                                                                              │
+   463→   463→│ 5. "View Reports" → Open reports/analytics modal                             │
+   464→   464→│    □ Usage statistics charts                                                │
+   465→   465→│    □ Activity timeline                                                      │
+   466→   466→│    □ Export report (PDF/CSV)                                                │
+   467→   467→│                                                                              │
+   468→   468→│ VISUAL ENHANCEMENTS:                                                         │
+   469→   469→│ □ Icon + label + keyboard shortcut hint (⌘N, ⌘U, etc.)                    │
+   470→   470→│ □ Hover: Darken background + show description                               │
+   471→   471→│ □ Click: Ripple effect + navigation/loading                                 │
+   472→   472→│ □ Recently used actions appear first (adaptive ordering)                    │
+   473→   473→└──────────────────────────────────────────────────────────────────────────────┘
+   474→   474→
+   475→   475→--------------------------------------------------------------------------------
+   476→   476→2.4 ACTIVITY FEED
+   477→   477→--------------------------------------------------------------------------------
+   478→   478→
+   479→   479→ACTIVITY FEED: Recent actions list
+   480→   480→┌── Current Behavior ──────────────────────────────────────────────────────────┐
+   481→   481→│ • Shows activities from store                                                │
+   482→   482→│ • Has "Clear Activities" button                                             │
+   483→   483→│ • Basic timestamp display                                                   │
+   484→   484→└──────────────────────────────────────────────────────────────────────────────┘
+   485→   485→┌── REQUIRED BEHAVIOR ─────────────────────────────────────────────────────────┐
+   486→   486→│ ACTION: Rich Activity Feed with Filtering & Actions                           │
+   487→   487→│                                                                              │
+   488→   488→│ 1. ACTIVITY TYPES WITH ICONS:                                               │
+   489→   489→│    □ 🔍 Search completed → Link to search results                           │
+   490→   490→│    ▓📊 Dataset uploaded → Link to dataset                                   │
+   491→   491→│    ▶️ Job completed → Link to job output                                    │
+   492→   492→│    💬 Comment posted → Link to discussion                                   │
+   493→   493→│    👥 Member joined → Link to profile                                       │
+   494→   494→│    ⚙️ Setting changed → Show what changed                                  │
+   495→   495→│    ⭐ Upgrade triggered → Link to subscription page                          │
+   496→   496→│                                                                              │
+   497→   497→│ 2. FILTERING:                                                               │
+   498→   498→│    □ Filter by type (tabs: All, Searches, Data, Collaboration)              │
+   499→   499→│    □ Filter by date range (Today, This Week, This Month, All)              │
+   500→   500→│    □ Search within activities                                               │
+
+[showing lines 1-500 of 2002; use offset=501 with limit to continue reading]
