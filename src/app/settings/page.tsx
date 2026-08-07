@@ -717,15 +717,15 @@ export default function SettingsPage() {
                     <p className="text-xs text-muted-foreground">{item.desc}</p>
                   </div>
                   <Switch
-                    checked={preferences.notifications[item.key as keyof typeof preferences.notifications]}
-                    onCheckedChange={(checked) => ({
+                    checked={preferences.notifications[item.key as keyof NotificationPreferences]}
+                    onCheckedChange={(checked) => 
                       updatePreferences({
                         notifications: {
                           ...preferences.notifications,
                           [item.key]: checked,
                         },
-                      }),
-                    })[0]}
+                      })
+                    }
                   />
                 </div>
               ))}
