@@ -1,0 +1,904 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * SciHub Pro - Collaboration Page
+     5→ * 
+     6→ * Team collaboration features with:
+     7→ * - Project management
+     8→ * - Team member directory
+     9→ * - Discussion forums
+    10→ * - Real-time editing stubs
+    11→ * - Activity feeds
+    12→ * - Call-for-action for Pro features
+    13→ */
+    14→
+    15→import { useState, useEffect } from 'react';
+    16→import { useTranslation } from '@/i18n/useTranslation';
+    17→import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+    18→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    19→import { Badge } from '@/components/ui/badge';
+    20→import { Button } from '@/components/ui/button';
+    21→import { Input } from '@/components/ui/input';
+    22→import { Textarea } from '@/components/ui/textarea';
+    23→import {
+    24→  Select,
+    25→  SelectContent,
+    26→  SelectItem,
+    27→  SelectTrigger,
+    28→  SelectValue,
+    29→} from '@/components/ui/select';
+    30→import {
+    31→  Dialog,
+    32→  DialogContent,
+    33→  DialogHeader,
+    34→  DialogTitle,
+    35→  DialogTrigger,
+    36→} from '@/components/ui/dialog';
+    37→import {
+    38→  Tabs,
+    39→  TabsContent,
+    40→  TabsList,
+    41→  TabsTrigger,
+    42→} from '@/components/ui/tabs';
+    43→import { CollaborationSkeleton, ListSkeleton, CardSkeleton } from '@/components/SkeletonComponents';
+    44→import { showSuccessToast, showInfoToast } from '@/lib/toast-utils';
+    45→
+    46→// ============ COLLABORATION PAGE COMPONENT ============
+    47→
+    48→export default function CollaborationPage() {
+    49→  const { t } = useTranslation();
+    50→  const store = useSciHubStore();
+    51→  
+    52→  const {
+    53→    projects,
+    54→    teamMembers,
+    55→    discussions,
+    56→    addProject,
+    57→    updateProject,
+    58→    addDiscussion,
+    59→    addReply,
+    60→    activities,
+    61→    addActivity,
+    62→    notifications,
+    63→    addNotification,
+    64→    userProfile,
+    65→    upgradePrompts,
+    66→    triggerUpgradePrompt,
+    67→  } = store;
+    68→
+    69→  // UI State
+    70→  const [activeTab, setActiveTab] = useState('projects');
+    71→  const [showNewProjectDialog, setShowNewProjectDialog] = useState(false);
+    72→  const [showNewDiscussionDialog, setShowNewDiscussionDialog] = useState(false);
+    73→  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+    74→  const [replyTexts, setReplyTexts] = useState<Record<string, string>>({});
+    75→  
+    76→  // New project form state
+    77→  const [newProjectName, setNewProjectName] = useState('');
+    78→  const [newProjectDesc, setNewProjectDesc] = useState('');
+    79→  const [newProjectVisibility, setNewProjectVisibility] = useState<'public' | 'private' | 'team'>('team');
+    80→  
+    81→  // New discussion form state
+    82→  const [newDiscussionTitle, setNewDiscussionTitle] = useState('');
+    83→  const [newDiscussionContent, setNewDiscussionContent] = useState('');
+    84→  const [newDiscussionTags, setNewDiscussionTags] = useState('');
+    85→  const [isLoading, setIsLoading] = useState(true);
+    86→
+    87→  // Simulate loading on mount
+    88→  useEffect(() => {
+    89→    const timer = setTimeout(() => setIsLoading(false), 1500);
+    90→    return () => clearTimeout(timer);
+    91→  }, []);
+    92→
+    93→  // Get selected project data
+    94→  const selectedProjectData = projects.find(p => p.id === selectedProject);
+    95→
+    96→  // Get online members count
+    97→  const onlineCount = teamMembers.filter(m => m.online).length;
+    98→
+    99→  // ============ HANDLERS ============
+   100→
+   101→  const handleCreateProject = () => {
+   102→    if (!newProjectName.trim()) return;
+   103→
+   104→    addProject({
+   105→      name: createDynamicField(newProjectName),
+   106→      description: createDynamicField(newProjectDesc || `Research project: ${newProjectName}`),
+   107→      memberIds: [teamMembers[0]?.id || 'member-001'], // Add current user as lead
+   108→      status: 'active',
+   109→      visibility: newProjectVisibility,
+   110→      leadId: teamMembers[0]?.id || 'member-001',
+   111→      datasetIds: [],
+   112→      queryIds: [],
+   113→    });
+   114→
+   115→    addActivity({
+   116→      type: 'collaboration',
+   117→      message: createDynamicField(`Created project: ${newProjectName}`),
+   118→      icon: '📁',
+   119→    });
+   120→
+   121→    addNotification({
+   122→      type: 'collaboration',
+   123→      title: 'New Project Created',
+   124→      message: `${userProfile.displayName.value} created "${newProjectName}"`,
+   125→      priority: 'medium',
+   126→    });
+   127→
+   128→    showSuccessToast('Project Created!', `"${newProjectName}" is ready for collaboration`);
+   129→
+   130→    // Reset form
+   131→    setNewProjectName('');
+   132→    setNewProjectDesc('');
+   133→    setShowNewProjectDialog(false);
+   134→
+   135→    // Trigger upgrade prompt for team features
+   136→    if (teamMembers.length >= 5) {
+   137→      triggerUpgradePrompt('collaboration');
+   138→    }
+   139→  };
+   140→
+   141→  const handleCreateDiscussion = () => {
+   142→    if (!newDiscussionTitle.trim() || !selectedProject) return;
+   143→
+   144→    addDiscussion({
+   145→      title: createDynamicField(newDiscussionTitle),
+   146→      content: createDynamicField(newDiscussionContent),
+   147→      authorId: teamMembers[0]?.id || 'member-001',
+   148→      projectId: selectedProject,
+   149→      tags: newDiscussionTags.split(',').map(t => t.trim()).filter(Boolean),
+   150→      replies: [],
+   151→    });
+   152→
+   153→    addActivity({
+   154→      type: 'collaboration',
+   155→      message: createDynamicField(`Started discussion: ${newDiscussionTitle}`),
+   156→      icon: '💬',
+   157→    });
+   158→
+   159→    showInfoToast('Discussion Posted', `"${newDiscussionTitle}" has been created`);
+   160→
+   161→    // Reset form
+   162→    setNewDiscussionTitle('');
+   163→    setNewDiscussionContent('');
+   164→    setNewDiscussionTags('');
+   165→    setShowNewDiscussionDialog(false);
+   166→  };
+   167→
+   168→  const handleAddReply = (discussionId: string) => {
+   169→    const text = replyTexts[discussionId];
+   170→    if (!text?.trim()) return;
+   171→
+   172→    addReply(discussionId, {
+   173→      authorId: teamMembers[0]?.id || 'member-001',
+   174→      content: text,
+   175→    });
+   176→
+   177→    setReplyTexts({ ...replyTexts, [discussionId]: '' });
+   178→    
+   179→    addActivity({
+   180→      type: 'collaboration',
+   181→      message: createDynamicField('Replied to discussion'),
+   182→      icon: '💬',
+   183→    });
+   184→    
+   185→    showInfoToast('Comment Posted', 'Your reply has been added');
+   186→  };
+   187→
+   188→  const getMemberById = (id: string) => teamMembers.find(m => m.id === id);
+   189→
+   190→  const getStatusColor = (status: string) => {
+   191→    switch (status) {
+   192→      case 'active': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+   193→      case 'paused': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+   194→      case 'completed': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+   195→      case 'archived': return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
+   196→      default: return 'bg-gray-100 text-gray-800';
+   197→    }
+   198→  };
+   199→
+   200→  const formatTimeAgo = (date: Date) => {
+   201→    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+   202→    if (seconds < 60) return 'Just now';
+   203→    const minutes = Math.floor(seconds / 60);
+   204→    if (minutes < 60) return `${minutes}m ago`;
+   205→    const hours = Math.floor(minutes / 60);
+   206→    if (hours < 24) return `${hours}h ago`;
+   207→    const days = Math.floor(hours / 24);
+   208→    return `${days}d ago`;
+   209→  };
+   210→
+   211→  // Loading skeleton
+   212→  if (isLoading) {
+   213→    return (
+   214→      <div className="min-h-screen bg-background">
+   215→        <CollaborationSkeleton />
+   216→      </div>
+   217→    );
+   218→  }
+   219→
+   220→  return (
+   221→    <div className="min-h-screen bg-background p-6">
+   222→      {/* Header */}
+   223→      <div className="mb-8">
+   224→        <div className="flex items-start justify-between">
+   225→          <div>
+   226→            <h1 className="text-3xl font-bold text-foreground">
+   227→              👥 {t('collaboration.title') || 'Collaboration'}
+   228→            </h1>
+   229→            <p className="text-muted-foreground mt-1">
+   230→              Work together on research projects, share insights, and discuss findings
+   231→            </p>
+   232→          </div>
+   233→
+   234→          {/* Quick Stats */}
+   235→          <div className="flex items-center gap-4">
+   236→            <div className="flex items-center gap-2">
+   237→              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+   238→              <span className="text-sm">{onlineCount} online</span>
+   239→            </div>
+   240→            <Badge variant="secondary">
+   241→              {projects.length} projects
+   242→            </Badge>
+   243→          </div>
+   244→        </div>
+   245→
+   246→        {/* Team Members Preview */}
+   247→        <div className="mt-4 flex items-center gap-3">
+   248→          <div className="flex -space-x-2">
+   249→            {teamMembers.slice(0, 5).map(member => (
+   250→              <div
+   251→                key={member.id}
+   252→                className={`w-9 h-9 rounded-full border-2 border-background flex items-center justify-center text-sm font-medium ${
+   253→                  member.online ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+   254→                }`}
+   255→                title={`${member.name}${member.online ? ' (Online)' : ''}`}
+   256→              >
+   257→                {member.name.split(' ').map(n => n[0]).join('')}
+   258→              </div>
+   259→            ))}
+   260→            {teamMembers.length > 5 && (
+   261→              <div className="w-9 h-9 rounded-full border-2 border-background bg-muted flex items-center justify-center text-xs font-medium">
+   262→                +{teamMembers.length - 5}
+   263→              </div>
+   264→            )}
+   265→          </div>
+   266→          <span className="text-sm text-muted-foreground">
+   267→            {teamMembers.length} team members
+   268→          </span>
+   269→        </div>
+   270→      </div>
+   271→
+   272→      {/* Main Content */}
+   273→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   274→        <TabsList className="mb-6">
+   275→          <TabsTrigger value="projects">📁 Projects</TabsTrigger>
+   276→          <TabsTrigger value="discussions">💬 Discussions</TabsTrigger>
+   277→          <TabsTrigger value="team">👥 Team</TabsTrigger>
+   278→          <TabsTrigger value="activity">📋 Activity</TabsTrigger>
+   279→        </TabsList>
+   280→
+   281→        {/* PROJECTS TAB */}
+   282→        <TabsContent value="projects" className="space-y-6">
+   283→          {/* Projects Header */}
+   284→          <div className="flex items-center justify-between">
+   285→            <h2 className="text-xl font-semibold">Your Projects</h2>
+   286→            
+   287→            <Dialog open={showNewProjectDialog} onOpenChange={setShowNewProjectDialog}>
+   288→              <DialogTrigger asChild>
+   289→                <Button>➕ New Project</Button>
+   290→              </DialogTrigger>
+   291→              <DialogContent>
+   292→                <DialogHeader>
+   293→                  <DialogTitle>Create New Project</DialogTitle>
+   294→                </DialogHeader>
+   295→                <div className="space-y-4 pt-4">
+   296→                  <div>
+   297→                    <label className="text-sm font-medium">Project Name *</label>
+   298→                    <Input
+   299→                      placeholder="e.g., Oncology Drug Discovery"
+   300→                      value={newProjectName}
+   301→                      onChange={(e) => setNewProjectName(e.target.value)}
+   302→                      className="mt-1"
+   303→                    />
+   304→                  </div>
+   305→                  
+   306→                  <div>
+   307→                    <label className="text-sm font-medium">Description</label>
+   308→                    <Textarea
+   309→                      placeholder="What is this project about?"
+   310→                      value={newProjectDesc}
+   311→                      onChange={(e) => setNewProjectDesc(e.target.value)}
+   312→                      className="mt-1"
+   313→                      rows={3}
+   314→                    />
+   315→                  </div>
+   316→
+   317→                  <div>
+   318→                    <label className="text-sm font-medium">Visibility</label>
+   319→                    <Select value={newProjectVisibility} onValueChange={(v) => setNewProjectVisibility(v as any)}>
+   320→                      <SelectTrigger className="mt-1">
+   321→                        <SelectValue />
+   322→                      </SelectTrigger>
+   323→                      <SelectContent>
+   324→                        <SelectItem value="private">🔒 Private (only you)</SelectItem>
+   325→                        <SelectItem value="team">👥 Team (invited members)</SelectItem>
+   326→                        <SelectItem value="public">🌐 Public (anyone can view)</SelectItem>
+   327→                      </SelectContent>
+   328→                    </Select>
+   329→                  </div>
+   330→
+   331→                  <div className="flex gap-2 justify-end pt-2">
+   332→                    <Button variant="outline" onClick={() => setShowNewProjectDialog(false)}>
+   333→                      Cancel
+   334→                    </Button>
+   335→                    <Button onClick={handleCreateProject} disabled={!newProjectName.trim()}>
+   336→                      Create Project
+   337→                    </Button>
+   338→                  </div>
+   339→                </div>
+   340→              </DialogContent>
+   341→            </Dialog>
+   342→          </div>
+   343→
+   344→          {/* Projects Grid */}
+   345→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+   346→            {projects.map(project => (
+   347→              <Card 
+   348→                key={project.id} 
+   349→                className={`hover:shadow-lg transition-all cursor-pointer ${
+   350→                  selectedProject === project.id ? 'ring-2 ring-primary' : ''
+   351→                }`}
+   352→                onClick={() => setSelectedProject(project.id)}
+   353→              >
+   354→                <CardHeader className="pb-3">
+   355→                  <div className="flex items-start justify-between">
+   356→                    <CardTitle className="text-lg line-clamp-1">
+   357→                      {project.name.value}
+   358→                    </CardTitle>
+   359→                    <Badge className={getStatusColor(project.status)}>
+   360→                      {project.status}
+   361→                    </Badge>
+   362→                  </div>
+   363→                  <CardDescription className="line-clamp-2">
+   364→                    {project.description.value}
+   365→                  </CardDescription>
+   366→                </CardHeader>
+   367→                
+   368→                <CardContent>
+   369→                  {/* Project Meta */}
+   370→                  <div className="space-y-3 text-sm">
+   371→                    <div className="flex items-center gap-4 text-muted-foreground">
+   372→                      <span className="flex items-center gap-1">
+   373→                        👥 {project.memberIds.length} members
+   374→                      </span>
+   375→                      <span className="flex items-center gap-1">
+   376→                        📊 {project.datasetIds.length} datasets
+   377→                      </span>
+   378→                      <span className="flex items-center gap-1">
+   379→                        🔎 {project.queryIds.length} queries
+   380→                      </span>
+   381→                    </div>
+   382→
+   383→                    {/* Lead */}
+   384→                    <div className="flex items-center gap-2">
+   385→                      <span className="text-xs text-muted-foreground">Lead:</span>
+   386→                      <span className="text-xs font-medium">
+   387→                        {getMemberById(project.leadId)?.name || 'Unknown'}
+   388→                      </span>
+   389→                    </div>
+   390→
+   391→                    {/* Last Activity */}
+   392→                    <div className="text-xs text-muted-foreground">
+   393→                      Last active: {formatTimeAgo(project.lastActivity)}
+   394→                    </div>
+   395→
+   396→                    {/* Members Avatars */}
+   397→                    <div className="flex items-center gap-2 pt-2 border-t">
+   398→                      <div className="flex -space-x-1">
+   399→                        {project.memberIds.slice(0, 4).map(id => {
+   400→                          const member = getMemberById(id);
+   401→                          return (
+   402→                            <div
+   403→                              key={id}
+   404→                              className={`w-6 h-6 rounded-full border border-background flex items-center justify-center text-[10px] ${
+   405→                                member?.online ? 'bg-green-100' : 'bg-gray-100'
+   406→                              }`}
+   407→                              title={member?.name}
+   408→                            >
+   409→                              {member?.name.charAt(0)}
+   410→                            </div>
+   411→                          );
+   412→                        })}
+   413→                        {project.memberIds.length > 4 && (
+   414→                          <div className="w-6 h-6 rounded-full border border-background bg-muted flex items-center justify-center text-[10px]">
+   415→                            +{project.memberIds.length - 4}
+   416→                          </div>
+   417→                        )}
+   418→                      </div>
+   419→                      
+   420→                      <Badge variant="outline" className="text-xs ml-auto">
+   421→                        {project.visibility}
+   422→                      </Badge>
+   423→                    </div>
+   424→                  </div>
+   425→                </CardContent>
+   426→              </Card>
+   427→            ))}
+   428→
+   429→            {/* Empty State / Create Prompt */}
+   430→            {projects.length === 0 && (
+   431→              <Card className="col-span-full">
+   432→                <CardContent className="py-12 text-center">
+   433→                  <span className="text-4xl block mb-3">📁</span>
+   434→                  <h3 className="text-lg font-semibold mb-2">No Projects Yet</h3>
+   435→                  <p className="text-muted-foreground max-w-md mx-auto mb-4">
+   436→                    Create a project to organize your research, collaborate with team members, and track progress.
+   437→                  </p>
+   438→                  <Button onClick={() => setShowNewProjectDialog(true)}>
+   439→                    ➕ Create Your First Project
+   440→                  </Button>
+   441→                </CardContent>
+   442→              </Card>
+   443→            )}
+   444→          </div>
+   445→
+   446→          {/* Selected Project Details */}
+   447→          {selectedProjectData && (
+   448→            <Card className="mt-6">
+   449→              <CardHeader>
+   450→                <div className="flex items-start justify-between">
+   451→                  <div>
+   452→                    <CardTitle>{selectedProjectData.name.value}</CardTitle>
+   453→                    <CardDescription className="mt-1">
+   454→                      {selectedProjectData.description.value}
+   455→                    </CardDescription>
+   456→                  </div>
+   457→                  <Button
+   458→                    variant="outline"
+   459→                    size="sm"
+   460→                    onClick={() => {
+   461→                      setSelectedProject(null);
+   462→                    }}
+   463→                  >
+   464→                    ✕ Close
+   465→                  </Button>
+   466→                </div>
+   467→              </CardHeader>
+   468→              
+   469→              <CardContent>
+   470→                <Tabs defaultValue="overview">
+   471→                  <TabsList className="mb-4">
+   472→                    <TabsTrigger value="overview">Overview</TabsTrigger>
+   473→                    <TabsTrigger value="members">Members</TabsTrigger>
+   474→                    <TabsTrigger value="datasets">Datasets</TabsTrigger>
+   475→                    <TabsTrigger value="discussions">Discussions</TabsTrigger>
+   476→                  </TabsList>
+   477→
+   478→                  <TabsContent value="overview" className="space-y-4">
+   479→                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   480→                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+   481→                        <div className="text-2xl font-bold">{selectedProjectData.memberIds.length}</div>
+   482→                        <div className="text-xs text-muted-foreground">Members</div>
+   483→                      </div>
+   484→                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+   485→                        <div className="text-2xl font-bold">{selectedProjectData.datasetIds.length}</div>
+   486→                        <div className="text-xs text-muted-foreground">Datasets</div>
+   487→                      </div>
+   488→                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+   489→                        <div className="text-2xl font-bold">{selectedProjectData.queryIds.length}</div>
+   490→                        <div className="text-xs text-muted-foreground">Queries</div>
+   491→                      </div>
+   492→                      <div className="p-3 bg-muted/50 rounded-lg text-center">
+   493→                        <div className="text-2xl font-bold">
+   494→                          {discussions.filter(d => d.projectId === selectedProject).length}
+   495→                        </div>
+   496→                        <div className="text-xs text-muted-foreground">Discussions</div>
+   497→                      </div>
+   498→                    </div>
+   499→
+   500→                    <Button 
+   501→                      variant="outline" 
+   502→                      className="w-full"
+   503→                      onClick={() => {
+   504→                        setActiveTab('discussions');
+   505→                        setShowNewDiscussionDialog(true);
+   506→                      }}
+   507→                    >
+   508→                      💬 Start a Discussion
+   509→                    </Button>
+   510→                  </TabsContent>
+   511→
+   512→                  <TabsContent value="members">
+   513→                    <div className="space-y-2">
+   514→                      {selectedProjectData.memberIds.map(id => {
+   515→                        const member = getMemberById(id);
+   516→                        if (!member) return null;
+   517→                        
+   518→                        return (
+   519→                          <div key={id} className="flex items-center justify-between p-3 rounded-lg hover:bg-muted/50">
+   520→                            <div className="flex items-center gap-3">
+   521→                              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-medium ${
+   522→                                member.online ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+   523→                              }`}>
+   524→                                {member.name.split(' ').map(n => n[0]).join('')}
+   525→                              </div>
+   526→                              <div>
+   527→                                <p className="font-medium">{member.name}</p>
+   528→                                <p className="text-sm text-muted-foreground">{member.role}</p>
+   529→                              </div>
+   530→                            </div>
+   531→                            
+   532→                            <div className="flex items-center gap-2">
+   533→                              {member.online ? (
+   534→                                <Badge variant="secondary" className="bg-green-100 text-green-700">Online</Badge>
+   535→                              ) : (
+   536→                                <span className="text-xs text-muted-foreground">
+   537→                                  Active {formatTimeAgo(member.lastActive)}
+   538→                                </span>
+   539→                              )}
+   540→                              <Badge variant="outline">{member.publicationsCount} pubs</Badge>
+   541→                            </div>
+   542→                          </div>
+   543→                        );
+   544→                      })}
+   545→                    </div>
+   546→                  </TabsContent>
+   547→
+   548→                  <TabsContent value="datasets">
+   549→                    <p className="text-muted-foreground text-center py-8">
+   550→                      No datasets linked yet. Add datasets from the Data Lake.
+   551→                    </p>
+   552→                  </TabsContent>
+   553→
+   554→                  <TabsContent value="discussions">
+   555→                    <div className="space-y-2">
+   556→                      {discussions
+   557→                        .filter(d => d.projectId === selectedProject)
+   558→                        .map(discussion => (
+   559→                          <div key={discussion.id} className="p-3 rounded-lg hover:bg-muted/50 cursor-pointer">
+   560→                            <div className="flex items-center justify-between">
+   561→                              <h4 className="font-medium">{discussion.title.value}</h4>
+   562→                              <Badge variant="secondary">{discussion.replyCount} replies</Badge>
+   563→                            </div>
+   564→                            <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
+   565→                              {discussion.content.value}
+   566→                            </p>
+   567→                          </div>
+   568→                        ))
+   569→                      }
+   570→                      
+   571→                      {discussions.filter(d => d.projectId === selectedProject).length === 0 && (
+   572→                        <div className="text-center py-8">
+   573→                          <p className="text-muted-foreground mb-3">No discussions in this project yet.</p>
+   574→                          <Button size="sm" onClick={() => setShowNewDiscussionDialog(true)}>
+   575→                            Start First Discussion
+   576→                          </Button>
+   577→                        </div>
+   578→                      )}
+   579→                    </div>
+   580→                  </TabsContent>
+   581→                </Tabs>
+   582→              </CardContent>
+   583→            </Card>
+   584→          )}
+   585→        </TabsContent>
+   586→
+   587→        /* DISCUSSIONS TAB */
+   588→        <TabsContent value="discussions" className="space-y-6">
+   589→          <div className="flex items-center justify-between">
+   590→            <h2 className="text-xl font-semibold">Team Discussions</h2>
+   591→            
+   592→            <Dialog open={showNewDiscussionDialog} onOpenChange={setShowNewDiscussionDialog}>
+   593→              <DialogTrigger asChild>
+   594→                <Button disabled={!selectedProject}>
+   595→                  💬 New Discussion
+   596→                </Button>
+   597→              </DialogTrigger>
+   598→              <DialogContent>
+   599→                <DialogHeader>
+   600→                  <DialogTitle>Start New Discussion</DialogTitle>
+   601→                </DialogHeader>
+   602→                {!selectedProject ? (
+   603→                  <p className="text-muted-foreground py-4 text-center">
+   604→                    Please select a project first to create a discussion.
+   605→                  </p>
+   606→                ) : (
+   607→                  <div className="space-y-4 pt-4">
+   608→                    <div>
+   609→                      <label className="text-sm font-medium">Title *</label>
+   610→                      <Input
+   611→                        placeholder="What do you want to discuss?"
+   612→                        value={newDiscussionTitle}
+   613→                        onChange={(e) => setNewDiscussionTitle(e.target.value)}
+   614→                        className="mt-1"
+   615→                      />
+   616→                    </div>
+   617→                    
+   618→                    <div>
+   619→                      <label className="text-sm font-medium">Content *</label>
+   620→                      <Textarea
+   621→                        placeholder="Share your thoughts, questions, or findings..."
+   622→                        value={newDiscussionContent}
+   623→                        onChange={(e) => setNewDiscussionContent(e.target.value)}
+   624→                        className="mt-1"
+   625→                        rows={4}
+   626→                      />
+   627→                    </div>
+   628→
+   629→                    <div>
+   630→                      <label className="text-sm font-medium">Tags (comma-separated)</label>
+   631→                      <Input
+   632→                        placeholder="e.g., methodology, question, result"
+   633→                        value={newDiscussionTags}
+   634→                        onChange={(e) => setNewDiscussionTags(e.target.value)}
+   635→                        className="mt-1"
+   636→                      />
+   637→                    </div>
+   638→
+   639→                    <div className="flex gap-2 justify-end pt-2">
+   640→                      <Button variant="outline" onClick={() => setShowNewDiscussionDialog(false)}>
+   641→                        Cancel
+   642→                      </Button>
+   643→                      <Button 
+   644→                        onClick={handleCreateDiscussion} 
+   645→                        disabled={!newDiscussionTitle.trim() || !newDiscussionContent.trim()}
+   646→                      >
+   647→                        Post Discussion
+   648→                      </Button>
+   649→                    </div>
+   650→                  </div>
+   651→                )}
+   652→              </DialogContent>
+   653→            </Dialog>
+   654→          </div>
+   655→
+   656→          {/* Discussions List */}
+   657→          <div className="space-y-4">
+   658→            {discussions.map(discussion => (
+   659→              <Card key={discussion.id}>
+   660→                <CardHeader className="pb-3">
+   661→                  <div className="flex items-start justify-between">
+   662→                    <div className="flex-1">
+   663→                      <div className="flex items-center gap-2 mb-1">
+   664→                        <CardTitle className="text-base">{discussion.title.value}</CardTitle>
+   665→                        {discussion.projectId && (
+   666→                          <Badge variant="outline" className="text-xs">
+   667→                            {projects.find(p => p.id === discussion.projectId)?.name.value}
+   668→                          </Badge>
+   669→                        )}
+   670→                      </div>
+   671→                      
+   672→                      <div className="flex items-center gap-3 text-sm text-muted-foreground">
+   673→                        <span>{getMemberById(discussion.authorId)?.name}</span>
+   674→                        <span>•</span>
+   675→                        <span>{formatTimeAgo(discussion.createdAt)}</span>
+   676→                        <span>•</span>
+   677→                        <span>{discussion.replyCount} replies</span>
+   678→                      </div>
+   679→                    </div>
+   680→                  </div>
+   681→                  
+   682→                  {/* Tags */}
+   683→                  {discussion.tags.length > 0 && (
+   684→                    <div className="flex flex-wrap gap-1 mt-2">
+   685→                      {discussion.tags.map(tag => (
+   686→                        <Badge key={tag} variant="secondary" className="text-xs">
+   687→                          {tag}
+   688→                        </Badge>
+   689→                      ))}
+   690→                    </div>
+   691→                  )}
+   692→                </CardHeader>
+   693→                
+   694→                <CardContent className="pt-0 space-y-4">
+   695→                  {/* Original Post */}
+   696→                  <p className="text-sm">{discussion.content.value}</p>
+   697→
+   698→                  {/* Replies */}
+   699→                  {discussion.replies.length > 0 && (
+   700→                    <div className="space-y-3 pl-4 border-l-2 border-muted">
+   701→                      {discussion.replies.map(reply => (
+   702→                        <div key={reply.id} className="space-y-1">
+   703→                          <div className="flex items-center gap-2">
+   704→                            <span className="text-sm font-medium">
+   705→                              {getMemberById(reply.authorId)?.name}
+   706→                            </span>
+   707→                            <span className="text-xs text-muted-foreground">
+   708→                              {formatTimeAgo(reply.timestamp)}
+   709→                            </span>
+   710→                          </div>
+   711→                          <p className="text-sm pl-4">{reply.content}</p>
+   712→                          
+   713→                          {/* Reactions */}
+   714→                          {Object.keys(reply.reactions).length > 0 && (
+   715→                            <div className="flex gap-1 pl-4">
+   716→                              {Object.entries(reply.reactions).map(([emoji, count]) => (
+   717→                                <button
+   718→                                  key={emoji}
+   719→                                  className="px-2 py-0.5 text-xs bg-muted rounded-full hover:bg-muted/80"
+   720→                                >
+   721→                                  {emoji} {count}
+   722→                                </button>
+   723→                              ))}
+   724→                            </div>
+   725→                          )}
+   726→                        </div>
+   727→                      ))}
+   728→                    </div>
+   729→                  )}
+   730→
+   731→                  {/* Reply Input */}
+   732→                  <div className="flex gap-2 pt-2 border-t">
+   733→                    <Input
+   734→                      placeholder="Write a reply..."
+   735→                      value={replyTexts[discussion.id] || ''}
+   736→                      onChange={(e) => setReplyTexts({ ...replyTexts, [discussion.id]: e.target.value })}
+   737→                      onKeyDown={(e) => e.key === 'Enter' && handleAddReply(discussion.id)}
+   738→                      className="flex-1"
+   739→                    />
+   740→                    <Button
+   741→                      size="sm"
+   742→                      onClick={() => handleAddReply(discussion.id)}
+   743→                      disabled={!replyTexts[discussion.id]?.trim()}
+   744→                    >
+   745→                      Reply
+   746→                    </Button>
+   747→                  </div>
+   748→                </CardContent>
+   749→              </Card>
+   750→            ))}
+   751→
+   752→            {discussions.length === 0 && (
+   753→              <Card>
+   754→                <CardContent className="py-12 text-center">
+   755→                  <span className="text-4xl block mb-3">💬</span>
+   756→                  <h3 className="text-lg font-semibold mb-2">No Discussions Yet</h3>
+   757→                  <p className="text-muted-foreground mb-4">
+   758→                    Start a conversation with your team about your research.
+   759→                  </p>
+   760→                  <Button onClick={() => setShowNewDiscussionDialog(true)} disabled={!selectedProject}>
+   761→                    Start First Discussion
+   762→                  </Button>
+   763→                </CardContent>
+   764→              </Card>
+   765→            )}
+   766→          </div>
+   767→        </TabsContent>
+   768→
+   769→        /* TEAM TAB */
+   770→        <TabsContent value="team" className="space-y-6">
+   771→          <h2 className="text-xl font-semibold">Team Members</h2>
+   772→          
+   773→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   774→            {teamMembers.map(member => (
+   775→              <Card key={member.id} className="hover:shadow-md transition-shadow">
+   776→                <CardContent className="p-5">
+   777→                  <div className="flex items-start gap-4">
+   778→                    <div className={`relative`}>
+   779→                      <div className={`w-14 h-14 rounded-full flex items-center justify-center text-lg font-bold ${
+   780→                        member.online ? 'bg-green-100 text-green-700 ring-2 ring-green-300' : 'bg-gray-100 text-gray-500'
+   781→                      }`}>
+   782→                        {member.name.split(' ').map(n => n[0]).join('')}
+   783→                      </div>
+   784→                      {member.online && (
+   785→                        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-background"></span>
+   786→                      )}
+   787→                    </div>
+   788→                    
+   789→                    <div className="flex-1 min-w-0">
+   790→                      <h3 className="font-semibold">{member.name}</h3>
+   791→                      <p className="text-sm text-muted-foreground">{member.role}</p>
+   792→                      <p className="text-xs text-muted-foreground mt-1">
+   793→                        {member.institution}
+   794→                      </p>
+   795→                    </div>
+   796→                  </div>
+   797→
+   798→                  {/* Expertise Tags */}
+   799→                  <div className="flex flex-wrap gap-1 mt-3">
+   800→                    {member.expertise.map(exp => (
+   801→                      <Badge key={exp} variant="secondary" className="text-xs">
+   802→                        {exp}
+   803→                      </Badge>
+   804→                    ))}
+   805→                  </div>
+   806→
+   807→                  {/* Stats */}
+   808→                  <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
+   809→                    <span>📄 {member.publicationsCount} publications</span>
+   810→                    <span className={member.online ? 'text-green-600' : ''}>
+   811→                      {member.online ? '🟢 Online' : `Last seen ${formatTimeAgo(member.lastActive)}`}
+   812→                    </span>
+   813→                  </div>
+   814→
+   815→                  {/* Actions */}
+   816→                  <div className="flex gap-2 mt-4 pt-3 border-t">
+   817→                    <Button size="sm" variant="outline" className="flex-1">
+   818→                      👤 Profile
+   819→                    </Button>
+   820→                    <Button size="sm" variant="outline" className="flex-1">
+   821→                      ✉️ Message
+   822→                    </Button>
+   823→                  </div>
+   824→                </CardContent>
+   825→              </Card>
+   826→            ))}
+   827→          </div>
+   828→
+   829→          {/* Invite Member CTA */}
+   830→          <Card className="border-dashed">
+   831→            <CardContent className="py-8 text-center">
+   832→              <p className="text-muted-foreground mb-3">
+   833→                Want to grow your team? Invite collaborators to join your projects.
+   834→              </p>
+   835→              <Button variant="outline" onClick={() => triggerUpgradePrompt('collaboration')}>
+   836→                👥 Invite Team Member
+   837→              </Button>
+   838→            </CardContent>
+   839→          </Card>
+   840→        </TabsContent>
+   841→
+   842→        /* ACTIVITY TAB */
+   843→        <TabsContent value="activity" className="space-y-4">
+   844→          <h2 className="text-xl font-semibold">Recent Activity</h2>
+   845→          
+   846→          <div className="space-y-3">
+   847→            {activities.slice(0, 20).map(activity => (
+   848→              <Card key={activity.id} className="hover:bg-muted/30 transition-colors">
+   849→                <CardContent className="p-4">
+   850→                  <div className="flex items-start gap-3">
+   851→                    <span className="text-xl mt-0.5">{activity.icon}</span>
+   852→                    <div className="flex-1 min-w-0">
+   853→                      <p className="text-sm">{activity.message.value}</p>
+   854→                      <p className="text-xs text-muted-foreground mt-1">
+   855→                        {formatTimeAgo(activity.timestamp)}
+   856→                      </p>
+   857→                    </div>
+   858→                    {activity.actionUrl && (
+   859→                      <Button size="sm" variant="ghost" className="shrink-0">
+   860→                        View →
+   861→                      </Button>
+   862→                    )}
+   863→                  </div>
+   864→                </CardContent>
+   865→              </Card>
+   866→            ))}
+   867→
+   868→            {activities.length === 0 && (
+   869→              <Card>
+   870→                <CardContent className="py-12 text-center">
+   871→                  <span className="text-4xl block mb-3">📋</span>
+   872→                  <h3 className="text-lg font-semibold mb-2">No Activity Yet</h3>
+   873→                  <p className="text-muted-foreground">
+   874→                    Your team activity will appear here.
+   875→                  </p>
+   876→                </CardContent>
+   877→              </Card>
+   878→            )}
+   879→          </div>
+   880→        </TabsContent>
+   881→      </Tabs>
+   882→
+   883→      {/* Real-time Collaboration Upgrade Prompt */}
+   884→      <Card className="mt-6 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30">
+   885→        <CardContent className="p-4">
+   886→          <div className="flex items-center justify-between">
+   887→            <div>
+   888→              <h4 className="font-medium text-indigo-900 dark:text-indigo-100">
+   889→                🔄 Enable Real-time Collaboration
+   890→              </h4>
+   891→              <p className="text-sm text-indigo-700 dark:text-indigo-300 mt-1">
+   892→                Edit documents together, see cursors live, and chat in real-time.
+   893→              </p>
+   894→            </div>
+   895→            <Button variant="outline" onClick={() => triggerUpgradePrompt('realtime_collab')}>
+   896→              Enable Now
+   897→            </Button>
+   898→          </div>
+   899→        </CardContent>
+   900→      </Card>
+   901→    </div>
+   902→  );
+   903→}
+   904→

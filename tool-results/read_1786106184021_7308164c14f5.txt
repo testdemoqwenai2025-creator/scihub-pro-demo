@@ -1,0 +1,975 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * SciHub Pro - Settings Page
+     5→ * 
+     6→ * Complete settings management with:
+     7→ * - User preferences (theme, language, etc.)
+     8→ * - Profile management
+     9→ * - Data export/import
+    10→ * - Storage management
+    11→ * - Notification settings
+    12→ * - Upgrade/Plan management
+    13→ * - Call-for-action prompts
+    14→ */
+    15→
+    16→import { useState, useEffect } from 'react';
+    17→import { useTranslation } from '@/i18n/useTranslation';
+    18→import { useSciHubStore, VOLUME_TIERS } from '@/store/useSciHubStore';
+    19→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    20→import { Badge } from '@/components/ui/badge';
+    21→import { Button } from '@/components/ui/button';
+    22→import { Input } from '@/components/ui/input';
+    23→import { Textarea } from '@/components/ui/textarea';
+    24→import { Progress } from '@/components/ui/progress';
+    25→import { Switch } from '@/components/ui/switch';
+    26→import {
+    27→  Select,
+    28→  SelectContent,
+    29→  SelectItem,
+    30→  SelectTrigger,
+    31→  SelectValue,
+    32→} from '@/components/ui/select';
+    33→import {
+    34→  Tabs,
+    35→  TabsContent,
+    36→  TabsList,
+    37→  TabsTrigger,
+    38→} from '@/components/ui/tabs';
+    39→import {
+    40→  Dialog,
+    41→  DialogContent,
+    42→  DialogHeader,
+    43→  DialogTitle,
+    44→  DialogTrigger,
+    45→} from '@/components/ui/dialog';
+    46→import { SettingsSkeleton, FormSkeleton } from '@/components/SkeletonComponents';
+    47→import { showSuccessToast, showErrorToast, showInfoToast, showWarningToast } from '@/lib/toast-utils';
+    48→
+    49→// ============ SETTINGS PAGE COMPONENT ============
+    50→
+    51→export default function SettingsPage() {
+    52→  const { t } = useTranslation();
+    53→  const store = useSciHubStore();
+    54→  
+    55→  const {
+    56→    preferences,
+    57→    updatePreferences,
+    58→    setTheme,
+    59→    setLanguage,
+    60→    setSkillLevel,
+    61→    userProfile,
+    62→    updateUserProfile,
+    63→    resetProfileChanges,
+    64→    datasets,
+    65→    totalStorageUsed,
+    66→    currentVolumeTier,
+    67→    databaseConfig,
+    68→    exportState,
+    69→    importState,
+    70→    addActivity,
+    71→    triggerUpgradePrompt,
+    72→    checkVolumeThreshold,
+    73→    getDirtyFieldsCount,
+    74→    resetAllFields,
+    75→    notifications,
+    76→    markAllNotificationsRead,
+    77→  } = store;
+    78→
+    79→  // UI State
+    80→  const [activeTab, setActiveTab] = useState('profile');
+    81→  const [showExportDialog, setShowExportDialog] = useState(false);
+    82→  const [showImportDialog, setShowImportDialog] = useState(false);
+    83→  const [importText, setImportText] = useState('');
+    84→  const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
+    85→  const [showResetConfirm, setShowResetConfirm] = useState(false);
+    86→  const [isLoading, setIsLoading] = useState(true);
+    87→
+    88→  // Simulate loading on mount
+    89→  useEffect(() => {
+    90→    const timer = setTimeout(() => setIsLoading(false), 1500);
+    91→    return () => clearTimeout(timer);
+    92→  }, []);
+    93→
+    94→  // Calculate storage percentage for current tier
+    95→  const storagePercentage = Math.min(
+    96→    100,
+    97→    totalStorageUsed > 0 && currentVolumeTier?.maxSize > 0 
+    98→      ? (totalStorageUsed / currentVolumeTier.maxSize) * 100 
+    99→      : 0
+   100→  );
+   101→
+   102→  // Format bytes to readable string
+   103→  const formatBytes = (bytes: number): string => {
+   104→    if (bytes === 0) return '0 Bytes';
+   105→    const k = 1024;
+   106→    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+   107→    const i = Math.floor(Math.log(bytes) / Math.log(k));
+   108→    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+   109→  };
+   110→
+   111→  // ============ HANDLERS ============
+   112→
+   113→  const handleExportData = () => {
+   114→    try {
+   115→      const stateJson = exportState();
+   116→      const blob = new Blob([stateJson], { type: 'application/json' });
+   117→      const url = URL.createObjectURL(blob);
+   118→      const a = document.createElement('a');
+   119→      a.href = url;
+   120→      a.download = `scihub-pro-backup-${new Date().toISOString().split('T')[0]}.json`;
+   121→      a.click();
+   122→      URL.revokeObjectURL(url);
+   123→      
+   124→      addActivity({
+   125→        type: 'export',
+   126→        message: createDynamicField('Exported application backup'),
+   127→        icon: '📥',
+   128→      });
+   129→      
+   130→      showSuccessToast('Data Exported Successfully!', 'Your backup file has been downloaded');
+   131→      
+   132→      setShowExportDialog(false);
+   133→    } catch (error) {
+   134→      console.error('Export failed:', error);
+   135→      showErrorToast('Export Failed', 'Could not export data. Please try again.');
+   136→    }
+   137→  };
+   138→
+   139→  const handleImportData = () => {
+   140→    try {
+   141→      const success = importState(importText);
+   142→      setImportResult({
+   143→        success,
+   144→        message: success 
+   145→          ? 'Data imported successfully! Your settings and workspace have been restored.'
+   146→          : 'Import failed. Please check that the file is a valid SciHub Pro backup.'
+   147→      });
+   148→      
+   149→      if (success) {
+   150→        addActivity({
+   151→          type: 'import',
+   152→          message: createDynamicField('Imported application backup'),
+   153→          icon: '📤',
+   154→        });
+   155→        showSuccessToast('Data Imported!', 'Your settings and workspace have been restored');
+   156→      } else {
+   157→        showErrorToast('Import Failed', 'Invalid file format. Please check your backup file.');
+   158→      }
+   159→    } catch (error) {
+   160→      setImportResult({
+   161→        success: false,
+   162→        message: 'Import failed: Invalid file format.',
+   163→      });
+   164→      showErrorToast('Import Error', 'An error occurred during import');
+   165→    }
+   166→  };
+   167→
+   168→  const handleResetAll = () => {
+   169→    resetAllFields();
+   170→    setShowResetConfirm(false);
+   171→    addActivity({
+   172→      type: 'reset',
+   173→      message: createDynamicField('Reset all fields to default values'),
+   174→      icon: '↩️',
+   175→    });
+   176→    showWarningToast('Settings Reset', 'All preferences have been restored to default values');
+   177→  };
+   178→
+   179→  // ============ RENDER ============
+   180→
+   181→  // Loading skeleton
+   182→  if (isLoading) {
+   183→    return (
+   184→      <div className="min-h-screen bg-background">
+   185→        <SettingsSkeleton />
+   186→      </div>
+   187→    );
+   188→  }
+   189→
+   190→  return (
+   191→    <div className="min-h-screen bg-background p-6">
+   192→      {/* Header */}
+   193→      <div className="mb-8">
+   194→        <h1 className="text-3xl font-bold text-foreground">⚙️ Settings</h1>
+   195→        <p className="text-muted-foreground mt-1">
+   196→          Manage your profile, preferences, data, and account settings
+   197→        </p>
+   198→      </div>
+   199→
+   200→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   201→        <TabsList className="mb-6">
+   202→          <TabsTrigger value="profile">👤 Profile</TabsTrigger>
+   203→          <TabsTrigger value="preferences">🎨 Preferences</TabsTrigger>
+   204→          <TabsTrigger value="data">💾 Data & Storage</TabsTrigger>
+   205→          <TabsTrigger value="notifications">🔔 Notifications</TabsTrigger>
+   206→          <TabsTrigger value="account">👑 Account</TabsTrigger>
+   207→        </TabsList>
+   208→
+   209→        {/* PROFILE TAB */}
+   210→        <TabsContent value="profile" className="space-y-6">
+   211→          <Card>
+   212→            <CardHeader>
+   213→              <CardTitle>Personal Information</CardTitle>
+   214→              <CardDescription>
+   215→                Update your personal details and research information
+   216→              </CardDescription>
+   217→            </CardHeader>
+   218→            <CardContent className="space-y-4">
+   219→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   220→                <div>
+   221→                  <label className="text-sm font-medium">Display Name</label>
+   222→                  <Input
+   223→                    value={userProfile.displayName.value}
+   224→                    onChange={(e) => updateUserProfile('displayName', e.target.value)}
+   225→                    className={`mt-1 ${userProfile.displayName.isDirty ? 'border-orange-400' : ''}`}
+   226→                  />
+   227→                  {userProfile.displayName.isDirty && (
+   228→                    <span className="text-xs text-orange-500 mt-1">Modified</span>
+   229→                  )}
+   230→                </div>
+   231→
+   232→                <div>
+   233→                  <label className="text-sm font-medium">Email</label>
+   234→                  <Input
+   235→                    type="email"
+   236→                    value={userProfile.email.value}
+   237→                    onChange={(e) => updateUserProfile('email', e.target.value)}
+   238→                    className={`mt-1 ${userProfile.email.isDirty ? 'border-orange-400' : ''}`}
+   239→                  />
+   240→                </div>
+   241→
+   242→                <div>
+   243→                  <label className="text-sm font-medium">Institution</label>
+   244→                  <Input
+   245→                    value={userProfile.institution.value}
+   246→                    onChange={(e) => updateUserProfile('institution', e.target.value)}
+   247→                    className={`mt-1 ${userProfile.institution.isDirty ? 'border-orange-400' : ''}`}
+   248→                  />
+   249→                </div>
+   250→
+   251→                <div>
+   252→                  <label className="text-sm font-medium">ORCID</label>
+   253→                  <Input
+   254→                    placeholder="0000-0000-0000-0000"
+   255→                    value={userProfile.orcid.value}
+   256→                    onChange={(e) => updateUserProfile('orcid', e.target.value)}
+   257→                    className={`mt-1 ${userProfile.orcid.isDirty ? 'border-orange-400' : ''}`}
+   258→                  />
+   259→                </div>
+   260→              </div>
+   261→
+   262→              <div>
+   263→                <label className="text-sm font-medium">Bio</label>
+   264→                <Textarea
+   265→                  value={userProfile.bio.value}
+   266→                  onChange={(e) => updateUserProfile('bio', e.target.value)}
+   267→                  className={`mt-1 ${userProfile.bio.isDirty ? 'border-orange-400' : ''}`}
+   268→                  rows={3}
+   269→                  placeholder="Tell us about your research interests..."
+   270→                />
+   271→              </div>
+   272→
+   273→              <div>
+   274→                <label className="text-sm font-medium">Research Interests</label>
+   275→                <Input
+   276→                  placeholder="cancer-genomics, machine-learning, drug-discovery"
+   277→                  defaultValue={userProfile.researchInterests?.join(', ') || ''}
+   278→                  className="mt-1"
+   279→                />
+   280→                <p className="text-xs text-muted-foreground mt-1">
+   281→                  Comma-separated keywords
+   282→                </p>
+   283→              </div>
+   284→
+   285→              {/* Dirty Fields Indicator */}
+   286→              {getDirtyFieldsCount() > 0 && (
+   287→                <div className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg">
+   288→                  <span className="text-sm text-orange-700 dark:text-orange-300">
+   289→                    You have {getDirtyFieldsCount()} unsaved change{getDirtyFieldsCount() > 1 ? 's' : ''}
+   290→                  </span>
+   291→                  <div className="flex gap-2">
+   292→                    <Button size="sm" variant="outline" onClick={resetProfileChanges}>
+   293→                      Reset Changes
+   294→                    </Button>
+   295→                    <Button size="sm" onClick={() => {
+   296→                      // In a real app, this would save to server
+   297→                      addActivity({
+   298→                        type: 'save',
+   299→                        message: createDynamicField('Saved profile changes'),
+   300→                        icon: '✅',
+   301→                      });
+   302→                    }}>
+   303→                      Save Changes
+   304→                    </Button>
+   305→                  </div>
+   306→                </div>
+   307→              )}
+   308→            </CardContent>
+   309→          </Card>
+   310→
+   311→          {/* Research Stats */}
+   312→          <Card>
+   313→            <CardHeader>
+   314→              <CardTitle>Research Statistics</CardTitle>
+   315→            </CardHeader>
+   316→            <CardContent>
+   317→              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   318→                <div className="p-4 bg-muted/50 rounded-lg text-center">
+   319→                  <div className="text-2xl font-bold">{userProfile.publicationsCount}</div>
+   320→                  <div className="text-sm text-muted-foreground">Publications</div>
+   321→                </div>
+   322→                <div className="p-4 bg-muted/50 rounded-lg text-center">
+   323→                  <div className="text-2xl font-bold">{userProfile.hIndex || 'N/A'}</div>
+   324→                  <div className="text-sm text-muted-foreground">H-Index</div>
+   325→                </div>
+   326→                <div className="p-4 bg-muted/50 rounded-lg text-center">
+   327→                  <div className="text-2xl font-bold">{userProfile.role}</div>
+   328→                  <div className="text-sm text-muted-foreground">Role</div>
+   329→                </div>
+   330→                <div className="p-4 bg-muted/50 rounded-lg text-center">
+   331→                  <div className="text-2xl font-bold">
+   332→                    {Math.floor((Date.now() - new Date(userProfile.joinDate).getTime()) / (1000 * 60 * 60 * 24))}
+   333→                  </div>
+   334→                  <div className="text-sm text-muted-foreground">Days Active</div>
+   335→                </div>
+   336→              </div>
+   337→            </CardContent>
+   338→          </Card>
+   339→        </TabsContent>
+   340→
+   341→        /* PREFERENCES TAB */
+   342→        <TabsContent value="preferences" className="space-y-6">
+   343→          <Card>
+   344→            <CardHeader>
+   345→              <CardTitle>Appearance</CardTitle>
+   346→            </CardHeader>
+   347→            <CardContent className="space-y-4">
+   348→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   349→                <div>
+   350→                  <label className="text-sm font-medium">Theme</label>
+   351→                  <Select value={preferences.theme} onValueChange={(v) => setTheme(v as any)}>
+   352→                    <SelectTrigger className="mt-1">
+   353→                      <SelectValue />
+   354→                    </SelectTrigger>
+   355→                    <SelectContent>
+   356→                      <SelectItem value="light">☀️ Light</SelectItem>
+   357→                      <SelectItem value="dark">🌙 Dark</SelectItem>
+   358→                      <SelectItem value="system">💻 System</SelectItem>
+   359→                    </SelectContent>
+   360→                  </Select>
+   361→                </div>
+   362→
+   363→                <div>
+   364→                  <label className="text-sm font-medium">Language</label>
+   365→                  <Select value={preferences.language} onValueChange={setLanguage}>
+   366→                    <SelectTrigger className="mt-1">
+   367→                      <SelectValue />
+   368→                    </SelectTrigger>
+   369→                    <SelectContent>
+   370→                      <SelectItem value="en">English</SelectItem>
+   371→                      <SelectItem value="zh">中文</SelectItem>
+   372→                      <SelectItem value="es">Español</SelectItem>
+   373→                      <SelectItem value="fr">Français</SelectItem>
+   374→                      <SelectItem value="de">Deutsch</SelectItem>
+   375→                    </SelectContent>
+   376→                  </Select>
+   377→                </div>
+   378→
+   379→                <div>
+   380→                  <label className="text-sm font-medium">Font Size</label>
+   381→                  <Select 
+   382→                    value={preferences.fontSize} 
+   383→                    onValueChange={(v) => updatePreferences({ fontSize: v as any })}
+   384→                  >
+   385→                    <SelectTrigger className="mt-1">
+   386→                      <SelectValue />
+   387→                    </SelectTrigger>
+   388→                    <SelectContent>
+   389→                      <SelectItem value="small">Small</SelectItem>
+   390→                      <SelectItem value="medium">Medium</SelectItem>
+   391→                      <SelectItem value="large">Large</SelectItem>
+   392→                    </SelectContent>
+   393→                  </Select>
+   394→                </div>
+   395→
+   396→                <div>
+   397→                  <label className="text-sm font-medium">Results Per Page</label>
+   398→                  <Select 
+   399→                    value={String(preferences.resultsPerPage)} 
+   400→                    onValueChange={(v) => updatePreferences({ resultsPerPage: Number(v) })}
+   401→                  >
+   402→                    <SelectTrigger className="mt-1">
+   403→                      <SelectValue />
+   404→                    </SelectTrigger>
+   405→                    <SelectContent>
+   406→                      <SelectItem value="10">10</SelectItem>
+   407→                      <SelectItem value="20">20</SelectItem>
+   408→                      <SelectItem value="50">50</SelectItem>
+   409→                      <SelectItem value="100">100</SelectItem>
+   410→                    </SelectContent>
+   411→                  </Select>
+   412→                </div>
+   413→              </div>
+   414→            </CardContent>
+   415→          </Card>
+   416→
+   417→          <Card>
+   418→            <CardHeader>
+   419→              <CardTitle>Behavior</CardTitle>
+   420→            </CardHeader>
+   421→            <CardContent className="space-y-4">
+   422→              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   423→                <div>
+   424→                  <label className="text-sm font-medium">Auto-save Interval</label>
+   425→                  <Select 
+   426→                    value={String(preferences.autoSaveInterval)} 
+   427→                    onValueChange={(v) => updatePreferences({ autoSaveInterval: Number(v) })}
+   428→                  >
+   429→                    <SelectTrigger className="mt-1">
+   430→                      <SelectValue />
+   431→                    </SelectTrigger>
+   432→                    <SelectContent>
+   433→                      <SelectItem value="15">15 seconds</SelectItem>
+   434→                      <SelectItem value="30">30 seconds</SelectItem>
+   435→                      <SelectItem value="60">1 minute</SelectItem>
+   436→                      <SelectItem value="300">5 minutes</SelectItem>
+   437→                    </SelectContent>
+   438→                  </Select>
+   439→                </div>
+   440→
+   441→                <div>
+   442→                  <label className="text-sm font-medium">Skill Level</label>
+   443→                  <Select value={preferences.skillLevel} onValueChange={(v) => setSkillLevel(v as any)}>
+   444→                    <SelectTrigger className="mt-1">
+   445→                      <SelectValue />
+   446→                    </SelectTrigger>
+   447→                    <SelectContent>
+   448→                      <SelectItem value="beginner">🌱 Beginner</SelectItem>
+   449→                      <SelectItem value="intermediate">🌿 Intermediate</SelectItem>
+   450→                      <SelectItem value="expert">🌳 Expert</SelectItem>
+   451→                    </SelectContent>
+   452→                  </Select>
+   453→                  <p className="text-xs text-muted-foreground mt-1">
+   454→                    Affects guidance and feature suggestions
+   455→                  </p>
+   456→                </div>
+   457→              </div>
+   458→
+   459→              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+   460→                <div>
+   461→                  <p className="font-medium text-sm">Sidebar Collapsed by Default</p>
+   462→                  <p className="text-xs text-muted-foreground">Start with sidebar minimized</p>
+   463→                </div>
+   464→                <Switch
+   465→                  checked={preferences.sidebarCollapsed}
+   466→                  onCheckedChange={(checked) => updatePreferences({ sidebarCollapsed: checked })}
+   467→                />
+   468→              </div>
+   469→            </CardContent>
+   470→          </Card>
+   471→        </TabsContent>
+   472→
+   473→        /* DATA & STORAGE TAB */
+   474→        <TabsContent value="data" className="space-y-6">
+   475→          {/* Storage Overview */}
+   476→          <Card>
+   477→            <CardHeader>
+   478→              <div className="flex items-center justify-between">
+   479→                <div>
+   480→                  <CardTitle>Storage Usage</CardTitle>
+   481→                  <CardDescription>
+   482→                    Current tier: {currentVolumeTier.name}
+   483→                  </CardDescription>
+   484→                </div>
+   485→                <Badge 
+   486→                  variant={storagePercentage > 80 ? 'destructive' : storagePercentage > 60 ? 'secondary' : 'default'}
+   487→                  className="bg-green-500"
+   488→                >
+   489→                  {formatBytes(totalStorageUsed)} used
+   490→                </Badge>
+   491→              </div>
+   492→            </CardHeader>
+   493→            <CardContent className="space-y-4">
+   494→              <Progress value={storagePercentage} className="h-3" />
+   495→              
+   496→              <div className="flex justify-between text-sm text-muted-foreground">
+   497→                <span>{formatBytes(totalStorageUsed)}</span>
+   498→                <span>{formatBytes(currentVolumeTier.maxSize)}</span>
+   499→                <span>{storagePercentage.toFixed(1)}%</span>
+   500→              </div>
+   501→
+   502→              {/* Volume Tiers Comparison */}
+   503→              <div className="mt-6">
+   504→                <h4 className="font-medium mb-3">Available Plans</h4>
+   505→                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+   506→                  {VOLUME_TIERS.map(tier => (
+   507→                    <div 
+   508→                      key={tier.tier}
+   509→                      className={`p-4 rounded-lg border ${
+   510→                        currentVolumeTier.tier === tier.tier 
+   511→                          ? 'border-primary bg-primary/5' 
+   512→                          : 'hover:bg-muted'
+   513→                      }`}
+   514→                    >
+   515→                      <div className="font-medium">{tier.name}</div>
+   516→                      <div className="text-sm text-muted-foreground mt-1">
+   517→                        Up to {formatBytes(tier.maxSize)}
+   518→                      </div>
+   519→                      <ul className="text-xs mt-2 space-y-1">
+   520→                        {tier.features.slice(0, 3).map((feature, i) => (
+   521→                          <li key={i} className="flex items-center gap-1">
+   522→                            <span className="text-green-500">✓</span>
+   523→                            {feature}
+   524→                          </li>
+   525→                        ))}
+   526→                      </ul>
+   527→                      {currentVolumeTier.tier !== tier.tier && (
+   528→                        <Button
+   529→                          size="sm"
+   530→                          variant="outline"
+   531→                          className="w-full mt-3"
+   532→                          onClick={() => triggerUpgradePrompt('storage')}
+   533→                        >
+   534→                          {tier.tier > currentVolumeTier.tier ? 'Upgrade' : 'Downgrade'}
+   535→                        </Button>
+   536→                      )}
+   537→                    </div>
+   538→                  ))}
+   539→                </div>
+   540→              </div>
+   541→            </CardContent>
+   542→          </Card>
+   543→
+   544→          {/* Datasets Summary */}
+   545→          <Card>
+   546→            <CardHeader>
+   547→              <CardTitle>Datasets ({datasets.length})</CardTitle>
+   548→            </CardHeader>
+   549→            <CardContent>
+   550→              <div className="space-y-2 max-h-64 overflow-auto">
+   551→                {datasets.map(dataset => (
+   552→                  <div key={dataset.id} className="flex items-center justify-between p-2 rounded hover:bg-muted">
+   553→                    <div className="flex items-center gap-3">
+   554→                      <span>{dataset.downloaded.value ? '✅' : '⬇️'}</span>
+   555→                      <span className="text-sm font-medium truncate max-w-[200px]">
+   556→                        {dataset.name.value}
+   557→                      </span>
+   558→                    </div>
+   559→                    <div className="flex items-center gap-2">
+   560→                      <span className="text-xs text-muted-foreground">
+   561→                        {formatBytes(dataset.sizeBytes.value)}
+   562→                      </span>
+   563→                      {dataset.isFavorite.value && (
+   564→                        <span className="text-yellow-500">⭐</span>
+   565→                      )}
+   566→                    </div>
+   567→                  </div>
+   568→                ))}
+   569→              </div>
+   570→            </CardContent>
+   571→          </Card>
+   572→
+   573→          {/* Data Management */}
+   574→          <Card>
+   575→            <CardHeader>
+   576→              <CardTitle>Data Management</CardTitle>
+   577→            </CardHeader>
+   578→            <CardContent className="space-y-3">
+   579→              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+   580→                {/* Export */}
+   581→                <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+   582→                  <DialogTrigger asChild>
+   583→                    <Button variant="outline" className="justify-start gap-2">
+   584→                      📤 Export All Data
+   585→                    </Button>
+   586→                  </DialogTrigger>
+   587→                  <DialogContent>
+   588→                    <DialogHeader>
+   589→                      <DialogTitle>Export Application Data</DialogTitle>
+   590→                    </DialogHeader>
+   591→                    <div className="py-4">
+   592→                      <p className="text-sm text-muted-foreground mb-4">
+   593→                        This will download a JSON backup containing your:
+   594→                      </p>
+   595→                      <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground mb-4">
+   596→                        <li>User preferences and profile</li>
+   597→                        <li>Saved queries and workspace files</li>
+   598→                        <li>Search history and saved items</li>
+   599→                        <li>Guidance dismissals</li>
+   600→                      </ul>
+   601→                      <p className="text-sm text-muted-foreground">
+   602→                        Note: Large datasets are not included in this export.
+   603→                      </p>
+   604→                    </div>
+   605→                    <div className="flex gap-2 justify-end">
+   606→                      <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+   607→                        Cancel
+   608→                      </Button>
+   609→                      <Button onClick={handleExportData}>
+   610→                        📥 Download Backup
+   611→                      </Button>
+   612→                    </div>
+   613→                  </DialogContent>
+   614→                </Dialog>
+   615→
+   616→                {/* Import */}
+   617→                <Dialog open={showImportDialog} onOpenChange={setShowImportDialog}>
+   618→                  <DialogTrigger asChild>
+   619→                    <Button variant="outline" className="justify-start gap-2">
+   620→                      📥 Import Data
+   621→                    </Button>
+   622→                  </DialogTrigger>
+   623→                  <DialogContent>
+   624→                    <DialogHeader>
+   625→                      <DialogTitle>Import Application Data</DialogTitle>
+   626→                    </DialogHeader>
+   627→                    <div className="py-4 space-y-4">
+   628→                      <p className="text-sm text-muted-foreground">
+   629→                        Paste your JSON backup below or upload a file:
+   630→                      </p>
+   631→                      <Textarea
+   632→                        placeholder="Paste JSON backup here..."
+   633→                        value={importText}
+   634→                        onChange={(e) => setImportText(e.target.value)}
+   635→                        rows={8}
+   636→                        className="font-mono text-xs"
+   637→                      />
+   638→                      
+   639→                      {importResult && (
+   640→                        <div className={`p-3 rounded ${
+   641→                          importResult.success 
+   642→                            ? 'bg-green-50 dark:bg-green-950 text-green-700 dark:text-green-300'
+   643→                            : 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300'
+   644→                        }`}>
+   645→                          {importResult.message}
+   646→                        </div>
+   647→                      )}
+   648→                    </div>
+   649→                    <div className="flex gap-2 justify-end">
+   650→                      <Button variant="outline" onClick={() => setShowImportDialog(false)}>
+   651→                        Cancel
+   652→                      </Button>
+   653→                      <Button 
+   654→                        onClick={handleImportData}
+   655→                        disabled={!importText.trim()}
+   656→                      >
+   657→                        Import Data
+   658→                      </Button>
+   659→                    </div>
+   660→                  </DialogContent>
+   661→                </Dialog>
+   662→
+   663→                {/* Reset */}
+   664→                <Dialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+   665→                  <DialogTrigger asChild>
+   666→                    <Button variant="outline" className="justify-start gap-2 text-destructive hover:text-destructive">
+   667→                      ↩️ Reset to Defaults
+   668→                    </Button>
+   669→                  </DialogTrigger>
+   670→                  <DialogContent>
+   671→                    <DialogHeader>
+   672→                      <DialogTitle>Reset All Settings?</DialogTitle>
+   673→                    </DialogHeader>
+   674→                    <div className="py-4">
+   675→                      <p className="text-sm text-muted-foreground">
+   676→                        This will reset all modified fields back to their original default values. 
+   677→                        This action cannot be undone.
+   678→                      </p>
+   679→                      <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-950 rounded text-sm text-yellow-700 dark:text-yellow-300">
+   680→                        ⚠️ Your custom data (queries, files, etc.) will not be affected.
+   681→                      </div>
+   682→                    </div>
+   683→                    <div className="flex gap-2 justify-end">
+   684→                      <Button variant="outline" onClick={() => setShowResetConfirm(false)}>
+   685→                        Cancel
+   686→                      </Button>
+   687→                      <Button variant="destructive" onClick={handleResetAll}>
+   688→                        Reset Everything
+   689→                      </Button>
+   690→                    </div>
+   691→                  </DialogContent>
+   692→                </Dialog>
+   693→
+   694→                {/* Clear Cache */}
+   695→                <Button 
+   696→                  variant="outline" 
+   697→                  className="justify-start gap-2"
+   698→                  onClick={() => {
+   699→                    localStorage.clear();
+   700→                    addActivity({
+   701→                      type: 'delete',
+   702→                      message: createDynamicField('Cleared local cache'),
+   703→                      icon: '🗑️',
+   704→                    });
+   705→                  }}
+   706→                >
+   707→                  🗑️ Clear Local Cache
+   708→                </Button>
+   709→              </div>
+   710→            </CardContent>
+   711→          </Card>
+   712→        </TabsContent>
+   713→
+   714→        /* NOTIFICATIONS TAB */
+   715→        <TabsContent value="notifications" className="space-y-6">
+   716→          <Card>
+   717→            <CardHeader>
+   718→              <div className="flex items-center justify-between">
+   719→                <div>
+   720→                  <CardTitle>Notification Preferences</CardTitle>
+   721→                  <CardDescription>
+   722→                    Choose how you want to be notified about updates
+   723→                  </CardDescription>
+   724→                </div>
+   725→                <Button
+   726→                  size="sm"
+   727→                  variant="outline"
+   728→                  onClick={markAllNotificationsRead}
+   729→                >
+   730→                  Mark All Read
+   731→                </Button>
+   732→              </div>
+   733→            </CardHeader>
+   734→            <CardContent className="space-y-4">
+   735→              {[
+   736→                { key: 'emailJobComplete', label: 'Job Completion Emails', desc: 'Get email when compute jobs finish' },
+   737→                { key: 'emailNewCollaborator', label: 'Team Activity Emails', desc: 'Email when team members join or post' },
+   738→                { key: 'pushUpdates', label: 'Push Notifications', desc: 'Browser push notifications for important events' },
+   739→                { key: 'weeklyDigest', label: 'Weekly Digest', desc: 'Summary of activity every week' },
+   740→                { key: 'researchAlerts', label: 'Research Alerts', desc: 'Alerts for new papers matching your interests' },
+   741→              ].map(item => (
+   742→                <div key={item.key} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+   743→                  <div>
+   744→                    <p className="font-medium text-sm">{item.label}</p>
+   745→                    <p className="text-xs text-muted-foreground">{item.desc}</p>
+   746→                  </div>
+   747→                  <Switch
+   748→                    checked={preferences.notifications?.[item.key as string] ?? false}
+   749→                    onCheckedChange={(checked) => 
+   750→                      updatePreferences({
+   751→                        notifications: {
+   752→                          ...(preferences.notifications || {}),
+   753→                          [item.key]: checked,
+   754→                        },
+   755→                      })
+   756→                    }
+   757→                  />
+   758→                </div>
+   759→              ))}
+   760→            </CardContent>
+   761→          </Card>
+   762→
+   763→          {/* Recent Notifications */}
+   764→          <Card>
+   765→            <CardHeader>
+   766→              <CardTitle>Recent Notifications</CardTitle>
+   767→            </CardHeader>
+   768→            <CardContent>
+   769→              <div className="space-y-2 max-h-96 overflow-auto">
+   770→                {notifications.slice(0, 20).map(notif => (
+   771→                  <div 
+   772→                    key={notif.id} 
+   773→                    className={`p-3 rounded-lg transition-colors ${
+   774→                      !notif.read ? 'bg-primary/5 border-l-2 border-l-primary' : 'hover:bg-muted/50'
+   775→                    }`}
+   776→                  >
+   777→                    <div className="flex items-start justify-between">
+   778→                      <div className="flex-1">
+   779→                        <div className="flex items-center gap-2">
+   780→                          <span className={`text-xs px-1.5 py-0.5 rounded ${
+   781→                            notif.type === 'success' ? 'bg-green-100 text-green-700' :
+   782→                            notif.type === 'error' ? 'bg-red-100 text-red-700' :
+   783→                            notif.type === 'warning' ? 'bg-yellow-100 text-yellow-700' :
+   784→                            notif.type === 'job_complete' ? 'bg-blue-100 text-blue-700' :
+   785→                            'bg-gray-100 text-gray-700'
+   786→                          }`}>
+   787→                            {notif.type.replace('_', ' ')}
+   788→                          </span>
+   789→                          <span className="font-medium text-sm">{notif.title}</span>
+   790→                        </div>
+   791→                        <p className="text-sm text-muted-foreground mt-1">
+   792→                          {notif.message}
+   793→                        </p>
+   794→                        <p className="text-xs text-muted-foreground mt-2">
+   795→                          {new Date(notif.timestamp).toLocaleString()}
+   796→                        </p>
+   797→                      </div>
+   798→                      
+   799→                      {notif.actionUrl && (
+   800→                        <Button size="sm" variant="ghost" className="shrink-0 h-7 text-xs">
+   801→                          {notif.actionLabel || 'View'} →
+   802→                        </Button>
+   803→                      )}
+   804→                    </div>
+   805→                  </div>
+   806→                ))}
+   807→
+   808→                {notifications.length === 0 && (
+   809→                  <div className="text-center py-8 text-muted-foreground">
+   810→                    No notifications yet
+   811→                  </div>
+   812→                )}
+   813→              </div>
+   814→            </CardContent>
+   815→          </Card>
+   816→        </TabsContent>
+   817→
+   818→        /* ACCOUNT TAB */
+   819→        <TabsContent value="account" className="space-y-6">
+   820→          {/* Current Plan */}
+   821→          <Card>
+   822→            <CardHeader>
+   823→              <CardTitle>Current Plan</CardTitle>
+   824→              <CardDescription>
+   825→                You&apos;re currently on the Free tier
+   826→              </CardDescription>
+   827→            </CardHeader>
+   828→            <CardContent>
+   829→              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 rounded-lg border border-green-200 dark:border-green-800">
+   830→                <div className="flex items-center justify-between">
+   831→                  <div>
+   832→                    <div className="flex items-center gap-2">
+   833→                      <span className="text-2xl">🆓</span>
+   834→                      <span className="text-xl font-bold text-green-800 dark:text-green-200">Free Tier</span>
+   835→                    </div>
+   836→                    <p className="text-sm text-green-700 dark:text-green-300 mt-1">
+   837→                      Perfect for getting started with scientific research tools
+   838→                    </p>
+   839→                  </div>
+   840→                  
+   841→                  <Button onClick={() => triggerUpgradePrompt('storage')}>
+   842→                    View Plans →
+   843→                  </Button>
+   844→                </div>
+   845→
+   846→                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 pt-4 border-t border-green-200 dark:border-green-800">
+   847→                  <div className="text-center">
+   848→                    <div className="text-2xl font-bold text-green-800 dark:text-green-200">∞</div>
+   849→                    <div className="text-xs text-green-600 dark:text-green-400">Unlimited Searches</div>
+   850→                  </div>
+   851→                  <div className="text-center">
+   852→                    <div className="text-2xl font-bold text-green-800 dark:text-green-200">5</div>
+   853→                    <div className="text-xs text-green-600 dark:text-green-400">Active Jobs</div>
+   854→                  </div>
+   855→                  <div className="text-center">
+   856→                    <div className="text-2xl font-bold text-green-800 dark:text-green-200">100MB</div>
+   857→                    <div className="text-xs text-green-600 dark:text-green-400">Storage</div>
+   858→                  </div>
+   859→                  <div className="text-center">
+   860→                    <div className="text-2xl font-bold text-green-800 dark:text-green-200">12</div>
+   861→                    <div className="text-xs text-green-600 dark:text-green-400">API Sources</div>
+   862→                  </div>
+   863→                </div>
+   864→              </div>
+   865→            </CardContent>
+   866→          </Card>
+   867→
+   868→          {/* Plan Comparison */}
+   869→          <Card>
+   870→            <CardHeader>
+   871→              <CardTitle>Compare Plans</CardTitle>
+   872→            </CardHeader>
+   873→            <CardContent>
+   874→              <div className="overflow-x-auto">
+   875→                <table className="w-full text-sm">
+   876→                  <thead>
+   877→                    <tr className="border-b">
+   878→                      <th className="text-left py-3 px-4">Feature</th>
+   879→                      <th className="text-center py-3 px-4">Free</th>
+   880→                      <th className="text-center py-3 px-4 bg-blue-50 dark:bg-blue-950">Pro ($9/mo)</th>
+   881→                      <th className="text-center py-3 px-4 bg-purple-50 dark:bg-purple-950">Enterprise ($49/mo)</th>
+   882→                    </tr>
+   883→                  </thead>
+   884→                  <tbody>
+   885→                    {[
+   886→                      { feature: 'Literature Search', free: '∞', pro: '∞', enterprise: '∞' },
+   887→                      { feature: 'Real API Access', free: '∞', pro: '∞', enterprise: '∞' },
+   888→                      { feature: 'Active Compute Jobs', free: '5', pro: '50', enterprise: '∞' },
+   889→                      { feature: 'Storage', free: '100MB', pro: '10GB', enterprise: 'Unlimited' },
+   890→                      { feature: 'AI Assistant Tokens', free: '10K/day', pro: '100K/day', enterprise: 'Unlimited' },
+   891→                      { feature: 'Team Members', free: '3', pro: '10', enterprise: 'Unlimited' },
+   892→                      { feature: 'SQL Query Engine', free: '-', pro: '✓', enterprise: '✓' },
+   893→                      { feature: 'DuckDB Analytics', free: '-', pro: '✓', enterprise: '✓' },
+   894→                      { feature: 'Real-time Collaboration', free: '-', pro: '-', enterprise: '✓' },
+   895→                      { feature: 'Custom Model Training', free: '-', pro: '-', enterprise: '✓' },
+   896→                      { feature: 'Priority Support', free: '-', pro: 'Community', enterprise: '24/7 Dedicated' },
+   897→                      { feature: 'SLA Guarantee', free: '-', pro: '-', enterprise: '99.99%' },
+   898→                    ].map((row, i) => (
+   899→                      <tr key={i} className="border-b last:border-0">
+   900→                        <td className="py-3 px-4">{row.feature}</td>
+   901→                        <td className="text-center py-3 px-4">{row.free}</td>
+   902→                        <td className="text-center py-3 px-4 bg-blue-50/50 dark:bg-blue-950/50">{row.pro}</td>
+   903→                        <td className="text-center py-3 px-4 bg-purple-50/50 dark:bg-purple-950/50">{row.enterprise}</td>
+   904→                      </tr>
+   905→                    ))}
+   906→                  </tbody>
+   907→                </table>
+   908→              </div>
+   909→
+   910→              <div className="flex gap-3 mt-6 justify-center">
+   911→                <Button variant="outline" onClick={() => triggerUpgradePrompt('collaboration')}>
+   912→                  Compare Features
+   913→                </Button>
+   914→                <Button onClick={() => triggerUpgradePrompt('storage')}>
+   915→                  Upgrade to Pro
+   916→                </Button>
+   917→              </div>
+   918→            </CardContent>
+   919→          </Card>
+   920→
+   921→          {/* Danger Zone */}
+   922→          <Card className="border-destructive/20">
+   923→            <CardHeader>
+   924→              <CardTitle className="text-destructive">Danger Zone</CardTitle>
+   925→            </CardHeader>
+   926→            <CardContent className="space-y-3">
+   927→              <p className="text-sm text-muted-foreground">
+   928→                Irreversible actions that affect your account
+   929→              </p>
+   930→              
+   931→              <div className="flex flex-wrap gap-3">
+   932→                <Button 
+   933→                  variant="outline" 
+   934→                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+   935→                  onClick={() => {
+   936→                    if (confirm('Are you sure you want to clear all activity history?')) {
+   937→                      // Clear activities logic
+   938→                    }
+   939→                  }}
+   940→                >
+   941→                  🗑️ Clear Activity History
+   942→                </Button>
+   943→                
+   944→                <Button 
+   945→                  variant="outline" 
+   946→                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+   947→                  onClick={() => {
+   948→                    if (confirm('Are you sure you want to delete all saved items?')) {
+   949→                      // Delete saved items logic
+   950→                    }
+   951→                  }}
+   952→                >
+   953→                  🗑️ Delete All Saved Items
+   954→                </Button>
+   955→                
+   956→                <Button 
+   957→                  variant="outline" 
+   958→                  className="text-destructive border-destructive/30 hover:bg-destructive/10"
+   959→                  onClick={() => {
+   960→                    if (confirm('This will delete your account permanently. Continue?')) {
+   961→                      // Account deletion logic
+   962→                    }
+   963→                  }}
+   964→                >
+   965→                  ⚠️ Delete Account
+   966→                </Button>
+   967→              </div>
+   968→            </CardContent>
+   969→          </Card>
+   970→        </TabsContent>
+   971→      </Tabs>
+   972→    </div>
+   973→  );
+   974→}
+   975→

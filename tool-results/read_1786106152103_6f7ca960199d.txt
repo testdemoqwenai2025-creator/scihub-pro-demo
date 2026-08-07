@@ -1,0 +1,713 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback } from 'react';
+     4→import { useTranslation } from '@/i18n/useTranslation';
+     5→import { useDynamicStore, createDynamicField } from '@/store/useDynamicStore';
+     6→import { executeSimulatedQuery, resultToCSV, resultToJSON, getFreeTierInfo } from '@/services/databaseSimulation';
+     7→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+     8→import { Badge } from '@/components/ui/badge';
+     9→import { Button } from '@/components/ui/button';
+    10→import { Input } from '@/components/ui/input';
+    11→import { Progress } from '@/components/ui/progress';
+    12→import {
+    13→  Select,
+    14→  SelectContent,
+    15→  SelectItem,
+    16→  SelectTrigger,
+    17→  SelectValue,
+    18→} from '@/components/ui/select';
+    19→import { DataLakeSkeleton, CardSkeleton, StatsCardSkeleton } from '@/components/SkeletonComponents';
+    20→import { showSuccessToast, showErrorToast, showLoadingToast } from '@/lib/toast-utils';
+    21→
+    22→// ============ TYPES ============
+    23→
+    24→interface DatasetFormData {
+    25→  name: string;
+    26→  description: string;
+    27→  type: string;
+    28→  format: string;
+    29→  sourceUrl: string;
+    30→  tags: string[];
+    31→  isPublic: boolean;
+    32→}
+    33→
+    34→// ============ DATA LAKE PAGE ============
+    35→
+    36→export default function DataLakePage() {
+    37→  const { t } = useTranslation();
+    38→  const {
+    39→    datasets,
+    40→    createDataset,
+    41→    updateDataset,
+    42→    deleteDataset,
+    43→    getTotalStorage,
+    44→    addActivity,
+    45→    checkVolumeThreshold,
+    46→    dbConfig,
+    47→  } = useDynamicStore();
+    48→
+    49→  // UI State
+    50→  const [searchQuery, setSearchQuery] = useState('');
+    51→  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
+    52→  const [selectedDataset, setSelectedDataset] = useState<string | null>(null);
+    53→  const [showCreateForm, setShowCreateForm] = useState(false);
+    54→  const [isUploading, setIsUploading] = useState(false);
+    55→  const [uploadProgress, setUploadProgress] = useState(0);
+    56→  const [editingField, setEditingField] = useState<{ id: string; field: string } | null>(null);
+    57→  const [tempValue, setTempValue] = useState('');
+    58→  
+    59→  // Form state
+    60→  const [formData, setFormData] = useState<DatasetFormData>({
+    61→    name: '',
+    62→    description: '',
+    63→    type: 'Genomics',
+    64→    format: 'CSV',
+    65→    sourceUrl: '',
+    66→    tags: [],
+    67→    isPublic: true,
+    68→  });
+    69→
+    70→  // Volume threshold
+    71→  const [volumeStatus, setVolumeStatus] = useState(checkVolumeThreshold());
+    72→  const [isLoading, setIsLoading] = useState(true);
+    73→
+    74→  // Simulate loading on mount
+    75→  useEffect(() => {
+    76→    const timer = setTimeout(() => setIsLoading(false), 1500);
+    77→    return () => clearTimeout(timer);
+    78→  }, []);
+    79→
+    80→  // Check volume periodically
+    81→  useEffect(() => {
+    82→    const interval = setInterval(() => {
+    83→      setVolumeStatus(checkVolumeThreshold());
+    84→    }, 10000);
+    85→    return () => clearInterval(interval);
+    86→  }, [checkVolumeThreshold]);
+    87→
+    88→  // Filter datasets
+    89→  const filteredDatasets = datasets.filter(dataset => {
+    90→    const matchesSearch = 
+    91→      dataset.name.value.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    92→      dataset.description.value.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    93→      dataset.tags.value.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
+    94→    return matchesSearch;
+    95→  });
+    96→
+    97→  // Storage calculations
+    98→  const totalStorageMB = (getTotalStorage() / 1024 / 1024).toFixed(2);
+    99→  const totalRows = datasets.reduce((acc, ds) => acc + ds.rows.value, 0);
+   100→  const publicCount = datasets.filter(ds => ds.isPublic.value).length;
+   101→
+   102→  // Handle dataset creation
+   103→  const handleCreateDataset = async () => {
+   104→    if (!formData.name.trim()) return;
+   105→
+   106→    setIsUploading(true);
+   107→    setUploadProgress(0);
+   108→    showLoadingToast('Creating Dataset...', `Uploading "${formData.name}"`);
+   109→
+   110→    // Simulate upload progress
+   111→    for (let i = 0; i <= 100; i += 10) {
+   112→      await new Promise(resolve => setTimeout(resolve, 100));
+   113→      setUploadProgress(i);
+   114→    }
+   115→
+   116→    const datasetSize = (Math.random() * 500 + 50).toFixed(1);
+   117→    
+   118→    createDataset({
+   119→      name: createDynamicField(formData.name),
+   120→      description: createDynamicField(formData.description || `Dataset: ${formData.name}`),
+   121→      size: createDynamicField(`${datasetSize} MB`),
+   122→      rows: createDynamicField(Math.floor(Math.random() * 1000000 + 10000)),
+   123→      columns: createDynamicField(Math.floor(Math.random() * 100 + 10)),
+   124→      type: createDynamicField(formData.type),
+   125→      format: createDynamicField(formData.format),
+   126→      sourceUrl: createDynamicField(formData.sourceUrl || '#'),
+   127→      tags: createDynamicField(formData.tags.length > 0 ? formData.tags : ['user-uploaded']),
+   128→      isPublic: createDynamicField(formData.isPublic),
+   129→      storageLocation: volumeStatus.exceeded ? 'duckdb' : 'local',
+   130→    });
+   131→
+   132→    setIsUploading(false);
+   133→    setShowCreateForm(false);
+   134→    setFormData({
+   135→      name: '',
+   136→      description: '',
+   137→      type: 'Genomics',
+   138→      format: 'CSV',
+   139→      sourceUrl: '',
+   140→      tags: [],
+   141→      isPublic: true,
+   142→    });
+   143→
+   144→    addActivity({
+   145→      type: 'upload',
+   146→      message: createDynamicField(`Uploaded dataset "${formData.name}"`),
+   147→      icon: '📊',
+   148→    });
+   149→    
+   150→    showSuccessToast('Dataset Created!', `Upload completed! File size: ${datasetSize} MB`);
+   151→  };
+   152→
+   153→  // Handle dataset deletion
+   154→  const handleDeleteDataset = (id: string) => {
+   155→    const dataset = datasets.find(d => d.id === id);
+   156→    if (dataset && confirm(`Delete "${dataset.name.value}"? This action cannot be undone.`)) {
+   157→      deleteDataset(id);
+   158→      setSelectedDataset(null);
+   159→      showInfoToast('Dataset Deleted', `"${dataset.name.value}" has been removed`);
+   160→    }
+   161→  };
+   162→
+   163→  // Handle inline editing
+   164→  const startEditing = (id: string, field: string, currentValue: any) => {
+   165→    setEditingField({ id, field });
+   166→    setTempValue(String(currentValue));
+   167→  };
+   168→
+   169→  const saveEdit = (id: string, field: string) => {
+   170→    updateDataset(id, {
+   171→      [field]: {
+   172→        ...datasets.find(d => d.id === id)?.[field as keyof typeof datasets[0]],
+   173→        value: tempValue,
+   174→        isDirty: true,
+   175→        lastModified: new Date(),
+   176→      }
+   177→    });
+   178→    setEditingField(null);
+   179→  };
+   180→
+   181→  // Query dataset with DuckDB simulation
+   182→  const handleQueryDataset = async (datasetId: string) => {
+   183→    const dataset = datasets.find(d => d.id === datasetId);
+   184→    if (!dataset) return;
+   185→
+   186→    try {
+   187→      const sql = `SELECT * FROM ${dataset.name.value.replace(/\s+/g, '_').toLowerCase()} LIMIT 20`;
+   188→      const result = await executeSimulatedQuery(sql, dataset.storageLocation);
+   189→      
+   190→      addActivity({
+   191→        type: 'query',
+   192→        message: createDynamicField(`Queried ${dataset.name.value}: ${result.rows.length} rows returned`),
+   193→        icon: '🔍',
+   194→      });
+   195→
+   196→      // Could open results in a modal or navigate to query page
+   197→      console.log('Query Result:', result);
+   198→    } catch (error) {
+   199→      console.error('Query failed:', error);
+   200→    }
+   201→  };
+   202→
+   203→  // Export dataset
+   204→  const handleExportDataset = async (datasetId: string, format: 'csv' | 'json') => {
+   205→    const dataset = datasets.find(d => d.id === datasetId);
+   206→    if (!dataset) return;
+   207→
+   208→    // Generate mock export data
+   209→    const mockResult = await executeSimulatedQuery(
+   210→      `SELECT * FROM ${dataset.name.value.replace(/\s+/g, '_').toLowerCase()} LIMIT 100`
+   211→    );
+   212→
+   213→    const content = format === 'csv' ? resultToCSV(mockResult) : resultToJSON(mockResult);
+   214→    const blob = new Blob([content], { type: format === 'csv' ? 'text/csv' : 'application/json' });
+   215→    const url = URL.createObjectURL(blob);
+   216→    const a = document.createElement('a');
+   217→    a.href = url;
+   218→    a.download = `${dataset.name.value}.${format}`;
+   219→    a.click();
+   220→    URL.revokeObjectURL(url);
+   221→
+   222→    addActivity({
+   223→      type: 'export',
+   224→      message: createDynamicField(`Exported ${dataset.name.value} as ${format.toUpperCase()}`),
+   225→      icon: '📥',
+   226→    });
+   227→    
+   228→    showSuccessToast('Export Complete', `${dataset.name.value} exported as ${format.toUpperCase()}`);
+   229→  };
+   230→
+   231→  // Loading skeleton
+   232→  if (isLoading) {
+   233→    return (
+   234→      <div className="min-h-screen bg-background">
+   235→        <DataLakeSkeleton />
+   236→      </div>
+   237→    );
+   238→  }
+   239→
+   240→  return (
+   241→    <div className="min-h-screen bg-background p-6">
+   242→      {/* Header */}
+   243→      <div className="mb-8">
+   244→        <h1 className="text-3xl font-bold text-foreground">{t('data.title') || 'Data Lake Browser'}</h1>
+   245→        <p className="text-muted-foreground mt-1">
+   246→          Browse, manage, and analyze scientific datasets. All data stored locally or pushed to free-tier databases.
+   247→        </p>
+   248→        
+   249→        {/* Free Tier Info */}
+   250→        <div className="mt-3 flex items-center gap-3 text-sm">
+   251→          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+   252→            🆓 Free Tier Active
+   253→          </Badge>
+   254→          <span className="text-muted-foreground">
+   255→            DuckDB • IndexedDB • localStorage
+   256→          </span>
+   257→          {volumeStatus.shouldPush && (
+   258→            <Badge variant="outline" className="border-yellow-400 text-yellow-600 animate-pulse">
+   259→              ⚠️ Approaching storage limit
+   260→            </Badge>
+   261→          )}
+   262→        </div>
+   263→      </div>
+   264→
+   265→      {/* Controls */}
+   266→      <div className="flex flex-col md:flex-row gap-4 mb-6">
+   267→        <div className="flex-1 flex gap-3">
+   268→          <Input
+   269→            placeholder="Search datasets by name, description, or tags..."
+   270→            value={searchQuery}
+   271→            onChange={(e) => setSearchQuery(e.target.value)}
+   272→            className="max-w-md"
+   273→          />
+   274→          
+   275→          <Select value={viewMode} onValueChange={(v) => setViewMode(v as 'grid' | 'table')}>
+   276→            <SelectTrigger className="w-[120px]">
+   277→              <SelectValue />
+   278→            </SelectTrigger>
+   279→            <SelectContent>
+   280→              <SelectItem value="grid">Grid View</SelectItem>
+   281→              <SelectItem value="table">Table View</SelectItem>
+   282→            </SelectContent>
+   283→          </Select>
+   284→        </div>
+   285→
+   286→        <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+   287→          + Upload Dataset
+   288→        </Button>
+   289→      </div>
+   290→
+   291→      {/* Stats Bar */}
+   292→      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
+   293→        <Card>
+   294→          <CardContent className="p-4 flex items-center gap-3">
+   295→            <span className="text-2xl">📊</span>
+   296→            <div>
+   297→              <p className="text-xs text-muted-foreground">Total Datasets</p>
+   298→              <p className="text-xl font-bold">{datasets.length}</p>
+   299→            </div>
+   300→          </CardContent>
+   301→        </Card>
+   302→        <Card>
+   303→          <CardContent className="p-4 flex items-center gap-3">
+   304→            <span className="text-2xl">💾</span>
+   305→            <div>
+   306→              <p className="text-xs text-muted-foreground">Total Size</p>
+   307→              <p className="text-xl font-bold">{totalStorageMB} MB</p>
+   308→            </div>
+   309→          </CardContent>
+   310→        </Card>
+   311→        <Card>
+   312→          <CardContent className="p-4 flex items-center gap-3">
+   313→            <span className="text-2xl">📋</span>
+   314→            <div>
+   315→              <p className="text-xs text-muted-foreground">Total Rows</p>
+   316→              <p className="text-xl font-bold">{totalRows.toLocaleString()}</p>
+   317→            </div>
+   318→          </CardContent>
+   319→        </Card>
+   320→        <Card>
+   321→          <CardContent className="p-4 flex items-center gap-3">
+   322→            <span className="text-2xl">🌐</span>
+   323→            <div>
+   324→              <p className="text-xs text-muted-foreground">Public</p>
+   325→              <p className="text-xl font-bold text-green-500">{publicCount}</p>
+   326→            </div>
+   327→          </CardContent>
+   328→        </Card>
+   329→        <Card>
+   330→          <CardContent className="p-4 flex items-center gap-3">
+   331→            <span className="text-2xl">{dbConfig.provider === 'duckdb' ? '🦆' : '🐘'}</span>
+   332→            <div>
+   333→              <p className="text-xs text-muted-foreground">Storage Engine</p>
+   334→              <p className="text-lg font-bold capitalize">{dbConfig.provider}</p>
+   335→            </div>
+   336→          </CardContent>
+   337→        </Card>
+   338→      </div>
+   339→
+   340→      {/* Create Dataset Form */}
+   341→      {showCreateForm && (
+   342→        <Card className="mb-8 border-primary">
+   343→          <CardHeader>
+   344→            <CardTitle>Upload New Dataset</CardTitle>
+   345→            <CardDescription>
+   346→              Fill in the details below. Your data will be stored using the configured database provider.
+   347→            </CardDescription>
+   348→          </CardHeader>
+   349→          <CardContent>
+   350→            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+   351→              <div>
+   352→                <label className="text-sm font-medium">Dataset Name *</label>
+   353→                <Input
+   354→                  value={formData.name}
+   355→                  onChange={(e) => setFormData({...formData, name: e.target.value})}
+   356→                  placeholder="e.g., TCGA Expression Matrix"
+   357→                  className="mt-1"
+   358→                />
+   359→              </div>
+   360→              <div>
+   361→                <label className="text-sm font-medium">Data Type</label>
+   362→                <Select value={formData.type} onValueChange={(v) => setFormData({...formData, type: v})}>
+   363→                  <SelectTrigger className="mt-1">
+   364→                    <SelectValue />
+   365→                  </SelectTrigger>
+   366→                  <SelectContent>
+   367→                    <SelectItem value="Genomics">Genomics</SelectItem>
+   368→                    <SelectItem value="Proteomics">Proteomics</SelectItem>
+   369→                    <SelectItem value="Chemical Biology">Chemical Biology</SelectItem>
+   370→                    <SelectItem value="Structural Biology">Structural Biology</SelectItem>
+   371→                    <SelectItem value="Literature">Literature</SelectItem>
+   372→                    <SelectItem value="Clinical">Clinical Data</SelectItem>
+   373→                    <SelectItem value="Imaging">Imaging</SelectItem>
+   374→                    <SelectItem value="Other">Other</SelectItem>
+   375→                  </SelectContent>
+   376→                </Select>
+   377→              </div>
+   378→              <div className="md:col-span-2">
+   379→                <label className="text-sm font-medium">Description</label>
+   380→                <Input
+   381→                  value={formData.description}
+   382→                  onChange={(e) => setFormData({...formData, description: e.target.value})}
+   383→                  placeholder="Brief description of the dataset..."
+   384→                  className="mt-1"
+   385→                />
+   386→              </div>
+   387→              <div>
+   388→                <label className="text-sm font-medium">Format</label>
+   389→                <Select value={formData.format} onValueChange={(v) => setFormData({...formData, format: v})}>
+   390→                  <SelectTrigger className="mt-1">
+   391→                    <SelectValue />
+   392→                  </SelectTrigger>
+   393→                  <SelectContent>
+   394→                    <SelectItem value="CSV">CSV</SelectItem>
+   395→                    <SelectItem value="JSON">JSON</SelectItem>
+   396→                    <SelectItem value="Parquet">Parquet</SelectItem>
+   397→                    <SelectItem value="HDF5">HDF5</SelectItem>
+   398→                    <SelectItem value="VCF">VCF/BCF</SelectItem>
+   399→                    <SelectItem value="FASTA">FASTA</SelectItem>
+   400→                    <SelectItem value="mmCIF">mmCIF</SelectItem>
+   401→                  </SelectContent>
+   402→                </Select>
+   403→              </div>
+   404→              <div>
+   405→                <label className="text-sm font-medium">Source URL</label>
+   406→                <Input
+   407→                  value={formData.sourceUrl}
+   408→                  onChange={(e) => setFormData({...formData, sourceUrl: e.target.value})}
+   409→                  placeholder="https://..."
+   410→                  className="mt-1"
+   411→                />
+   412→              </div>
+   413→            </div>
+   414→
+   415→            {/* Upload Progress */}
+   416→            {isUploading && (
+   417→              <div className="mb-4">
+   418→                <div className="flex justify-between text-sm mb-2">
+   419→                  <span>Uploading...</span>
+   420→                  <span>{uploadProgress}%</span>
+   421→                </div>
+   422→                <Progress value={uploadProgress} />
+   423→              </div>
+   424→            )}
+   425→
+   426→            <div className="flex justify-end gap-3">
+   427→              <Button variant="outline" onClick={() => setShowCreateForm(false)} disabled={isUploading}>
+   428→                Cancel
+   429→              </Button>
+   430→              <Button onClick={handleCreateDataset} disabled={!formData.name.trim() || isUploading}>
+   431→                {isUploading ? '⏳ Uploading...' : '📤 Upload Dataset'}
+   432→              </Button>
+   433→            </div>
+   434→          </CardContent>
+   435→        </Card>
+   436→      )}
+   437→
+   438→      {/* Datasets Display */}
+   439→      {viewMode === 'grid' ? (
+   440→        /* Grid View */
+   441→        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+   442→          {filteredDatasets.map((dataset) => (
+   443→            <Card 
+   444→              key={dataset.id} 
+   445→              className={`hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer ${
+   446→                selectedDataset === dataset.id ? 'ring-2 ring-primary' : ''
+   447→              }`}
+   448→              onClick={() => setSelectedDataset(dataset.id)}
+   449→            >
+   450→              <CardHeader className="pb-3">
+   451→                <div className="flex items-start justify-between">
+   452→                  <div className="flex-1 min-w-0">
+   453→                    {editingField?.id === dataset.id && editingField.field === 'name' ? (
+   454→                      <Input
+   455→                        value={tempValue}
+   456→                        onChange={(e) => setTempValue(e.target.value)}
+   457→                        onBlur={() => saveEdit(dataset.id, 'name')}
+   458→                        onKeyDown={(e) => e.key === 'Enter' && saveEdit(dataset.id, 'name')}
+   459→                        className="h-7 text-lg font-medium"
+   460→                        autoFocus
+   461→                      />
+   462→                    ) : (
+   463→                      <CardTitle 
+   464→                        className="text-lg truncate"
+   465→                        onDoubleClick={(e) => {
+   466→                          e.stopPropagation();
+   467→                          startEditing(dataset.id, 'name', dataset.name.value);
+   468→                        }}
+   469→                        title="Double-click to edit"
+   470→                      >
+   471→                        {dataset.name.value}
+   472→                        {dataset.name.isDirty && <span className="ml-1 text-orange-500">✏️</span>}
+   473→                      </CardTitle>
+   474→                    )}
+   475→                    <CardDescription className="text-xs mt-1 line-clamp-2">
+   476→                      {dataset.description.value}
+   477→                    </CardDescription>
+   478→                  </div>
+   479→                  
+   480→                  <div className="flex flex-col items-end gap-1">
+   481→                    <Badge variant="outline" className="text-xs">
+   482→                      {dataset.type.value}
+   483→                    </Badge>
+   484→                    <Badge variant={dataset.isPublic.value ? 'default' : 'secondary'} className="text-xs">
+   485→                      {dataset.isPublic.value ? 'Public' : 'Private'}
+   486→                    </Badge>
+   487→                  </div>
+   488→                </div>
+   489→              </CardHeader>
+   490→              
+   491→              <CardContent className="space-y-3">
+   492→                {/* Info Grid */}
+   493→                <div className="grid grid-cols-2 gap-2 text-xs">
+   494→                  <div className="flex items-center gap-1">
+   495→                    <span>📦</span>
+   496→                    <span>{dataset.size.value}</span>
+   497→                  </div>
+   498→                  <div className="flex items-center gap-1">
+   499→                    <span>📊</span>
+   500→                    <span>{dataset.rows.value.toLocaleString()} rows</span>
+   501→                  </div>
+   502→                  <div className="flex items-center gap-1">
+   503→                    <span>📋</span>
+   504→                    <span>{dataset.columns.value} cols</span>
+   505→                  </div>
+   506→                  <div className="flex items-center gap-1">
+   507→                    <span>🏷️</span>
+   508→                    <span>{dataset.format.value}</span>
+   509→                  </div>
+   510→                </div>
+   511→
+   512→                {/* Tags */}
+   513→                <div className="flex flex-wrap gap-1">
+   514→                  {dataset.tags.value.slice(0, 3).map((tag, idx) => (
+   515→                    <Badge key={idx} variant="secondary" className="text-xs">
+   516→                      {tag}
+   517→                    </Badge>
+   518→                  ))}
+   519→                  {dataset.tags.value.length > 3 && (
+   520→                    <Badge variant="secondary" className="text-xs">
+   521→                      +{dataset.tags.value.length - 3}
+   522→                    </Badge>
+   523→                  )}
+   524→                </div>
+   525→
+   526→                {/* Storage Location */}
+   527→                <div className="pt-2 border-t">
+   528→                  <div className="flex items-center justify-between text-xs">
+   529→                    <span className="text-muted-foreground">Storage:</span>
+   530→                    <Badge variant="outline" className="text-xs">
+   531→                      {dataset.storageLocation === 'duckdb' && '🦆 DuckDB'}
+   532→                      {dataset.storageLocation === 'postgres' && '🐘 PostgreSQL'}
+   533→                      {dataset.storageLocation === 'indexeddb' && '🗄️ IndexedDB'}
+   534→                      {dataset.storageLocation === 'local' && '💾 Local'}
+   535→                    </Badge>
+   536→                  </div>
+   537→                </div>
+   538→
+   539→                {/* Actions */}
+   540→                <div className="flex gap-2 pt-2 border-t">
+   541→                  <Button 
+   542→                    size="sm" 
+   543→                    variant="outline" 
+   544→                    className="flex-1"
+   545→                    onClick={(e) => {
+   546→                      e.stopPropagation();
+   547→                      handleQueryDataset(dataset.id);
+   548→                    }}
+   549→                  >
+   550→                    🔍 Query
+   551→                  </Button>
+   552→                  <Button 
+   553→                    size="sm" 
+   554→                    variant="outline"
+   555→                    onClick={(e) => {
+   556→                      e.stopPropagation();
+   557→                      handleExportDataset(dataset.id, 'csv');
+   558→                    }}
+   559→                  >
+   560→                    📥 CSV
+   561→                  </Button>
+   562→                  <Button 
+   563→                    size="sm" 
+   564→                    variant="outline"
+   565→                    onClick={(e) => {
+   566→                      e.stopPropagation();
+   567→                      handleDeleteDataset(dataset.id);
+   568→                    }}
+   569→                    className="text-destructive hover:text-destructive"
+   570→                  >
+   571→                    🗑️
+   572→                  </Button>
+   573→                </div>
+   574→
+   575→                {/* Metadata */}
+   576→                <div className="text-xs text-muted-foreground pt-1">
+   577→                  Modified: {dataset.lastModified.toLocaleDateString()}
+   578→                  {' • '}
+   579→                  Downloads: {dataset.downloadCount}
+   580→                </div>
+   581→              </CardContent>
+   582→            </Card>
+   583→          ))}
+   584→        </div>
+   585→      ) : (
+   586→        /* Table View */
+   587→        <Card>
+   588→          <CardContent className="p-0">
+   589→            <div className="overflow-x-auto">
+   590→              <table className="w-full text-sm">
+   591→                <thead className="border-b bg-muted/50">
+   592→                  <tr>
+   593→                    <th className="px-4 py-3 text-left font-medium">Name</th>
+   594→                    <th className="px-4 py-3 text-left font-medium">Type</th>
+   595→                    <th className="px-4 py-3 text-right font-medium">Size</th>
+   596→                    <th className="px-4 py-3 text-right font-medium">Rows</th>
+   597→                    <th className="px-4 py-3 text-left font-medium">Format</th>
+   598→                    <th className="px-4 py-3 text-left font-medium">Storage</th>
+   599→                    <th className="px-4 py-3 text-center font-medium">Actions</th>
+   600→                  </tr>
+   601→                </thead>
+   602→                <tbody>
+   603→                  {filteredDatasets.map((dataset) => (
+   604→                    <tr key={dataset.id} className="border-b hover:bg-muted/30 transition-colors">
+   605→                      <td className="px-4 py-3">
+   606→                        <div>
+   607→                          <p className="font-medium truncate max-w-[200px]">
+   608→                            {dataset.name.value}
+   609→                            {dataset.name.isDirty && <span className="ml-1 text-orange-500">✏️</span>}
+   610→                          </p>
+   611→                          <p className="text-xs text-muted-foreground truncate max-w-[200px]">
+   612→                            {dataset.description.value}
+   613→                          </p>
+   614→                        </div>
+   615→                      </td>
+   616→                      <td className="px-4 py-3">
+   617→                        <Badge variant="outline" className="text-xs">
+   618→                          {dataset.type.value}
+   619→                        </Badge>
+   620→                      </td>
+   621→                      <td className="px-4 py-3 text-right">{dataset.size.value}</td>
+   622→                      <td className="px-4 py-3 text-right">{dataset.rows.value.toLocaleString()}</td>
+   623→                      <td className="px-4 py-3">{dataset.format.value}</td>
+   624→                      <td className="px-4 py-3">
+   625→                        <Badge variant="secondary" className="text-xs">
+   626→                          {dataset.storageLocation}
+   627→                        </Badge>
+   628→                      </td>
+   629→                      <td className="px-4 py-3">
+   630→                        <div className="flex items-center justify-center gap-1">
+   631→                          <Button size="sm" variant="ghost" onClick={() => handleQueryDataset(dataset.id)}>🔍</Button>
+   632→                          <Button size="sm" variant="ghost" onClick={() => handleExportDataset(dataset.id, 'csv')}>📥</Button>
+   633→                          <Button size="sm" variant="ghost" onClick={() => handleDeleteDataset(dataset.id)}>🗑️</Button>
+   634→                        </div>
+   635→                      </td>
+   636→                    </tr>
+   637→                  ))}
+   638→                </tbody>
+   639→              </table>
+   640→            </div>
+   641→          </CardContent>
+   642→        </Card>
+   643→      )}
+   644→
+   645→      {/* Empty State */}
+   646→      {filteredDatasets.length === 0 && !showCreateForm && (
+   647→        <div className="text-center py-16">
+   648→          <span className="text-6xl block mb-4">📂</span>
+   649→          <h3 className="text-lg font-medium mb-2">No datasets found</h3>
+   650→          <p className="text-muted-foreground mb-4">
+   651→            {searchQuery ? 'Try adjusting your search terms' : 'Upload your first dataset to get started'}
+   652→          </p>
+   653→          {!searchQuery && (
+   654→            <Button onClick={() => setShowCreateForm(true)}>
+   655→              + Upload Dataset
+   656→            </Button>
+   657→          )}
+   658→        </div>
+   659→      )}
+   660→
+   661→      {/* Database Info Panel */}
+   662→      <Card className="mt-8">
+   663→        <CardHeader>
+   664→          <CardTitle className="text-base">🗄️ Database & Storage Information</CardTitle>
+   665→        </CardHeader>
+   666→        <CardContent>
+   667→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+   668→            <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+   669→              <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">DuckDB (Analytical)</h4>
+   670→              <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+   671→                <li>• In-process OLAP queries</li>
+   672→                <li>• Columnar storage format</li>
+   673→                <li>• Unlimited storage (disk-based)</li>
+   674→                <li>• Perfect for large analytics</li>
+   675→              </ul>
+   676→            </div>
+   677→            
+   678→            <div className="p-4 rounded-lg bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800">
+   679→              <h4 className="font-medium text-purple-800 dark:text-purple-200 mb-2">IndexedDB (Browser)</h4>
+   680→              <ul className="text-sm text-purple-700 dark:text-purple-300 space-y-1">
+   681→                <li>• Client-side persistence</li>
+   682→                <li>• ~250MB typical limit</li>
+   683→                <li>• Async operations</li>
+   684→                <li>• Good for caching</li>
+   685→              </ul>
+   686→            </div>
+   687→            
+   688→            <div className="p-4 rounded-lg bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800">
+   689→              <h4 className="font-medium text-green-800 dark:text-green-200 mb-2">localStorage (Session)</h4>
+   690→              <ul className="text-sm text-green-700 dark:text-green-300 space-y-1">
+   691→                <li>• ~5-10MB capacity</li>
+   692→                <li>• Synchronous access</li>
+   693→                <li>• User preferences</li>
+   694→                <li>• Quick state recovery</li>
+   695→              </ul>
+   696→            </div>
+   697→            
+   698→            <div className="p-4 rounded-lg bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800">
+   699→              <h4 className="font-medium text-orange-800 dark:text-orange-200 mb-2">Auto-Push Threshold</h4>
+   700→              <ul className="text-sm text-orange-700 dark:text-orange-300 space-y-1">
+   701→                <li>• Current: {(dbConfig.autoPushThreshold.value / 1024 / 1024).toFixed(0)} MB</li>
+   702→                <li>• Used: {totalStorageMB} MB</li>
+   703→                <li>• Status: {volumeStatus.exceeded ? 'Exceeded' : volumeStatus.shouldPush ? 'Warning' : 'Normal'}</li>
+   704→                <li>• Provider: {dbConfig.provider}</li>
+   705→              </ul>
+   706→            </div>
+   707→          </div>
+   708→        </CardContent>
+   709→      </Card>
+   710→    </div>
+   711→  );
+   712→}
+   713→

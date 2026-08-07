@@ -1,0 +1,725 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect } from 'react';
+     4→import { useTranslation } from '@/i18n/useTranslation';
+     5→import { useDynamicStore, createDynamicField } from '@/store/useDynamicStore';
+     6→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     7→import { Badge } from '@/components/ui/badge';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Input } from '@/components/ui/input';
+    10→import { Progress } from '@/components/ui/progress';
+    11→import {
+    12→  Select,
+    13→  SelectContent,
+    14→  SelectItem,
+    15→  SelectTrigger,
+    16→  SelectValue,
+    17→} from '@/components/ui/select';
+    18→import { ComputeSkeleton, CardSkeleton } from '@/components/SkeletonComponents';
+    19→
+    20→// ============ TYPES ============
+    21→
+    22→interface ComputeJob {
+    23→  id: string;
+    24→  name: string;
+    25→  type: 'analysis' | 'training' | 'simulation' | 'pipeline' | 'custom';
+    26→  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'configuring';
+    27→  priority: 'low' | 'normal' | 'high' | 'urgent';
+    28→  submitter: string;
+    29→  progress: number;
+    30→  computeHoursUsed: number;
+    31→  computeHoursTotal: number;
+    32→  gpusAllocated: number;
+    33→  memoryUsed: string;
+    34→  memoryTotal: string;
+    35→  submittedAt: Date;
+    36→  startedAt?: Date;
+    37→  completedAt?: Date;
+    38→  logs: LogEntry[];
+    39→  estimatedCost?: number;
+    40→}
+    41→
+    42→interface LogEntry {
+    43→  timestamp: Date;
+    44→  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' | 'SUCCESS';
+    45→  message: string;
+    46→}
+    47→
+    48→interface ComputeNode {
+    49→  id: string;
+    50→  name: string;
+    51→  status: 'online' | 'offline' | 'maintenance';
+    52→  cpuUsage: number;
+    53→  memoryUsage: number;
+    54→  gpuUsage: number;
+    55→  gpus: number;
+    56→  runningJobs: number;
+    57→}
+    58→
+    59→// ============ INITIAL DATA ============
+    60→
+    61→const INITIAL_JOBS: ComputeJob[] = [
+    62→  {
+    63→    id: 'job-001',
+    64→    name: 'GATK Variant Calling Pipeline',
+    65→    type: 'pipeline',
+    66→    status: 'running',
+    67→    priority: 'high',
+    68→    submitter: 'Dr. Smith',
+    69→    progress: 67,
+    70→    computeHoursUsed: 12.5,
+    71→    computeHoursTotal: 18.0,
+    72→    gpusAllocated: 1,
+    73→    memoryUsed: '24 GB',
+    74→    memoryTotal: '32 GB',
+    75→    submittedAt: new Date(Date.now() - 2 * 3600000),
+    76→    startedAt: new Date(Date.now() - 1.9 * 3600000),
+    77→    estimatedCost: 2.45,
+    78→    logs: [
+    79→      { timestamp: new Date(Date.now() - 7200000), level: 'INFO', message: 'Job submitted to queue' },
+    80→      { timestamp: new Date(Date.now() - 6840000), level: 'INFO', message: 'Allocating resources (1x GPU, 32GB RAM)' },
+    81→      { timestamp: new Date(Date.now() - 6800000), level: 'INFO', message: 'Starting BWA alignment step...' },
+    82→      { timestamp: new Date(Date.now() - 3600000), level: 'INFO', message: 'BWA alignment complete. Starting MarkDuplicates...' },
+    83→      { timestamp: new Date(Date.now() - 1800000), level: 'INFO', message: 'Running HaplotypeCaller on chr1-22...' },
+    84→      { timestamp: new Date(Date.now() - 60000), level: 'INFO', message: 'Processing chromosome 17 of 22 (67%)' },
+    85→    ],
+    86→  },
+    87→  {
+    88→    id: 'job-002',
+    89→    name: 'Protein Folding Simulation (AlphaFold)',
+    90→    type: 'simulation',
+    91→    status: 'running',
+    92→    priority: 'urgent',
+    93→    submitter: 'Prof. Johnson',
+    94→    progress: 45,
+    95→    computeHoursUsed: 28.3,
+    96→    computeHoursTotal: 64.0,
+    97→    gpusAllocated: 4,
+    98→    memoryUsed: '48 GB',
+    99→    memoryTotal: '64 GB',
+   100→    submittedAt: new Date(Date.now() - 4 * 3600000),
+   101→    startedAt: new Date(Date.now() - 3.8 * 3600000),
+   102→    estimatedCost: 12.80,
+   103→    logs: [
+   104→      { timestamp: new Date(Date.now() - 14400000), level: 'INFO', message: 'AlphaFold v2.3 initialized' },
+   105→      { timestamp: new Date(Date.now() - 14000000), level: 'INFO', message: 'Loading MSA database (UniRef90)' },
+   106→      { timestamp: new Date(Date.now() - 13600000), level: 'INFO', message: 'MSA search complete. Found 15,234 homologs' },
+   107→      { timestamp: new Date(Date.now() - 7200000), level: 'INFO', message: 'Building features for model 1/5...' },
+   108→      { timestamp: new Date(Date.now() - 3600000), level: 'INFO', message: 'Model 1 inference: 45% complete' },
+   109→    ],
+   110→  },
+   111→  {
+   112→    id: 'job-003',
+   113→    name: 'Drug Screening - EGFR Inhibitors',
+   114→    type: 'analysis',
+   115→    status: 'queued',
+   116→    priority: 'normal',
+   117→    submitter: 'Research Team A',
+   118→    progress: 0,
+   119→    computeHoursUsed: 0,
+   120→    computeHoursTotal: 8.0,
+   121→    gpusAllocated: 0,
+   122→    memoryUsed: '0 GB',
+   123→    memoryTotal: '16 GB',
+   124→    submittedAt: new Date(Date.now() - 30 * 60000),
+   125→    estimatedCost: 1.20,
+   126→    logs: [
+   127→      { timestamp: new Date(Date.now() - 1800000), level: 'INFO', message: 'Job queued. Waiting for GPU allocation.' },
+   128→    ],
+   129→  },
+   130→  {
+   131→    id: 'job-004',
+   132→    name: 'ML Model Training - Toxicity Prediction',
+   133→    type: 'training',
+   134→    status: 'completed',
+   135→    priority: 'normal',
+   136→    submitter: 'Data Science Lab',
+   137→    progress: 100,
+   138→    computeHoursUsed: 42.0,
+   139→    computeHoursTotal: 42.0,
+   140→    gpusAllocated: 2,
+   141→    memoryUsed: '0 GB',
+   142→    memoryTotal: '32 GB',
+   143→    submittedAt: new Date(Date.now() - 24 * 3600000),
+   144→    startedAt: new Date(Date.now() - 23.5 * 3600000),
+   145→    completedAt: new Date(Date.now() - 20 * 3600000),
+   146→    estimatedCost: 8.40,
+   147→    logs: [
+   148→      { timestamp: new Date(Date.now() - 86400000), level: 'INFO', message: 'Training started with 500K samples' },
+   149→      { timestamp: new Date(Date.now() - 72000000), level: 'INFO', message: 'Epoch 50/200 - Loss: 0.342 - Val Loss: 0.398' },
+   150→      { timestamp: new Date(Date.now() - 57600000), level: 'INFO', message: 'Epoch 100/200 - Loss: 0.189 - Val Loss: 0.245' },
+   151→      { timestamp: new Date(Date.now() - 43200000), level: 'INFO', message: 'Epoch 150/200 - Loss: 0.123 - Val Loss: 0.178' },
+   152→      { timestamp: new Date(Date.now() - 28800000), level: 'INFO', message: 'Training complete. Best val_loss: 0.165 at epoch 178' },
+   153→      { timestamp: new Date(Date.now() - 28790000), level: 'SUCCESS', message: 'Model saved to /models/toxicity_v2.pt' },
+   154→    ],
+   155→  },
+   156→];
+   157→
+   158→const INITIAL_NODES: ComputeNode[] = [
+   159→  { id: 'node-1', name: 'GPU-Node-01', status: 'online', cpuUsage: 78, memoryUsage: 65, gpuUsage: 92, gpus: 4, runningJobs: 3 },
+   160→  { id: 'node-2', name: 'GPU-Node-02', status: 'online', cpuUsage: 45, memoryUsage: 52, gpuUsage: 78, gpus: 4, runningJobs: 2 },
+   161→  { id: 'node-3', name: 'CPU-Node-01', status: 'online', cpuUsage: 62, memoryUsage: 71, gpuUsage: 0, gpus: 0, runningJobs: 5 },
+   162→  { id: 'node-4', name: 'GPU-Node-03', status: 'maintenance', cpuUsage: 0, memoryUsage: 10, gpuUsage: 0, gpus: 4, runningJobs: 0 },
+   163→];
+   164→
+   165→// ============ COMPUTE PAGE ============
+   166→
+   167→export default function ComputePage() {
+   168→  const { t } = useTranslation();
+   169→  const {
+   170→    createJob,
+   171→    updateJobProgress,
+   172→    cancelJob,
+   173→    addActivity,
+   174→  } = useDynamicStore();
+   175→
+   176→  // UI State
+   177→  const [jobs, setJobs] = useState<ComputeJob[]>(INITIAL_JOBS);
+   178→  const [nodes] = useState<ComputeNode[]>(INITIAL_NODES);
+   179→  const [selectedJob, setSelectedJob] = useState<ComputeJob | null>(null);
+   180→  const [showCreateForm, setShowCreateForm] = useState(false);
+   181→  const [isLoading, setIsLoading] = useState(true);
+   182→  
+   183→  // Form state
+   184→  const [newJobName, setNewJobName] = useState('');
+   185→  const [newJobType, setNewJobType] = useState<ComputeJob['type']>('analysis');
+   186→  const [newJobPriority, setNewJobPriority] = useState<ComputeJob['priority']>('normal');
+   187→  const [newJobDataset, setNewJobDataset] = useState('');
+   188→  const [newJobGpus, setNewJobGpus] = useState(1);
+   189→
+   190→  // Simulate loading on mount
+   191→  useEffect(() => {
+   192→    const timer = setTimeout(() => setIsLoading(false), 1500);
+   193→    return () => clearTimeout(timer);
+   194→  }, []);
+   195→
+   196→  // Auto-update running jobs
+   197→  useEffect(() => {
+   198→    const interval = setInterval(() => {
+   199→      setJobs(prev => prev.map(job => {
+   200→        if (job.status === 'running') {
+   201→          const newProgress = Math.min(100, job.progress + Math.random() * 2);
+   202→          const newComputeHours = job.computeHoursUsed + (Math.random() * 0.1);
+   203→          
+   204→          return {
+   205→            ...job,
+   206→            progress: newProgress,
+   207→            computeHoursUsed: newComputeHours,
+   208→            ...(newProgress >= 100 ? { 
+   209→              status: 'completed' as const, 
+   210→              completedAt: new Date(),
+   211→              estimatedCost: job.estimatedCost ? job.estimatedCost + Math.random() * 0.5 : undefined
+   212→            } : {}),
+   213→          };
+   214→        }
+   215→        return job;
+   216→      }));
+   217→    }, 3000);
+   218→
+   219→    return () => clearInterval(interval);
+   220→  }, []);
+   221→
+   222→  // Stats calculations
+   223→  const activeJobs = jobs.filter(j => j.status === 'running');
+   224→  const totalCompute = jobs.reduce((acc, j) => acc + j.computeHoursUsed, 0);
+   225→  const totalGPUs = activeJobs.reduce((acc, j) => acc + j.gpusAllocated, 0);
+   226→  const avgProgress = activeJobs.length > 0 
+   227→    ? Math.round(activeJobs.reduce((acc, j) => acc + j.progress, 0) / activeJobs.length)
+   228→    : 0;
+   229→
+   230→  // Handle job creation
+   231→  const handleCreateJob = () => {
+   232→    if (!newJobName.trim()) return;
+   233→
+   234→    const costPerHour = newJobGpus * 0.5; // $0.50 per GPU hour (free tier simulation)
+   235→    const estimatedHours = newJobType === 'training' ? 24 : newJobType === 'simulation' ? 16 : 4;
+   236→
+   237→    const newJob: ComputeJob = {
+   238→      id: `job-${Date.now()}`,
+   239→      name: newJobName,
+   240→      type: newJobType,
+   241→      status: 'queued',
+   242→      priority: newJobPriority,
+   243→      submitter: 'You',
+   244→      progress: 0,
+   245→      computeHoursUsed: 0,
+   246→      computeHoursTotal: estimatedHours,
+   247→      gpusAllocated: 0,
+   248→      memoryUsed: '0 GB',
+   249→      memoryTotal: `${newJobGpus * 16} GB`,
+   250→      submittedAt: new Date(),
+   251→      estimatedCost: estimatedHours * costPerHour,
+   252→      logs: [{ timestamp: new Date(), level: 'INFO', message: 'Job created and queued' }],
+   253→    };
+   254→
+   255→    setJobs(prev => [newJob, ...prev]);
+   256→    
+   257→    // Also add to store
+   258→    createJob({
+   259→      name: createDynamicField(newJobName),
+   260→      type: createDynamicField(newJobType),
+   261→      status: createDynamicField('queued'),
+   262→      priority: createDynamicField(newJobPriority),
+   263→      submitter: createDynamicField('You'),
+   264→      config: {
+   265→        inputDataset: createDynamicField(newJobDataset),
+   266→        parameters: {},
+   267→        outputFormat: createDynamicField('JSON'),
+   268→        notifications: createDynamicField(true),
+   269→        retryCount: createDynamicField(3),
+   270→      },
+   271→      progress: createDynamicField(0),
+   272→      computeHoursUsed: createDynamicField(0),
+   273→      computeHoursTotal: createDynamicField(estimatedHours),
+   274→      gpusAllocated: createDynamicField(0),
+   275→      memoryUsed: createDynamicField('0 GB'),
+   276→    });
+   277→
+   278→    addActivity({
+   279→      type: 'job',
+   280→      message: createDynamicField(`Submitted job "${newJobName}"`),
+   281→      icon: '⚡',
+   282→    });
+   283→
+   284→    // Reset form
+   285→    setNewJobName('');
+   286→    setShowCreateForm(false);
+   287→  };
+   288→
+   289→  // Handle job cancellation
+   290→  const handleCancelJob = (jobId: string) => {
+   291→    const job = jobs.find(j => j.id === jobId);
+   292→    if (!job) return;
+   293→
+   294→    if (confirm(`Cancel job "${job.name}"?`)) {
+   295→      setJobs(prev => prev.map(j => 
+   296→        j.id === jobId ? { ...j, status: 'cancelled' as const } : j
+   297→      ));
+   298→      cancelJob(jobId);
+   299→      
+   300→      addActivity({
+   301→        type: 'update',
+   302→        message: createDynamicField(`Cancelled job "${job.name}"`),
+   303→        icon: '🛑',
+   304→      });
+   305→    }
+   306→  };
+   307→
+   308→  // Get status badge
+   309→  const getStatusBadge = (status: ComputeJob['status']) => {
+   310→    switch (status) {
+   311→      case 'running': return <Badge className="bg-blue-500 animate-pulse">{t('compute.running') || 'Running'}</Badge>;
+   312→      case 'queued': return <Badge className="bg-yellow-500">{t('compute.queued') || 'Queued'}</Badge>;
+   313→      case 'completed': return <Badge className="bg-green-500">{t('compute.completed') || 'Completed'}</Badge>;
+   314→      case 'failed': return <Badge variant="destructive">{t('compute.failed') || 'Failed'}</Badge>;
+   315→      case 'cancelled': return <Badge variant="secondary">Cancelled</Badge>;
+   316→      default: return <Badge variant="secondary">{status}</Badge>;
+   317→    }
+   318→  };
+   319→
+   320→  // Get priority badge
+   321→  const getPriorityBadge = (priority: ComputeJob['priority']) => {
+   322→    const colors: Record<string, string> = {
+   323→      low: 'bg-gray-400',
+   324→      normal: 'bg-blue-400',
+   325→      high: 'bg-orange-400',
+   326→      urgent: 'bg-red-500',
+   327→    };
+   328→    return <Badge className={colors[priority]}>{priority.charAt(0).toUpperCase() + priority.slice(1)}</Badge>;
+   329→  };
+   330→
+   331→  // Format time ago
+   332→  const formatTimeAgo = (date: Date): string => {
+   333→    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+   334→    if (seconds < 60) return `${seconds}s ago`;
+   335→    const minutes = Math.floor(seconds / 60);
+   336→    if (minutes < 60) return `${minutes}m ago`;
+   337→    const hours = Math.floor(minutes / 60);
+   338→    if (hours < 24) return `${hours}h ago`;
+   339→    return `${Math.floor(hours / 24)}d ago`;
+   340→  };
+   341→
+   342→  // Loading skeleton
+   343→  if (isLoading) {
+   344→    return (
+   345→      <div className="min-h-screen bg-background">
+   346→        <ComputeSkeleton />
+   347→      </div>
+   348→    );
+   349→  }
+   350→
+   351→  return (
+   352→    <div className="min-h-screen bg-background p-6">
+   353→      {/* Header */}
+   354→      <div className="mb-6">
+   355→        <h1 className="text-3xl font-bold text-foreground">{t('compute.title') || 'Compute Layer'}</h1>
+   356→        <p className="text-muted-foreground mt-1">
+   357→          Manage computational jobs and monitor cluster resources. Free-tier simulation included.
+   358→        </p>
+   359→        
+   360→        <div className="mt-2 flex items-center gap-3">
+   361→          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+   362→            🆓 Free Tier Compute
+   363→          </Badge>
+   364→          <span className="text-sm text-muted-foreground">
+   365→            Simulated resources • No actual costs incurred
+   366→          </span>
+   367→        </div>
+   368→      </div>
+   369→
+   370→      {/* Stats Grid */}
+   371→      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+   372→        <Card>
+   373→          <CardContent className="p-4 flex items-center gap-3">
+   374→            <span className="text-2xl">⚡</span>
+   375→            <div>
+   376→              <p className="text-sm text-muted-foreground">{t('compute.active_jobs') || 'Active Jobs'}</p>
+   377→              <p className="text-xl font-bold text-blue-500">{activeJobs.length}</p>
+   378→            </div>
+   379→          </CardContent>
+   380→        </Card>
+   381→        <Card>
+   382→          <CardContent className="p-4 flex items-center gap-3">
+   383→            <span className="text-2xl">⏱️</span>
+   384→            <div>
+   385→              <p className="text-sm text-muted-foreground">Total Compute Used</p>
+   386→              <p className="text-xl font-bold">{totalCompute.toFixed(1)} hrs</p>
+   387→            </div>
+   388→          </CardContent>
+   389→        </Card>
+   390→        <Card>
+   391→          <CardContent className="p-4 flex items-center gap-3">
+   392→            <span className="text-2xl">🖥️</span>
+   393→            <div>
+   394→              <p className="text-sm text-muted-foreground">GPUs Allocated</p>
+   395→              <p className="text-xl font-bold text-purple-500">{totalGPUs}</p>
+   396→            </div>
+   397→          </CardContent>
+   398→        </Card>
+   399→        <Card>
+   400→          <CardContent className="p-4 flex items-center gap-3">
+   401→            <span className="text-2xl">📊</span>
+   402→            <div>
+   403→              <p className="text-sm text-muted-foreground">Avg Progress</p>
+   404→              <p className="text-xl font-bold text-green-500">{avgProgress}%</p>
+   405→            </div>
+   406→          </CardContent>
+   407→        </Card>
+   408→      </div>
+   409→
+   410→      {/* Create Job Button */}
+   411→      <div className="mb-6 flex justify-between items-center">
+   412→        <h2 className="text-xl font-semibold">{t('compute.jobs') || 'Jobs'}</h2>
+   413→        <Button onClick={() => setShowCreateForm(!showCreateForm)}>
+   414→          + {t('compute.new_job') || 'New Job'}
+   415→        </Button>
+   416→      </div>
+   417→
+   418→      {/* Create Job Form */}
+   419→      {showCreateForm && (
+   420→        <Card className="mb-6 border-primary">
+   421→          <CardHeader>
+   422→            <CardTitle className="text-base">Submit New Job</CardTitle>
+   423→          </CardHeader>
+   424→          <CardContent>
+   425→            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+   426→              <div>
+   427→                <label className="text-sm font-medium">Job Name *</label>
+   428→                <Input
+   429→                  value={newJobName}
+   430→                  onChange={(e) => setNewJobName(e.target.value)}
+   431→                  placeholder="e.g., Variant Analysis Pipeline"
+   432→                  className="mt-1"
+   433→                />
+   434→              </div>
+   435→              <div>
+   436→                <label className="text-sm font-medium">Job Type</label>
+   437→                <Select value={newJobType} onValueChange={(v) => setNewJobType(v as ComputeJob['type'])}>
+   438→                  <SelectTrigger className="mt-1">
+   439→                    <SelectValue />
+   440→                  </SelectTrigger>
+   441→                  <SelectContent>
+   442→                    <SelectItem value="analysis">Analysis</SelectItem>
+   443→                    <SelectItem value="training">Training</SelectItem>
+   444→                    <SelectItem value="simulation">Simulation</SelectItem>
+   445→                    <SelectItem value="pipeline">Pipeline</SelectItem>
+   446→                    <SelectItem value="custom">Custom</SelectItem>
+   447→                  </SelectContent>
+   448→                </Select>
+   449→              </div>
+   450→              <div>
+   451→                <label className="text-sm font-medium">Priority</label>
+   452→                <Select value={newJobPriority} onValueChange={(v) => setNewJobPriority(v as ComputeJob['priority'])}>
+   453→                  <SelectTrigger className="mt-1">
+   454→                    <SelectValue />
+   455→                  </SelectTrigger>
+   456→                  <SelectContent>
+   457→                    <SelectItem value="low">Low</SelectItem>
+   458→                    <SelectItem value="normal">Normal</SelectItem>
+   459→                    <SelectItem value="high">High</SelectItem>
+   460→                    <SelectItem value="urgent">Urgent</SelectItem>
+   461→                  </SelectContent>
+   462→                </Select>
+   463→              </div>
+   464→              <div>
+   465→                <label className="text-sm font-medium">GPU Count</label>
+   466→                <Select value={String(newJobGpus)} onValueChange={(v) => setNewJobGpus(parseInt(v))}>
+   467→                  <SelectTrigger className="mt-1">
+   468→                    <SelectValue />
+   469→                  </SelectTrigger>
+   470→                  <SelectContent>
+   471→                    <SelectItem value="0">0 (CPU only)</SelectItem>
+   472→                    <SelectItem value="1">1 GPU</SelectItem>
+   473→                    <SelectItem value="2">2 GPUs</SelectItem>
+   474→                    <SelectItem value="4">4 GPUs</SelectItem>
+   475→                    <SelectItem value="8">8 GPUs</SelectItem>
+   476→                  </SelectContent>
+   477→                </Select>
+   478→              </div>
+   479→              <div className="md:col-span-2">
+   480→                <label className="text-sm font-medium">Input Dataset (optional)</label>
+   481→                <Input
+   482→                  value={newJobDataset}
+   483→                  onChange={(e) => setNewJobDataset(e.target.value)}
+   484→                  placeholder="Dataset name or path..."
+   485→                  className="mt-1"
+   486→                />
+   487→              </div>
+   488→            </div>
+   489→
+   490→            {/* Cost Estimate */}
+   491→            <div className="p-3 rounded-lg bg-muted/50 mb-4">
+   492→              <div className="flex justify-between text-sm">
+   493→                <span>Estimated Cost:</span>
+   494→                <span className="font-medium text-green-600">$0.00 (Free Tier)</span>
+   495→              </div>
+   496→              <p className="text-xs text-muted-foreground mt-1">
+   497→                In production, this would be ${(newJobGpus * 0.5 * (newJobType === 'training' ? 24 : 4)).toFixed(2)}
+   498→              </p>
+   499→            </div>
+   500→
+   501→            <div className="flex justify-end gap-3">
+   502→              <Button variant="outline" onClick={() => setShowCreateForm(false)}>
+   503→                Cancel
+   504→              </Button>
+   505→              <Button onClick={handleCreateJob} disabled={!newJobName.trim()}>
+   506→                Submit Job
+   507→              </Button>
+   508→            </div>
+   509→          </CardContent>
+   510→        </Card>
+   511→      )}
+   512→
+   513→      <div className="flex gap-6">
+   514→        {/* Jobs List */}
+   515→        <div className="flex-1 space-y-4">
+   516→          {jobs.map(job => (
+   517→            <Card 
+   518→              key={job.id} 
+   519→              className={`cursor-pointer transition-all hover:shadow-md ${
+   520→                selectedJob?.id === job.id ? 'ring-2 ring-primary' : ''
+   521→              }`}
+   522→              onClick={() => setSelectedJob(job)}
+   523→            >
+   524→              <CardContent className="p-4">
+   525→                <div className="flex items-start justify-between mb-3">
+   526→                  <div>
+   527→                    <h3 className="font-medium">{job.name}</h3>
+   528→                    <p className="text-sm text-muted-foreground">
+   529→                      {job.submitter} • Submitted {formatTimeAgo(job.submittedAt)}
+   530→                    </p>
+   531→                  </div>
+   532→                  <div className="flex gap-2">
+   533→                    {getStatusBadge(job.status)}
+   534→                    {getPriorityBadge(job.priority)}
+   535→                  </div>
+   536→                </div>
+   537→
+   538→                {job.status === 'running' && (
+   539→                  <div className="space-y-2">
+   540→                    <div className="flex justify-between text-sm">
+   541→                      <span>{t('compute.progress') || 'Progress'}</span>
+   542→                      <span className="font-medium">{Math.round(job.progress)}%</span>
+   543→                    </div>
+   544→                    <Progress value={job.progress} />
+   545→                    <div className="flex justify-between text-xs text-muted-foreground">
+   546→                      <span>⏱️ {job.computeHoursUsed.toFixed(1)} / {job.computeHoursTotal} hrs</span>
+   547→                      <span>🎮 {job.gpusAllocated} GPUs</span>
+   548→                      <span>💾 {job.memoryUsed}</span>
+   549→                      {job.estimatedCost !== undefined && (
+   550→                        <span>💰 ${job.estimatedCost.toFixed(2)}</span>
+   551→                      )}
+   552→                    </div>
+   553→                  </div>
+   554→                )}
+   555→
+   556→                {job.status === 'completed' && (
+   557→                  <div className="text-sm text-green-600 space-y-1">
+   558→                    <p>✅ Completed in {(job.computeHoursUsed).toFixed(1)} compute hours</p>
+   559→                    {job.estimatedCost !== undefined && (
+   560→                      <p>💰 Cost: ${job.estimatedCost.toFixed(2)}</p>
+   561→                    )}
+   562→                    <p>📅 Completed: {job.completedAt?.toLocaleString()}</p>
+   563→                  </div>
+   564→                )}
+   565→
+   566→                {job.status === 'queued' && (
+   567→                  <div className="text-sm text-yellow-600">
+   568→                    ⏳ Waiting in queue...
+   569→                  </div>
+   570→                )}
+   571→
+   572→                {job.status === 'cancelled' && (
+   573→                  <div className="text-sm text-gray-500">
+   574→                    🛑 Cancelled by user
+   575→                  </div>
+   576→                )}
+   577→
+   578→                {/* Quick Actions */}
+   579→                <div className="flex gap-2 mt-3 pt-3 border-t">
+   580→                  {job.status === 'running' && (
+   581→                    <Button size="sm" variant="destructive" onClick={(e) => {
+   582→                      e.stopPropagation();
+   583→                      handleCancelJob(job.id);
+   584→                    }}>
+   585→                      Cancel
+   586→                    </Button>
+   587→                  )}
+   588→                  {job.status === 'completed' && (
+   589→                    <>
+   590→                      <Button size="sm" variant="outline" onClick={(e) => e.stopPropagation()}>
+   591→                        View Logs
+   592→                      </Button>
+   593→                      <Button size="sm" variant="outline" onClick={(e) => e.stopPropagation()}>
+   594→                        Download Results
+   595→                      </Button>
+   596→                    </>
+   597→                  )}
+   598→                </div>
+   599→              </CardContent>
+   600→            </Card>
+   601→          ))}
+   602→        </div>
+   603→
+   604→        {/* Detail Panel */}
+   605→        <div className="w-96 space-y-4">
+   606→          {selectedJob ? (
+   607→            <>
+   608→              <Card>
+   609→                <CardHeader>
+   610→                  <CardTitle className="text-base">{selectedJob.name}</CardTitle>
+   611→                </CardHeader>
+   612→                <CardContent className="space-y-3">
+   613→                  <div className="grid grid-cols-2 gap-2 text-sm">
+   614→                    <div>
+   615→                      <span className="text-muted-foreground">Type</span>
+   616→                      <p className="capitalize font-medium">{selectedJob.type}</p>
+   617→                    </div>
+   618→                    <div>
+   619→                      <span className="text-muted-foreground">Submitter</span>
+   620→                      <p className="font-medium">{selectedJob.submitter}</p>
+   621→                    </div>
+   622→                    <div>
+   623→                      <span className="text-muted-foreground">Submitted</span>
+   624→                      <p className="font-medium">{selectedJob.submittedAt.toLocaleString()}</p>
+   625→                    </div>
+   626→                    {selectedJob.completedAt && (
+   627→                      <div>
+   628→                        <span className="text-muted-foreground">Completed</span>
+   629→                        <p className="font-medium">{selectedJob.completedAt.toLocaleString()}</p>
+   630→                      </div>
+   631→                    )}
+   632→                    {selectedJob.estimatedCost !== undefined && (
+   633→                      <div>
+   634→                        <span className="text-muted-foreground">Est. Cost</span>
+   635→                        <p className="font-medium">${selectedJob.estimatedCost.toFixed(2)}</p>
+   636→                      </div>
+   637→                    )}
+   638→                  </div>
+   639→
+   640→                  <div className="pt-2 border-t space-y-2">
+   641→                    <Button size="sm" variant="outline" className="w-full">
+   642→                      {t('compute.view_logs') || 'View Logs'}
+   643→                    </Button>
+   644→                    <Button size="sm" variant="outline" className="w-full">
+   645→                      Download Results
+   646→                    </Button>
+   647→                    {selectedJob.status === 'running' && (
+   648→                      <Button size="sm" variant="destructive" className="w-full" onClick={() => handleCancelJob(selectedJob.id)}>
+   649→                        Cancel Job
+   650→                      </Button>
+   651→                    )}
+   652→                  </div>
+   653→                </CardContent>
+   654→              </Card>
+   655→
+   656→              {/* Recent Logs */}
+   657→              <Card>
+   658→                <CardHeader className="pb-3">
+   659→                  <CardTitle className="text-sm">Recent Logs</CardTitle>
+   660→                </CardHeader>
+   661→                <CardContent className="max-h-60 overflow-auto">
+   662→                  <div className="space-y-1 font-mono text-xs">
+   663→                    {selectedJob.logs.slice(-10).map((log, idx) => (
+   664→                      <div key={idx} className={`${
+   665→                        log.level === 'ERROR' ? 'text-red-500' :
+   666→                        log.level === 'WARN' ? 'text-yellow-500' :
+   667→                        log.level === 'SUCCESS' ? 'text-green-500' :
+   668→                        log.level === 'DEBUG' ? 'text-gray-400' :
+   669→                        'text-foreground'
+   670→                      }`}>
+   671→                        <span className="text-muted-foreground mr-2">
+   672→                          [{log.timestamp.toLocaleTimeString()}]
+   673→                        </span>
+   674→                        [{log.level}] {log.message}
+   675→                      </div>
+   676→                    ))}
+   677→                  </div>
+   678→                </CardContent>
+   679→              </Card>
+   680→            </>
+   681→          ) : (
+   682→            <Card>
+   683→              <CardContent className="p-8 text-center text-muted-foreground">
+   684→                {t('compute.no_jobs') || 'Select a job to view details'}
+   685→              </CardContent>
+   686→            </Card>
+   687→          )}
+   688→
+   689→          {/* Node Status */}
+   690→          <Card>
+   691→            <CardHeader className="pb-3">
+   692→              <CardTitle className="text-sm">{t('compute.nodes') || 'Compute Nodes'}</CardTitle>
+   693→            </CardHeader>
+   694→            <CardContent className="space-y-3">
+   695→              {nodes.map(node => (
+   696→                <div key={node.id} className="space-y-1">
+   697→                  <div className="flex items-center justify-between text-sm">
+   698→                    <div className="flex items-center gap-2">
+   699→                      <span className={`w-2 h-2 rounded-full ${
+   700→                        node.status === 'online' ? 'bg-green-500' : 
+   701→                        node.status === 'maintenance' ? 'bg-yellow-500' : 'bg-gray-400'
+   702→                      }`} />
+   703→                      <span className="font-medium">{node.name}</span>
+   704→                    </div>
+   705→                    <span className="text-xs text-muted-foreground">
+   706→                      {node.runningJobs} jobs
+   707→                    </span>
+   708→                  </div>
+   709→                  {node.status === 'online' && (
+   710→                    <div className="grid grid-cols-3 gap-2 text-xs pl-4">
+   711→                      <div>CPU: {node.cpuUsage}%</div>
+   712→                      <div>MEM: {node.memoryUsage}%</div>
+   713→                      <div>GPU: {node.gpuUsage}%</div>
+   714→                    </div>
+   715→                  )}
+   716→                </div>
+   717→              ))}
+   718→            </CardContent>
+   719→          </Card>
+   720→        </div>
+   721→      </div>
+   722→    </div>
+   723→  );
+   724→}
+   725→

@@ -1,0 +1,1450 @@
+     1→/**
+     2→ * SciHub Pro - Enhanced Dynamic Store (Zustand)
+     3→ * 
+     4→ * Full Dynamic Data Pipeline:
+     5→ * - Synthetic data pre-fill that clears on user input
+     6→ * - Dirty state tracking per field
+     7→ * - Volume threshold detection for database push
+     8→ * - Free-tier database simulation (DuckDB/Postgres)
+     9→ * - Complete CRUD for all entities
+    10→ * 
+    11→ * Persistence Layers:
+    12→ * 1. React State (component level)
+    13→ * 2. Zustand Store (global state)
+    14→ * 3. localStorage (session persistence via middleware)
+    15→ * 4. IndexedDB (large datasets via idbHelper)
+    16→ * 5. Free-Tier DB Simulation (when volume threshold reached)
+    17→ */
+    18→
+    19→import { create } from 'zustand';
+    20→import { persist, createJSONStorage } from 'zustand/middleware';
+    21→
+    22→// ============ COMPREHENSIVE TYPES ============
+    23→
+    24→export interface DynamicField<T = any> {
+    25→  value: T;
+    26→  syntheticValue: T; // Original synthetic/fake data
+    27→  isDirty: boolean; // Has user modified this field?
+    28→  lastModified?: Date;
+    29→  isValid: boolean;
+    30→  validationError?: string;
+    31→}
+    32→
+    33→export interface DynamicForm {
+    34→  id: string;
+    35→  name: string;
+    36→  fields: Record<string, DynamicField>;
+    37→  isSubmitting: boolean;
+    38→  lastSaved?: Date;
+    39→  volumeBytes: number; // Track data size for threshold detection
+    40→}
+    41→
+    42→export interface DashboardStats {
+    43→  activeJobs: DynamicField<number>;
+    44→  storageUsed: DynamicField<string>;
+    45→  apiCallsToday: DynamicField<number>;
+    46→  collaborators: DynamicField<number>;
+    47→  systemHealth: DynamicField<number>;
+    48→}
+    49→
+    50→export interface ActivityEntry {
+    51→  id: string;
+    52→  type: 'search' | 'save' | 'export' | 'job' | 'collaboration' | 'login' | 'download' | 'upload' | 'query' | 'compute';
+    53→  message: DynamicField<string>;
+    54→  timestamp: Date;
+    55→  icon: string;
+    56→  userId?: string;
+    57→  metadata?: Record<string, any>;
+    58→}
+    59→
+    60→export interface ConnectorConfig {
+    61→  id: string;
+    62→  name: string;
+    63→  isConnected: DynamicField<boolean>;
+    64→  apiKey: DynamicField<string>;
+    65→  apiEndpoint: DynamicField<string>;
+    66→  lastSync?: Date;
+    67→  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+    68→  recordCount?: DynamicField<number>;
+    69→  freeTierLimit: number;
+    70→  currentUsage: number;
+    71→  features: string[];
+    72→}
+    73→
+    74→export interface WorkspaceFile {
+    75→  id: string;
+    76→  name: DynamicField<string>;
+    77→  content: DynamicField<string>;
+    78→  language: DynamicField<string>;
+    79→  createdAt: Date;
+    80→  lastModified: Date;
+    81→  isModified: boolean;
+    82→  sizeBytes: number;
+    83→  tabOrder: number;
+    84→}
+    85→
+    86→export interface DatasetRecord {
+    87→  id: string;
+    88→  name: DynamicField<string>;
+    89→  description: DynamicField<string>;
+    90→  size: DynamicField<string>;
+    91→  rows: DynamicField<number>;
+    92→  columns: DynamicField<number>;
+    93→  type: DynamicField<string>;
+    94→  format: DynamicField<string>;
+    95→  sourceUrl: DynamicField<string>;
+    96→  tags: DynamicField<string[]>;
+    97→  lastModified: Date;
+    98→  isPublic: DynamicField<boolean>;
+    99→  storageLocation: 'local' | 'indexeddb' | 'duckdb' | 'postgres';
+   100→  downloadCount: number;
+   101→}
+   102→
+   103→export interface QueryHistoryEntry {
+   104→  id: string;
+   105→  query: DynamicField<string>;
+   106→  results: any[];
+   107→  executionTime: DynamicField<number>;
+   108→  rowsAffected: DynamicField<number>;
+   109→  timestamp: Date;
+   110→  dataSource: string;
+   111→  status: 'success' | 'error' | 'running';
+   112→}
+   113→
+   114→export interface ComputeJob {
+   115→  id: string;
+   116→  name: DynamicField<string>;
+   117→  type: DynamicField<'analysis' | 'training' | 'simulation' | 'pipeline' | 'custom'>;
+   118→  status: DynamicField<'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'configuring'>;
+   119→  priority: DynamicField<'low' | 'normal' | 'high' | 'urgent'>;
+   120→  submitter: DynamicField<string>;
+   121→  config: JobConfig;
+   122→  progress: DynamicField<number>;
+   123→  computeHoursUsed: DynamicField<number>;
+   124→  computeHoursTotal: DynamicField<number>;
+   125→  gpusAllocated: DynamicField<number>;
+   126→  memoryUsed: DynamicField<string>;
+   127→  submittedAt: Date;
+   128→  startedAt?: Date;
+   129→  completedAt?: Date;
+   130→  logs: LogEntry[];
+   131→  estimatedCost?: DynamicField<number>;
+   132→}
+   133→
+   134→export interface JobConfig {
+   135→  inputDataset: DynamicField<string>;
+   136→  parameters: Record<string, DynamicField<any>>;
+   137→  outputFormat: DynamicField<string>;
+   138→  notifications: DynamicField<boolean>;
+   139→  retryCount: DynamicField<number>;
+   140→}
+   141→
+   142→export interface LogEntry {
+   143→  timestamp: Date;
+   144→  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' | 'SUCCESS';
+   145→  message: string;
+   146→}
+   147→
+   148→export interface CollaborationMember {
+   149→  id: string;
+   150→  name: DynamicField<string>;
+   151→  email: DynamicField<string>;
+   152→  role: DynamicField<'pi' | 'postdoc' | 'phd' | 'researcher' | 'data_scientist' | 'developer' | 'admin'>;
+   153→  institution: DynamicField<string>;
+   154→  orcid: DynamicField<string>;
+   155→  avatar?: string;
+   156→  isOnline: DynamicField<boolean>;
+   157→  joinedAt: Date;
+   158→  publications: DynamicField<number>;
+   159→}
+   160→
+   161→export interface CollaborationProject {
+   162→  id: string;
+   163→  name: DynamicField<string>;
+   164→  description: DynamicField<string>;
+   165→  members: string[]; // Member IDs
+   166→  status: DynamicField<'active' | 'paused' | 'completed' | 'archived'>;
+   167→  createdAt: Date;
+   168→  lastActivity: Date;
+   169→  datasets: string[];
+   170→  discussions: DiscussionThread[];
+   171→}
+   172→
+   173→export interface DiscussionThread {
+   174→  id: string;
+   175→  title: DynamicField<string>;
+   176→  author: string;
+   177→  replies: Reply[];
+   178→  tags: DynamicField<string[]>;
+   179→  createdAt: Date;
+   180→  lastReply?: Date;
+   181→  isPinned: DynamicField<boolean>;
+   182→}
+   183→
+   184→export interface Reply {
+   185→  id: string;
+   186→  author: string;
+   187→  content: DynamicField<string>;
+   188→  timestamp: Date;
+   189→}
+   190→
+   191→export interface AETHELPrompt {
+   192→  id: string;
+   193→  prompt: DynamicField<string>;
+   194→  model: DynamicField<string>;
+   195→  response?: string;
+   196→  tokensUsed: DynamicField<number>;
+   197→  computeTime: DynamicField<number>;
+   198→  priority: DynamicField<'low' | 'normal' | 'high' | 'critical'>;
+   199→  computeBudget: DynamicField<number>;
+   200→  timestamp: Date;
+   201→  status: 'queued' | 'processing' | 'completed' | 'failed';
+   202→}
+   203→
+   204→export interface KnowledgeGraphNode {
+   205→  id: string;
+   206→  label: DynamicField<string>;
+   207→  type: DynamicField<'concept' | 'paper' | 'author' | 'gene' | 'compound' | 'domain' | 'dataset' | 'method'>;
+   208→  properties: Record<string, DynamicField<any>>;
+   209→  x: number;
+   210→  y: number;
+   211→  connections: number;
+   212→  createdVia: 'user' | 'import' | 'inference';
+   213→}
+   214→
+   215→export interface KnowledgeGraphEdge {
+   216→  id: string;
+   217→  source: string;
+   218→  target: string;
+   219→  relationship: DynamicField<string>;
+   220→  strength: DynamicField<number>;
+   221→  evidence?: DynamicField<string>;
+   222→  createdBy: string;
+   223→}
+   224→
+   225→export interface UserProfileDynamic {
+   226→  displayName: DynamicField<string>;
+   227→  email: DynamicField<string>;
+   228→  institution: DynamicField<string>;
+   229→  orcid: DynamicField<string>;
+   230→  bio: DynamicField<string>;
+   231→  role: DynamicField<'researcher' | 'developer' | 'admin' | 'community'>;
+   232→  avatar?: string;
+   233→}
+   234→
+   235→export interface NotificationPreference {
+   236→  emailJobComplete: DynamicField<boolean>;
+   237→  emailCollaborator: DynamicField<boolean>;
+   238→  pushUpdates: DynamicField<boolean>;
+   239→  weeklyDigest: DynamicField<boolean>;
+   240→}
+   241→
+   242→export interface DatabasePushConfig {
+   243→  enabled: boolean;
+   244→  provider: 'duckdb' | 'postgres' | 'sqlite' | 'mysql';
+   245→  connectionString: DynamicField<string>;
+   246→  autoPushThreshold: DynamicField<number>; // in bytes
+   247→  lastPush?: Date;
+   248→  pushHistory: PushRecord[];
+   249→}
+   250→
+   251→export interface PushRecord {
+   252→  timestamp: Date;
+   253→  recordCount: number;
+   254→  volumeBytes: number;
+   255→  provider: string;
+   256→  status: 'success' | 'failed';
+   257→  duration: number;
+   258→}
+   259→
+   260→// ============ HELPER FUNCTIONS ============
+   261→
+   262→/**
+   263→ * Creates a dynamic field with synthetic default value
+   264→ */
+   265→export function createDynamicField<T>(syntheticValue: T): DynamicField<T> {
+   266→  return {
+   267→    value: syntheticValue,
+   268→    syntheticValue,
+   269→    isDirty: false,
+   270→    isValid: true,
+   271→  };
+   272→}
+   273→
+   274→/**
+   275→ * Updates a dynamic field's value and marks as dirty if different from synthetic
+   276→ */
+   277→export function updateDynamicField<T>(field: DynamicField<T>, newValue: T): DynamicField<T> {
+   278→  const isDirty = JSON.stringify(newValue) !== JSON.stringify(field.syntheticValue);
+   279→  return {
+   280→    ...field,
+   281→    value: newValue,
+   282→    isDirty,
+   283→    lastModified: new Date(),
+   284→    isValid: true,
+   285→  };
+   286→}
+   287→
+   288→/**
+   289→ * Resets a dynamic field back to its synthetic value
+   290→ */
+   291→export function resetDynamicField<T>(field: DynamicField<T>): DynamicField<T> {
+   292→  return {
+   293→    ...field,
+   294→    value: field.syntheticValue,
+   295→    isDirty: false,
+   296→    lastModified: new Date(),
+   297→  };
+   298→}
+   299→
+   300→/**
+   301→ * Calculates approximate byte size of data
+   302→ */
+   303→function calculateDataSize(data: any): number {
+   304→  return new Blob([JSON.stringify(data)]).size;
+   305→}
+   306→
+   307→// ============ STORE INTERFACE ============
+   308→
+   309→interface SciHubDynamicStore {
+   310→  // Dashboard
+   311→  dashboardStats: DashboardStats;
+   312→  activities: ActivityEntry[];
+   313→  updateDashboardStat: (key: keyof DashboardStats, value: number | string) => void;
+   314→  addActivity: (activity: Omit<ActivityEntry, 'id' | 'timestamp'>) => void;
+   315→  clearActivities: () => void;
+   316→
+   317→  // Connectors
+   318→  connectors: ConnectorConfig[];
+   319→  toggleConnector: (id: string) => Promise<void>;
+   320→  updateConnectorApiKey: (id: string, key: string) => void;
+   321→  syncConnector: (id: string) => Promise<void>;
+   322→
+   323→  // Workspace
+   324→  workspaceFiles: WorkspaceFile[];
+   325→  createFile: (name: string, language: string, content: string) => void;
+   326→  updateFileContent: (id: string, content: string) => void;
+   327→  deleteFile: (id: string) => void;
+   328→  reorderFiles: (fileIds: string[]) => void;
+   329→
+   330→  // Data Lake
+   331→  datasets: DatasetRecord[];
+   332→  createDataset: (dataset: Omit<DatasetRecord, 'id' | 'lastModified' | 'downloadCount'>) => void;
+   333→  updateDataset: (id: string, updates: Partial<DatasetRecord>) => void;
+   334→  deleteDataset: (id: string) => void;
+   335→  getTotalStorage: () => number;
+   336→
+   337→  // Query Executor
+   338→  queryHistory: QueryHistoryEntry[];
+   339→  addQueryToHistory: (query: string, results: any[], executionTime: number, dataSource: string) => void;
+   340→  clearQueryHistory: () => void;
+   341→
+   342→  // Compute Layer
+   343→  computeJobs: ComputeJob[];
+   344→  createJob: (job: Omit<ComputeJob, 'id' | 'submittedAt' | 'logs' | 'progress' | 'status'>) => void;
+   345→  updateJobProgress: (id: string, progress: number) => void;
+   346→  cancelJob: (id: string) => void;
+   347→  getActiveJobs: () => ComputeJob[];
+   348→
+   349→  // Collaboration
+   350→  members: CollaborationMember[];
+   351→  projects: CollaborationProject[];
+   352→  addMember: (member: Omit<CollaborationMember, 'id' | 'joinedAt'>) => void;
+   353→  updateMember: (id: string, updates: Partial<CollaborationMember>) => void;
+   354→  removeMember: (id: string) => void;
+   355→  createProject: (project: Omit<CollaborationProject, 'id' | 'createdAt' | 'lastActivity' | 'discussions'>) => void;
+   356→  addDiscussion: (projectId: string, discussion: Omit<DiscussionThread, 'id' | 'createdAt' | 'replies'>) => void;
+   357→
+   358→  // AETHEL AI
+   359→  aethelPrompts: AETHELPrompt[];
+   360→  submitPrompt: (prompt: AETHELPrompt) => void;
+   361→  clearPromptHistory: () => void;
+   362→
+   363→  // Knowledge Graph
+   364→  graphNodes: KnowledgeGraphNode[];
+   365→  graphEdges: KnowledgeGraphEdge[];
+   366→  addNode: (node: Omit<KnowledgeGraphNode, 'id' | 'connections' | 'createdVia'>) => void;
+   367→  addEdge: (edge: Omit<KnowledgeGraphEdge, 'id' | 'createdBy'>) => void;
+   368→  removeNode: (id: string) => void;
+   369→  removeEdge: (id: string) => void;
+   370→
+   371→  // User Profile
+   372→  userProfile: UserProfileDynamic;
+   373→  updateUserProfile: (key: keyof UserProfileDynamic, value: any) => void;
+   374→  resetUserProfile: () => void;
+   375→
+   376→  // Notifications
+   377→  notificationPrefs: NotificationPreference;
+   378→  updateNotificationPref: (key: keyof NotificationPreference, value: boolean) => void;
+   379→
+   380→  // Database/Persistence
+   381→  dbConfig: DatabasePushConfig;
+   382→  updateDbConfig: (key: keyof DatabasePushConfig, value: any) => void;
+   383→  checkVolumeThreshold: () => { exceeded: boolean; totalSize: number; shouldPush: boolean };
+   384→  simulatePushToDatabase: () => Promise<PushRecord>;
+   385→
+   386→  // Utility
+   387→  getDirtyFieldsCount: () => number;
+   388→  resetAllFields: () => void;
+   389→  exportState: () => string;
+   390→  importState: (json: string) => void;
+   391→}
+   392→
+   393→// ============ SYNTHETIC DATA GENERATORS ============
+   394→
+   395→const generateSyntheticDashboardStats = (): DashboardStats => ({
+   396→  activeJobs: createDynamicField(12),
+   397→  storageUsed: createDynamicField('2.4 GB'),
+   398→  apiCallsToday: createDynamicField(1247),
+   399→  collaborators: createDynamicField(8),
+   400→  systemHealth: createDynamicField(98),
+   401→});
+   402→
+   403→const generateSyntheticConnectors = (): ConnectorConfig[] => [
+   404→  {
+   405→    id: 'ncbi-genbank',
+   406→    name: 'NCBI GenBank',
+   407→    isConnected: createDynamicField(false),
+   408→    apiKey: createDynamicField(''),
+   409→    apiEndpoint: createDynamicField('https://eutils.ncbi.nlm.nih.gov/entrez/eutils'),
+   410→    freeTierLimit: 3, // requests/second
+   411→    currentUsage: 0,
+   412→    features: ['BLAST Search', 'Sequence Download', 'Taxonomy Browser'],
+   413→    recordCount: createDynamicField(250000000),
+   414→  },
+   415→  {
+   416→    id: 'rcsb-pdb',
+   417→    name: 'RCSB PDB',
+   418→    isConnected: createDynamicField(true),
+   419→    apiKey: createDynamicField(''),
+   420→    apiEndpoint: createDynamicField('https://data.rcsb.org/rest/v1'),
+   421→    freeTierLimit: 10,
+   422→    currentUsage: 0,
+   423→    features: ['3D Viewer', 'Structure Search', 'Ligand Analysis'],
+   424→    recordCount: createDynamicField(200000),
+   425→    lastSync: new Date(Date.now() - 3600000),
+   426→  },
+   427→  {
+   428→    id: 'uniprot',
+   429→    name: 'UniProt',
+   430→    isConnected: createDynamicField(true),
+   431→    apiKey: createDynamicField(''),
+   432→    apiEndpoint: createDynamicField('https://rest.uniprot.org'),
+   433→    freeTierLimit: 15,
+   434→    currentUsage: 0,
+   435→    features: ['ID Mapping', 'Batch Retrieval', 'BLAST'],
+   436→    recordCount: createDynamicField(230000000),
+   437→  },
+   438→  {
+   439→    id: 'pubchem',
+   440→    name: 'PubChem',
+   441→    isConnected: createDynamicField(true),
+   442→    apiKey: createDynamicField(''),
+   443→    apiEndpoint: createDynamicField('https://pubchem.ncbi.nlm.nih.gov/rest/pug'),
+   444→    freeTierLimit: 5,
+   445→    currentUsage: 0,
+   446→    features: ['PUG REST API', 'Structure Search', 'Biological Testing'],
+   447→    recordCount: createDynamicField(111000000),
+   448→  },
+   449→  {
+   450→    id: 'crossref',
+   451→    name: 'CrossRef',
+   452→    isConnected: createDynamicField(true),
+   453→    apiKey: createDynamicField(''), // Free tier - no key needed
+   454→    apiEndpoint: createDynamicField('https://api.crossref.org/works'),
+   455→    freeTierLimit: 50,
+   456→    currentUsage: 0,
+   457→    features: ['DOI Resolution', 'Citation Network', 'Metadata Query'],
+   458→    recordCount: createDynamicField(140000000),
+   459→  },
+   460→  {
+   461→    id: 'openalex',
+   462→    name: 'OpenAlex',
+   463→    isConnected: createDynamicField(false),
+   464→    apiKey: createDynamicField(''), // Optional for higher limits
+   465→    apiEndpoint: createDynamicField('https://api.openalex.org'),
+   466→    freeTierLimit: 10,
+   467→    currentUsage: 0,
+   468→    features: ['Author Profiles', 'Institution Analytics', 'Topic Modeling'],
+   469→    recordCount: createDynamicField(250000000),
+   470→  },
+   471→  {
+   472→    id: 'arxiv',
+   473→    name: 'arXiv',
+   474→    isConnected: createDynamicField(true),
+   475→    apiKey: createDynamicField(''),
+   476→    apiEndpoint: createDynamicField('http://export.arxiv.org/api/query'),
+   477→    freeTierLimit: 0, // Unknown limit
+   478→    currentUsage: 0,
+   479→    features: ['Category Browse', 'API Access', 'Full Text PDF'],
+   480→    recordCount: createDynamicField(2400000),
+   481→  },
+   482→  {
+   483→    id: 'chembl',
+   484→    name: 'ChEMBL',
+   485→    isConnected: createDynamicField(false),
+   486→    apiKey: createDynamicField(''),
+   487→    apiEndpoint: createDynamicField('https://www.ebi.ac.uk/chembl/api/data'),
+   488→    freeTierLimit: 5,
+   489→    currentUsage: 0,
+   490→    features: ['Activity Search', 'Target Profile', 'Similarity'],
+   491→    recordCount: createDynamicField(2400000),
+   492→  },
+   493→  {
+   494→    id: 'geo',
+   495→    name: 'NCBI GEO',
+   496→    isConnected: createDynamicField(false),
+   497→    apiKey: createDynamicField(''),
+   498→    apiEndpoint: createDynamicField('https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi'),
+   499→    freeTierLimit: 3,
+   500→    currentUsage: 0,
+   501→    features: ['GEO2R Analysis', 'Dataset Browser', 'Series Matrix'],
+   502→    recordCount: createDynamicField(4000000),
+   503→  },
+   504→  {
+   505→    id: 'zenodo',
+   506→    name: 'Zenodo',
+   507→    isConnected: createDynamicField(false),
+   508→    apiKey: createDynamicField(''),
+   509→    apiEndpoint: createDynamicField('https://zenodo.org/api'),
+   510→    freeTierLimit: 10,
+   511→    currentUsage: 0,
+   512→    features: ['DOI Minting', 'GitHub Integration', 'Version Control'],
+   513→    recordCount: createDynamicField(3000000),
+   514→  },
+   515→  {
+   516→    id: 'figshare',
+   517→    name: 'Figshare',
+   518→    isConnected: createDynamicField(false),
+   519→    apiKey: createDynamicField(''),
+   520→    apiEndpoint: createDynamicField('https://api.figshare.com/v2'),
+   521→    freeTierLimit: 10,
+   522→    currentUsage: 0,
+   523→    features: ['File Hosting', 'DOI Assignment', 'Embedding'],
+   524→    recordCount: createDynamicField(1500000),
+   525→  },
+   526→  {
+   527→    id: 'kaggle',
+   528→    name: 'Kaggle Datasets',
+   529→    isConnected: createDynamicField(false),
+   530→    apiKey: createDynamicField(''),
+   531→    apiEndpoint: createDynamicField('https://www.kaggle.com/api/v1'),
+   532→    freeTierLimit: 100, // Daily calls
+   533→    currentUsage: 0,
+   534→    features: ['Kernels', 'Competitions', 'Discussion Forums'],
+   535→    recordCount: createDynamicField(50000),
+   536→  },
+   537→];
+   538→
+   539→const generateSyntheticWorkspaceFiles = (): WorkspaceFile[] => [
+   540→  {
+   541→    id: 'file-001',
+   542→    name: createDynamicField('analysis.py'),
+   543→    content: createDynamicField(`# SciHub Pro - Python Analysis Example
+   544→# Bioinformatics: Sequence Analysis
+   545→
+   546→from Bio import SeqIO
+   547→import pandas as pd
+   548→import matplotlib.pyplot as plt
+   549→
+   550→# Load sequence data (simulated)
+   551→def load_genomic_data(accession: str):
+   552→    """Load sequence from NCBI GenBank"""
+   553→    print(f"Loading sequence: {accession}")
+   554→    sequence = "ATGCGATCGATCGTACGATCGATCGTAGCTAGCTAGC"
+   555→    return {
+   556→        'accession': accession,
+   557→        'sequence': sequence,
+   558→        'length': len(sequence),
+   559→        'gc_content': calculate_gc_content(sequence)
+   560→    }
+   561→
+   562→def calculate_gc_content(sequence: str) -> float:
+   563→    """Calculate GC content of DNA sequence"""
+   564→    gc_count = sequence.upper().count('G') + sequence.upper().count('C')
+   565→    return (gc_count / len(sequence)) * 100 if sequence else 0
+   566→
+   567→# Main analysis pipeline
+   568→if __name__ == "__main__":
+   569→    brca1_data = load_genomic_data("NM_001301717.2")
+   570→    print(f"GC Content: {brca1_data['gc_content']:.2f}%")`),
+   571→    language: createDynamicField('python'),
+   572→    createdAt: new Date(Date.now() - 86400000),
+   573→    lastModified: new Date(Date.now() - 3600000),
+   574→    isModified: false,
+   575→    sizeBytes: 4892,
+   576→    tabOrder: 0,
+   577→  },
+   578→  {
+   579→    id: 'file-002',
+   580→    name: createDynamicField('query.sql'),
+   581→    content: createDynamicField(`-- Find highly cited papers in bioinformatics
+   582→SELECT 
+   583→    p.title,
+   584→    p.authors,
+   585→    p.year,
+   586→    p.citations,
+   587→    p.journal
+   588→FROM publications p
+   589→WHERE p.field = 'Bioinformatics'
+   590→    AND p.year >= 2020
+   591→ORDER BY p.citations DESC
+   592→LIMIT 20;`),
+   593→    language: createDynamicField('sql'),
+   594→    createdAt: new Date(Date.now() - 172800000),
+   595→    lastModified: new Date(Date.now() - 7200000),
+   596→    isModified: false,
+   597→    sizeBytes: 1256,
+   598→    tabOrder: 1,
+   599→  },
+   600→];
+   601→
+   602→const generateSyntheticDatasets = (): DatasetRecord[] => [
+   603→  {
+   604→    id: 'ds-001',
+   605→    name: createDynamicField('TCGA Expression Matrix'),
+   606→    description: createDynamicField('RNA-seq gene expression data from The Cancer Genome Atlas across 33 cancer types'),
+   607→    size: createDynamicField('4.2 GB'),
+   608→    rows: createDynamicField(24500000),
+   609→    columns: createDynamicField(25000),
+   610→    type: createDynamicField('Gene Expression'),
+   611→    format: createDynamicField('Parquet'),
+   612→    sourceUrl: createDynamicField('https://portal.gdc.cancer.gov/'),
+   613→    tags: createDynamicField(['cancer', 'genomics', 'expression', 'tcga']),
+   614→    lastModified: new Date(Date.now() - 604800000),
+   615→    isPublic: createDynamicField(true),
+   616→    storageLocation: 'indexeddb',
+   617→    downloadCount: 1247,
+   618→  },
+   619→  {
+   620→    id: 'ds-002',
+   621→    name: createDynamicField('Human Protein Atlas'),
+   622→    description: createDynamicField('Tissue-specific protein expression profiles for all human proteins'),
+   623→    size: createDynamicField('1.8 GB'),
+   624→    rows: createDynamicField(15000000),
+   625→    columns: createDynamicField(180),
+   626→    type: createDynamicField('Proteomics'),
+   627→    format: createDynamicField('HDF5'),
+   628→    sourceUrl: createDynamicField('https://www.proteinatlas.org/'),
+   629→    tags: createDynamicField(['protein', 'tissue', 'expression', 'human']),
+   630→    lastModified: new Date(Date.now() - 2592000000),
+   631→    isPublic: createDynamicField(true),
+   632→    storageLocation: 'local',
+   633→    downloadCount: 3421,
+   634→  },
+   635→  {
+   636→    id: 'ds-003',
+   637→    name: createDynamicField('ChEMBL Bioactivity'),
+   638→    description: createDynamicField('Compound bioactivity data with target binding affinities and drug-like properties'),
+   639→    size: createDynamicField('890 MB'),
+   640→    rows: createDynamicField(2400000),
+   641→    columns: createDynamicField(45),
+   642→    type: createDynamicField('Chemical Biology'),
+   643→    format: createDynamicField('CSV'),
+   644→    sourceUrl: createDynamicField('https://www.ebi.ac.uk/chembl/'),
+   645→    tags: createDynamicField(['drug', 'bioactivity', 'compound', 'target']),
+   646→    lastModified: new Date(Date.now() - 7776000000),
+   647→    isPublic: createDynamicField(true),
+   648→    storageLocation: 'duckdb',
+   649→    downloadCount: 8932,
+   650→  },
+   651→  {
+   652→    id: 'ds-004',
+   653→    name: createDynamicField('PDB Structures'),
+   654→    description: createDynamicField('3D coordinates and metadata for experimentally determined protein structures'),
+   655→    size: createDynamicField('15 GB'),
+   656→    rows: createDynamicField(200000),
+   657→    columns: createDynamicField(95),
+   658→    type: createDynamicField('Structural Biology'),
+   659→    format: createDynamicField('mmCIF'),
+   660→    sourceUrl: createDynamicField('https://www.rcsb.org/'),
+   661→    tags: createDynamicField(['structure', 'protein', '3d', 'experimental']),
+   662→    lastModified: new Date(Date.now() - 2592000),
+   663→    isPublic: createDynamicField(true),
+   664→    storageLocation: 'postgres',
+   665→    downloadCount: 15678,
+   666→  },
+   667→  {
+   668→    id: 'ds-005',
+   669→    name: createDynamicField('gnomAD Variants'),
+   670→    description: createDynamicField('Genome aggregation database containing allele frequencies from large-scale sequencing'),
+   671→    size: createDynamicField('12 GB'),
+   672→    rows: createDynamicField(350000000),
+   673→    columns: createDynamicField(30),
+   674→    type: createDynamicField('Genomics'),
+   675→    format: createDynamicField('VCF/BCF'),
+   676→    sourceUrl: createDynamicField('https://gnomad.broadinstitute.org/'),
+   677→    tags: createDynamicField(['variants', 'population', 'frequency', 'genome']),
+   678→    lastModified: new Date(Date.now() - 31536000000),
+   679→    isPublic: createDynamicField(true),
+   680→    storageLocation: 'duckdb',
+   681→    downloadCount: 24567,
+   682→  },
+   683→  {
+   684→    id: 'ds-006',
+   685→    name: createDynamicField('arXiv ML Papers'),
+   686→    description: createDynamicField('Machine learning paper metadata and abstracts from arXiv preprint server'),
+   687→    size: createDynamicField('450 MB'),
+   688→    rows: createDynamicField(85000),
+   689→    columns: createDynamicField(25),
+   690→    type: createDynamicField('Literature'),
+   691→    format: createDynamicField('JSON'),
+   692→    sourceUrl: createDynamicField('https://arxiv.org/list/cs.LG/recent'),
+   693→    tags: createDynamicField(['machine-learning', 'papers', 'preprints', 'cs']),
+   694→    lastModified: new Date(Date.now() - 86400000),
+   695→    isPublic: createDynamicField(true),
+   696→    storageLocation: 'local',
+   697→    downloadCount: 5678,
+   698→  },
+   699→];
+   700→
+   701→const generateSyntheticMembers = (): CollaborationMember[] => [
+   702→  {
+   703→    id: 'mem-001',
+   704→    name: createDynamicField('Dr. Sarah Chen'),
+   705→    email: createDynamicField('s.chen@research.edu'),
+   706→    role: createDynamicField('pi'),
+   707→    institution: createDynamicField('MIT Broad Institute'),
+   708→    orcid: createDynamicField('0000-0001-2345-6789'),
+   709→    isOnline: createDynamicField(true),
+   710→    joinedAt: new Date(Date.now() - 31536000000),
+   711→    publications: createDynamicField(47),
+   712→  },
+   713→  {
+   714→    id: 'mem-002',
+   715→    name: createDynamicField('Dr. James Wilson'),
+   716→    email: createDynamicField('j.wilson@lab.edu'),
+   717→    role: createDynamicField('postdoc'),
+   718→    institution: createDynamicField('Stanford University'),
+   719→    orcid: createDynamicField('0000-0002-3456-7890'),
+   720→    isOnline: createDynamicField(true),
+   721→    joinedAt: new Date(Date.now() - 15768000000),
+   722→    publications: createDynamicField(23),
+   723→  },
+   724→  {
+   725→    id: 'mem-003',
+   726→    name: createDynamicField('Emily Rodriguez'),
+   727→    email: createDynamicField('e.rodriguez@grad.edu'),
+   728→    role: createDynamicField('phd'),
+   729→    institution: createDynamicField('UC Berkeley'),
+   730→    orcid: createDynamicField('0000-0003-4567-8901'),
+   731→    isOnline: createDynamicField(false),
+   732→    joinedAt: new Date(Date.now() - 63072000000),
+   733→    publications: createDynamicField(8),
+   734→  },
+   735→  {
+   736→    id: 'mem-004',
+   737→    name: createDynamicField('Michael Kim'),
+   738→    email: createDynamicField('m.kim@data.io'),
+   739→    role: createDynamicField('data_scientist'),
+   740→    institution: createDynamicField('Google Research'),
+   741→    orcid: createDynamicField('0000-0004-5678-9012'),
+   742→    isOnline: createDynamicField(true),
+   743→    joinedAt: new Date(Date.now() - 94608000000),
+   744→    publications: createDynamicField(15),
+   745→  },
+   746→  {
+   747→    id: 'mem-005',
+   748→    name: createDynamicField('Dr. Anna Patel'),
+   749→    email: createDynamicField('a.patel@pharma.com'),
+   750→    role: createDynamicField('researcher'),
+   751→    institution: createDynamicField('Pfizer R&D'),
+   752→    orcid: createDynamicField('0000-0005-6789-0123'),
+   753→    isOnline: createDynamicField(false),
+   754→    joinedAt: new Date(Date.now() - 47304000000),
+   755→    publications: createDynamicField(31),
+   756→  },
+   757→];
+   758→
+   759→const generateSyntheticProjects = (): CollaborationProject[] => [
+   760→  {
+   761→    id: 'proj-001',
+   762→    name: createDynamicField('Cancer Genomics Study'),
+   763→    description: createDynamicField('Multi-omics integration for identifying novel cancer biomarkers using TCGA and GTEx data'),
+   764→    members: ['mem-001', 'mem-002', 'mem-003'],
+   765→    status: createDynamicField('active'),
+   766→    createdAt: new Date(Date.now() - 15768000000),
+   767→    lastActivity: new Date(Date.now() - 3600000),
+   768→    datasets: ['ds-001', 'ds-002', 'ds-005'],
+   769→    discussions: [],
+   770→  },
+   771→  {
+   772→    id: 'proj-002',
+   773→    name: createDynamicField('Drug Discovery Pipeline'),
+   774→    description: createDynamicField('Virtual screening and molecular docking for EGFR inhibitor development'),
+   775→    members: ['mem-001', 'mem-004', 'mem-005'],
+   776→    status: createDynamicField('active'),
+   777→    createdAt: new Date(Date.now() - 94608000000),
+   778→    lastActivity: new Date(Date.now() - 86400000),
+   779→    datasets: ['ds-003'],
+   780→    discussions: [],
+   781→  },
+   782→  {
+   783→    id: 'proj-003',
+   784→    name: createDynamicField('Protein Structure Prediction'),
+   785→    description: createDynamicField('Benchmarking AlphaFold predictions against experimental structures'),
+   786→    members: ['mem-002', 'mem-003'],
+   787→    status: createDynamicField('paused'),
+   788→    createdAt: new Date(Date.now() - 63072000000),
+   789→    lastActivity: new Date(Date.now() - 2592000000),
+   790→    datasets: ['ds-004'],
+   791→    discussions: [],
+   792→  },
+   793→  {
+   794→    id: 'proj-004',
+   795→    name: createDynamicField('ML Literature Review'),
+   796→    description: createDynamicField('Systematic review of machine learning applications in biomedical research'),
+   797→    members: ['mem-004'],
+   798→    status: createDynamicField('active'),
+   799→    createdAt: new Date(Date.now() - 31536000000),
+   800→    lastActivity: new Date(Date.now() - 172800000),
+   801→    datasets: ['ds-006'],
+   802→    discussions: [],
+   803→  },
+   804→];
+   805→
+   806→// ============ STORE CREATION ============
+   807→
+   808→export const useDynamicStore = create<SciHubDynamicStore>()(
+   809→  persist(
+   810→    (set, get) => ({
+   811→      // ========== DASHBOARD ==========
+   812→      dashboardStats: generateSyntheticDashboardStats(),
+   813→      activities: [
+   814→        { id: 'act-1', type: 'search', message: createDynamicField('Searched for "CRISPR gene editing" in PubMed'), timestamp: new Date(Date.now() - 300000), icon: '🔍' },
+   815→        { id: 'act-2', type: 'save', message: createDynamicField('Saved paper "Advances in Protein Folding" to favorites'), timestamp: new Date(Date.now() - 900000), icon: '⭐' },
+   816→        { id: 'act-3', type: 'job', message: createDynamicField('Variant calling pipeline completed successfully'), timestamp: new Date(Date.now() - 1800000), icon: '⚙️' },
+   817→        { id: 'act-4', type: 'collaboration', message: createDynamicField('Dr. Smith joined project "Cancer Genomics Study"'), timestamp: new Date(Date.now() - 2700000), icon: '👥' },
+   818→        { id: 'act-5', type: 'export', message: createDynamicField('Exported dataset "TCGA Expression Matrix" as CSV'), timestamp: new Date(Date.now() - 3600000), icon: '📤' },
+   819→      ],
+   820→
+   821→      updateDashboardStat: (key, value) => set((state) => ({
+   822→        dashboardStats: {
+   823→          ...state.dashboardStats,
+   824→          [key]: updateDynamicField(state.dashboardStats[key], value),
+   825→        },
+   826→      })),
+   827→
+   828→      addActivity: (activity) => set((state) => ({
+   829→        activities: [
+   830→          { ...activity, id: `act-${Date.now()}`, timestamp: new Date() },
+   831→          ...state.activities.slice(0, 49), // Keep last 50
+   832→        ],
+   833→      })),
+   834→
+   835→      clearActivities: () => set({ activities: [] }),
+   836→
+   837→      // ========== CONNECTORS ==========
+   838→      connectors: generateSyntheticConnectors(),
+   839→
+   840→      toggleConnector: async (id) => {
+   841→        const connector = get().connectors.find((c) => c.id === id);
+   842→        if (!connector) return;
+   843→
+   844→        const newConnectedState = !connector.isConnected.value;
+   845→
+   846→        set((state) => ({
+   847→          connectors: state.connectors.map((c) =>
+   848→            c.id === id
+   849→              ? { ...c, isConnected: updateDynamicField(c.isConnected, newConnectedState), syncStatus: 'syncing' as const }
+   850→              : c
+   851→          ),
+   852→        }));
+   853→
+   854→        // Simulate API call delay
+   855→        await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 2000));
+   856→
+   857→        set((state) => ({
+   858→          connectors: state.connectors.map((c) =>
+   859→            c.id === id
+   860→              ? {
+   861→                  ...c,
+   862→                  isConnected: updateDynamicField(c.isConnected, newConnectedState),
+   863→                  syncStatus: newConnectedState ? ('success' as const) : ('idle' as const),
+   864→                  lastSync: newConnectedState ? new Date() : undefined,
+   865→                }
+   866→              : c
+   867→          ),
+   868→        }));
+   869→
+   870→        get().addActivity({
+   871→          type: newConnectedState ? 'connect' : 'disconnect',
+   872→          message: createDynamicField(`${newConnectedState ? 'Connected to' : 'Disconnected from'} ${connector.name}`),
+   873→          icon: newConnectedState ? '✅' : '❌',
+   874→        });
+   875→      },
+   876→
+   877→      updateConnectorApiKey: (id, key) =>
+   878→        set((state) => ({
+   879→          connectors: state.connectors.map((c) =>
+   880→            c.id === id ? { ...c, apiKey: updateDynamicField(c.apiKey, key) } : c
+   881→          ),
+   882→        })),
+   883→
+   884→      syncConnector: async (id) => {
+   885→        set((state) => ({
+   886→          connectors: state.connectors.map((c) =>
+   887→            c.id === id ? { ...c, syncStatus: 'syncing' as const } : c
+   888→          ),
+   889→        }));
+   890→
+   891→        await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 3000));
+   892→
+   893→        const connector = get().connectors.find((c) => c.id === id);
+   894→        const newRecordCount = connector?.recordCount.value
+   895→          ? Math.floor(connector.recordCount.value * (1 + (Math.random() - 0.5) * 0.01))
+   896→          : 0;
+   897→
+   898→        set((state) => ({
+   899→          connectors: state.connectors.map((c) =>
+   900→            c.id === id
+   901→              ? {
+   902→                  ...c,
+   903→                  syncStatus: 'success' as const,
+   904→                  lastSync: new Date(),
+   905→                  recordCount: updateDynamicField(c.recordCount || createDynamicField(0), newRecordCount),
+   906→                }
+   907→              : c
+   908→          ),
+   909→        }));
+   910→      },
+   911→
+   912→      // ========== WORKSPACE ==========
+   913→      workspaceFiles: generateSyntheticWorkspaceFiles(),
+   914→
+   915→      createFile: (name, language, content) => {
+   916→        const newFile: WorkspaceFile = {
+   917→          id: `file-${Date.now()}`,
+   918→          name: createDynamicField(name),
+   919→          content: createDynamicField(content),
+   920→          language: createDynamicField(language),
+   921→          createdAt: new Date(),
+   922→          lastModified: new Date(),
+   923→          isModified: true,
+   924→          sizeBytes: calculateDataSize(content),
+   925→          tabOrder: get().workspaceFiles.length,
+   926→        };
+   927→
+   928→        set((state) => ({
+   929→          workspaceFiles: [...state.workspaceFiles, newFile],
+   930→        }));
+   931→
+   932→        get().addActivity({
+   933→          type: 'create',
+   934→          message: createDynamicField(`Created file "${name}"`),
+   935→          icon: '📄',
+   936→        });
+   937→      },
+   938→
+   939→      updateFileContent: (id, content) =>
+   940→        set((state) => ({
+   941→          workspaceFiles: state.workspaceFiles.map((f) =>
+   942→            f.id === id
+   943→              ? {
+   944→                  ...f,
+   945→                  content: updateDynamicField(f.content, content),
+   946→                  lastModified: new Date(),
+   947→                  isModified: true,
+   948→                  sizeBytes: calculateDataSize(content),
+   949→                }
+   950→              : f
+   951→          ),
+   952→        })),
+   953→
+   954→      deleteFile: (id) => {
+   955→        const file = get().workspaceFiles.find((f) => f.id === id);
+   956→        set((state) => ({
+   957→          workspaceFiles: state.workspaceFiles.filter((f) => f.id !== id),
+   958→        }));
+   959→        if (file) {
+   960→          get().addActivity({
+   961→            type: 'delete',
+   962→            message: createDynamicField(`Deleted file "${file.name.value}"`),
+   963→            icon: '🗑️',
+   964→          });
+   965→        }
+   966→      },
+   967→
+   968→      reorderFiles: (fileIds) =>
+   969→        set((state) => ({
+   970→          workspaceFiles: state.workspaceFiles
+   971→            .map((f) => ({ ...f, tabOrder: fileIds.indexOf(f.id) }))
+   972→            .sort((a, b) => a.tabOrder - b.tabOrder),
+   973→        })),
+   974→
+   975→      // ========== DATA LAKE ==========
+   976→      datasets: generateSyntheticDatasets(),
+   977→
+   978→      createDataset: (dataset) => {
+   979→        const newDataset: DatasetRecord = {
+   980→          ...dataset,
+   981→          id: `ds-${Date.now()}`,
+   982→          lastModified: new Date(),
+   983→          downloadCount: 0,
+   984→        };
+   985→
+   986→        set((state) => ({
+   987→          datasets: [...state.datasets, newDataset],
+   988→        }));
+   989→
+   990→        get().addActivity({
+   991→          type: 'upload',
+   992→          message: createDynamicField(`Uploaded dataset "${dataset.name.value}"`),
+   993→          icon: '📊',
+   994→        });
+   995→      },
+   996→
+   997→      updateDataset: (id, updates) =>
+   998→        set((state) => ({
+   999→          datasets: state.datasets.map((d) =>
+  1000→            d.id === id ? { ...d, ...updates, lastModified: new Date() } : d
+  1001→          ),
+  1002→        })),
+  1003→
+  1004→      deleteDataset: (id) => {
+  1005→        const dataset = get().datasets.find((d) => d.id === id);
+  1006→        set((state) => ({
+  1007→          datasets: state.datasets.filter((d) => d.id !== id),
+  1008→        }));
+  1009→        if (dataset) {
+  1010→          get().addActivity({
+  1011→            type: 'delete',
+  1012→            message: createDynamicField(`Deleted dataset "${dataset.name.value}"`),
+  1013→            icon: '🗑️',
+  1014→          });
+  1015→        }
+  1016→      },
+  1017→
+  1018→      getTotalStorage: () => {
+  1019→        const { datasets } = get();
+  1020→        return datasets.reduce((total, ds) => total + ds.sizeBytes, 0);
+  1021→      },
+  1022→
+  1023→      // ========== QUERY EXECUTOR ==========
+  1024→      queryHistory: [],
+  1025→
+  1026→      addQueryToHistory: (query, results, executionTime, dataSource) => {
+  1027→        const entry: QueryHistoryEntry = {
+  1028→          id: `query-${Date.now()}`,
+  1029→          query: createDynamicField(query),
+  1030→          results,
+  1031→          executionTime: createDynamicField(executionTime),
+  1032→          rowsAffected: createDynamicField(results.length),
+  1033→          timestamp: new Date(),
+  1034→          dataSource,
+  1035→          status: 'success',
+  1036→        };
+  1037→
+  1038→        set((state) => ({
+  1039→          queryHistory: [entry, ...state.queryHistory.slice(0, 99)],
+  1040→        }));
+  1041→
+  1042→        get().addActivity({
+  1043→          type: 'query',
+  1044→          message: createDynamicField(`Executed query on ${dataSource} (${results.length} rows)`),
+  1045→          icon: '🔎',
+  1046→        });
+  1047→      },
+  1048→
+  1049→      clearQueryHistory: () => set({ queryHistory: [] }),
+  1050→
+  1051→      // ========== COMPUTE LAYER ==========
+  1052→      computeJobs: [],
+  1053→
+  1054→      createJob: (job) => {
+  1055→        const newJob: ComputeJob = {
+  1056→          ...job,
+  1057→          id: `job-${Date.now()}`,
+  1058→          submittedAt: new Date(),
+  1059→          logs: [{ timestamp: new Date(), level: 'INFO', message: 'Job submitted to queue' }],
+  1060→          progress: createDynamicField(0),
+  1061→          status: createDynamicField('queued'),
+  1062→        };
+  1063→
+  1064→        set((state) => ({
+  1065→          computeJobs: [...state.computeJobs, newJob],
+  1066→        }));
+  1067→
+  1068→        get().addActivity({
+  1069→          type: 'job',
+  1070→          message: createDynamicField(`Submitted job "${job.name.value}"`),
+  1071→          icon: '⚡',
+  1072→        });
+  1073→      },
+  1074→
+  1075→      updateJobProgress: (id, progress) =>
+  1076→        set((state) => ({
+  1077→          computeJobs: state.computeJobs.map((j) =>
+  1078→            j.id === id
+  1079→              ? {
+  1080→                  ...j,
+  1081→                  progress: updateDynamicField(j.progress, progress),
+  1082→                  ...(progress >= 100
+  1083→                    ? { status: updateDynamicField(j.status, 'completed'), completedAt: new Date() }
+  1084→                    : {}),
+  1085→                }
+  1086→              : j
+  1087→          ),
+  1088→        })),
+  1089→
+  1090→      cancelJob: (id) =>
+  1091→        set((state) => ({
+  1092→          computeJobs: state.computeJobs.map((j) =>
+  1093→            j.id === id
+  1094→              ? {
+  1095→                  ...j,
+  1096→                  status: updateDynamicField(j.status, 'cancelled'),
+  1097→                  logs: [...j.logs, { timestamp: new Date(), level: 'WARN', message: 'Job cancelled by user' }],
+  1098→                }
+  1099→              : j
+  1100→          ),
+  1101→        })),
+  1102→
+  1103→      getActiveJobs: () => get().computeJobs.filter((j) => j.status.value === 'running'),
+  1104→
+  1105→      // ========== COLLABORATION ==========
+  1106→      members: generateSyntheticMembers(),
+  1107→      projects: generateSyntheticProjects(),
+  1108→
+  1109→      addMember: (member) => {
+  1110→        const newMember: CollaborationMember = {
+  1111→          ...member,
+  1112→          id: `mem-${Date.now()}`,
+  1113→          joinedAt: new Date(),
+  1114→        };
+  1115→
+  1116→        set((state) => ({
+  1117→          members: [...state.members, newMember],
+  1118→        }));
+  1119→
+  1120→        get().addActivity({
+  1121→          type: 'collaboration',
+  1122→          message: createDynamicField(`${member.name.value} joined the team`),
+  1123→          icon: '👋',
+  1124→        });
+  1125→      },
+  1126→
+  1127→      updateMember: (id, updates) =>
+  1128→        set((state) => ({
+  1129→          members: state.members.map((m) => (m.id === id ? { ...m, ...updates } : m)),
+  1130→        })),
+  1131→
+  1132→      removeMember: (id) => {
+  1133→        const member = get().members.find((m) => m.id === id);
+  1134→        set((state) => ({
+  1135→          members: state.members.filter((m) => m.id !== id),
+  1136→        }));
+  1137→        if (member) {
+  1138→          get().addActivity({
+  1139→            type: 'collaboration',
+  1140→            message: createDynamicField(`${member.name.value} left the team`),
+  1141→            icon: '👋',
+  1142→          });
+  1143→        }
+  1144→      },
+  1145→
+  1146→      createProject: (project) => {
+  1147→        const newProject: CollaborationProject = {
+  1148→          ...project,
+  1149→          id: `proj-${Date.now()}`,
+  1150→          createdAt: new Date(),
+  1151→          lastActivity: new Date(),
+  1152→          discussions: [],
+  1153→        };
+  1154→
+  1155→        set((state) => ({
+  1156→          projects: [...state.projects, newProject],
+  1157→        }));
+  1158→      },
+  1159→
+  1160→      addDiscussion: (projectId, discussion) => {
+  1161→        const newThread: DiscussionThread = {
+  1162→          ...discussion,
+  1163→          id: `disc-${Date.now()}`,
+  1164→          createdAt: new Date(),
+  1165→          replies: [],
+  1166→        };
+  1167→
+  1168→        set((state) => ({
+  1169→          projects: state.projects.map((p) =>
+  1170→            p.id === projectId
+  1171→              ? { ...p, discussions: [...p.discussions, newThread], lastActivity: new Date() }
+  1172→              : p
+  1173→          ),
+  1174→        }));
+  1175→      },
+  1176→
+  1177→      // ========== AETHEL AI ==========
+  1178→      aethelPrompts: [],
+  1179→
+  1180→      submitPrompt: (prompt) => {
+  1181→        const newPrompt: AETHELPrompt = {
+  1182→          ...prompt,
+  1183→          id: `prompt-${Date.now()}`,
+  1184→          status: 'queued',
+  1185→        };
+  1186→
+  1187→        set((state) => ({
+  1188→          aethelPrompts: [newPrompt, ...state.aethelPrompts.slice(0, 19)],
+  1189→        }));
+  1190→
+  1191→        get().addActivity({
+  1192→          type: 'compute',
+  1193→          message: createDynamicField(`Submitted prompt to ${prompt.model.value}`),
+  1194→          icon: '🤖',
+  1195→        });
+  1196→      },
+  1197→
+  1198→      clearPromptHistory: () => set({ aethelPrompts: [] }),
+  1199→
+  1200→      // ========== KNOWLEDGE GRAPH ==========
+  1201→      graphNodes: [],
+  1202→      graphEdges: [],
+  1203→
+  1204→      addNode: (node) => {
+  1205→        const newNode: KnowledgeGraphNode = {
+  1206→          ...node,
+  1207→          id: `node-${Date.now()}`,
+  1208→          connections: 0,
+  1209→          createdVia: 'user',
+  1210→        };
+  1211→
+  1212→        set((state) => ({
+  1213→          graphNodes: [...state.graphNodes, newNode],
+  1214→        }));
+  1215→      },
+  1216→
+  1217→      addEdge: (edge) => {
+  1218→        const newEdge: KnowledgeGraphEdge = {
+  1219→          ...edge,
+  1220→          id: `edge-${Date.now()}`,
+  1221→          createdBy: 'user',
+  1222→        };
+  1223→
+  1224→        set((state) => ({
+  1225→          graphEdges: [...state.graphEdges, newEdge],
+  1226→          graphNodes: state.graphNodes.map((n) =>
+  1227→            n.id === edge.source || n.id === edge.target
+  1228→              ? { ...n, connections: n.connections + 1 }
+  1229→              : n
+  1230→          ),
+  1231→        }));
+  1232→      },
+  1233→
+  1234→      removeNode: (id) =>
+  1235→        set((state) => ({
+  1236→          graphNodes: state.graphNodes.filter((n) => n.id !== id),
+  1237→          graphEdges: state.graphEdges.filter((e) => e.source !== id && e.target !== id),
+  1238→        })),
+  1239→
+  1240→      removeEdge: (id) =>
+  1241→        set((state) => ({
+  1242→          graphEdges: state.graphEdges.filter((e) => e.id !== id),
+  1243→        })),
+  1244→
+  1245→      // ========== USER PROFILE ==========
+  1246→      userProfile: {
+  1247→        displayName: createDynamicField('Dr. Researcher Name'),
+  1248→        email: createDynamicField('researcher@institution.edu'),
+  1249→        institution: createDynamicField('Leading Research Institution'),
+  1250→        orcid: createDynamicField('0000-0001-2345-6789'),
+  1251→        bio: createDynamicField('Computational biologist specializing in genomics and machine learning applications in biomedical research.'),
+  1252→        role: createDynamicField('researcher'),
+  1253→      },
+  1254→
+  1255→      updateUserProfile: (key, value) =>
+  1256→        set((state) => ({
+  1257→          userProfile: {
+  1258→            ...state.userProfile,
+  1259→            [key]: updateDynamicField(state.userProfile[key], value),
+  1260→          },
+  1261→        })),
+  1262→
+  1263→      resetUserProfile: () =>
+  1264→        set({
+  1265→          userProfile: {
+  1266→            displayName: createDynamicField('Dr. Researcher Name'),
+  1267→            email: createDynamicField('researcher@institution.edu'),
+  1268→            institution: createDynamicField('Leading Research Institution'),
+  1269→            orcid: createDynamicField('0000-0001-2345-6789'),
+  1270→            bio: createDynamicField('Computational biologist specializing in genomics and machine learning.'),
+  1271→            role: createDynamicField('researcher'),
+  1272→          },
+  1273→        }),
+  1274→
+  1275→      // ========== NOTIFICATIONS ==========
+  1276→      notificationPrefs: {
+  1277→        emailJobComplete: createDynamicField(true),
+  1278→        emailCollaborator: createDynamicField(true),
+  1279→        pushUpdates: createDynamicField(false),
+  1280→        weeklyDigest: createDynamicField(true),
+  1281→      },
+  1282→
+  1283→      updateNotificationPref: (key, value) =>
+  1284→        set((state) => ({
+  1285→          notificationPrefs: {
+  1286→            ...state.notificationPrefs,
+  1287→            [key]: updateDynamicField(state.notificationPrefs[key], value),
+  1288→          },
+  1289→        })),
+  1290→
+  1291→      // ========== DATABASE CONFIGURATION ==========
+  1292→      dbConfig: {
+  1293→        enabled: false,
+  1294→        provider: 'duckdb',
+  1295→        connectionString: createDynamicField('memory:scihub_pro.db'),
+  1296→        autoPushThreshold: createDynamicField(50 * 1024 * 1024), // 50MB default
+  1297→        pushHistory: [],
+  1298→      },
+  1299→
+  1300→      updateDbConfig: (key, value) =>
+  1301→        set((state) => ({
+  1302→          dbConfig: { ...state.dbConfig, [key]: value },
+  1303→        })),
+  1304→
+  1305→      checkVolumeThreshold: () => {
+  1306→        const state = get();
+  1307→        const totalSize =
+  1308→          calculateDataSize(state.datasets) +
+  1309→          calculateDataSize(state.workspaceFiles) +
+  1310→          calculateDataSize(state.queryHistory);
+  1311→
+  1312→        return {
+  1313→          exceeded: totalSize > state.dbConfig.autoPushThreshold.value,
+  1314→          totalSize,
+  1315→          shouldPush: totalSize > state.dbConfig.autoPushThreshold.value * 0.8,
+  1316→        };
+  1317→      },
+  1318→
+  1319→      simulatePushToDatabase: async () => {
+  1320→        const startTime = Date.now();
+  1321→
+  1322→        set((state) => ({
+  1323→          dbConfig: {
+  1324→            ...state.dbConfig,
+  1325→            pushHistory: [
+  1326→              ...state.dbConfig.pushHistory,
+  1327→              {
+  1328→                timestamp: new Date(),
+  1329→                recordCount:
+  1330→                  state.datasets.length +
+  1331→                  state.workspaceFiles.length +
+  1332→                  state.queryHistory.length,
+  1333→                volumeBytes: calculateDataSize(state.datasets) + calculateDataSize(state.workspaceFiles),
+  1334→                provider: state.dbConfig.provider,
+  1335→                status: 'success' as const,
+  1336→                duration: 0,
+  1337→              },
+  1338→            ],
+  1339→          },
+  1340→        }));
+  1341→
+  1342→        // Simulate processing time
+  1343→        await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 3000));
+  1344→
+  1345→        const duration = Date.now() - startTime;
+  1346→
+  1347→        set((state) => ({
+  1348→          dbConfig: {
+  1349→            ...state.dbConfig,
+  1350→            lastPush: new Date(),
+  1351→            pushHistory: state.dbConfig.pushHistory.map((record, index) =>
+  1352→              index === state.dbConfig.pushHistory.length - 1
+  1353→                ? { ...record, duration }
+  1354→                : record
+  1355→            ),
+  1356→          },
+  1357→        }));
+  1358→
+  1359→        get().addActivity({
+  1360→          type: 'export',
+  1361→          message: createDynamicField(
+  1362→            `Pushed data to ${get().dbConfig.provider} (${(duration / 1000).toFixed(1)}s)`
+  1363→          ),
+  1364→          icon: '💾',
+  1365→        });
+  1366→
+  1367→        return get().dbConfig.pushHistory[get().dbConfig.pushHistory.length - 1];
+  1368→      },
+  1369→
+  1370→      // ========== UTILITY FUNCTIONS ==========
+  1371→      getDirtyFieldsCount: () => {
+  1372→        const state = get();
+  1373→        let count = 0;
+  1374→
+  1375→        // Count dirty fields in user profile
+  1376→        Object.values(state.userProfile).forEach((field) => {
+  1377→          if ((field as DynamicField).isDirty) count++;
+  1378→        });
+  1379→
+  1380→        // Count dirty fields in connectors
+  1381→        state.connectors.forEach((conn) => {
+  1382→          Object.values(conn).forEach((val) => {
+  1383→            if (val && typeof val === 'object' && 'isDirty' in val && (val as DynamicField).isDirty) count++;
+  1384→          });
+  1385→        });
+  1386→
+  1387→        return count;
+  1388→      },
+  1389→
+  1390→      resetAllFields: () => {
+  1391→        set({
+  1392→          dashboardStats: generateSyntheticDashboardStats(),
+  1393→          userProfile: {
+  1394→            displayName: createDynamicField('Dr. Researcher Name'),
+  1395→            email: createDynamicField('researcher@institution.edu'),
+  1396→            institution: createDynamicField('Leading Research Institution'),
+  1397→            orcid: createDynamicField('0000-0001-2345-6789'),
+  1398→            bio: createDynamicField('Computational biologist specializing in genomics.'),
+  1399→            role: createDynamicField('researcher'),
+  1400→          },
+  1401→        });
+  1402→      },
+  1403→
+  1404→      exportState: () => {
+  1405→        const state = get();
+  1406→        return JSON.stringify(
+  1407→          {
+  1408→            userProfile: state.userProfile,
+  1409→            connectors: state.connectors,
+  1410→            datasets: state.datasets,
+  1411→            workspaceFiles: state.workspaceFiles,
+  1412→            timestamp: new Date().toISOString(),
+  1413→          },
+  1414→          null,
+  1415→          2
+  1416→        );
+  1417→      },
+  1418→
+  1419→      importState: (json) => {
+  1420→        try {
+  1421→          const data = JSON.parse(json);
+  1422→          if (data.userProfile) set({ userProfile: data.userProfile });
+  1423→          if (data.connectors) set({ connectors: data.connectors });
+  1424→          if (data.datasets) set({ datasets: data.datasets });
+  1425→          if (data.workspaceFiles) set({ workspaceFiles: data.workspaceFiles });
+  1426→        } catch (error) {
+  1427→          console.error('Failed to import state:', error);
+  1428→        }
+  1429→      },
+  1430→    }),
+  1431→    {
+  1432→      name: 'scihub-dynamic-store',
+  1433→      storage: createJSONStorage(() => localStorage),
+  1434→      partialize: (state) => ({
+  1435→        userProfile: state.userProfile,
+  1436→        connectors: state.connectors,
+  1437→        datasets: state.datasets,
+  1438→        workspaceFiles: state.workspaceFiles,
+  1439→        notificationPrefs: state.notificationPrefs,
+  1440→        dbConfig: state.dbConfig,
+  1441→        activities: state.activities.slice(0, 20),
+  1442→        queryHistory: state.queryHistory.slice(0, 20),
+  1443→      }),
+  1444→    }
+  1445→  )
+  1446→);
+  1447→
+  1448→// Export helper functions
+  1449→export { createDynamicField, updateDynamicField, resetDynamicField };
+  1450→
