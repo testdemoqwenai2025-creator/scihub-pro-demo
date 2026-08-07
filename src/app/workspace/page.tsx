@@ -5,14 +5,15 @@
  * 
  * Interactive code editor and execution environment with:
  * - Multi-file workspace (Python, SQL, R, Markdown)
- * - Code execution simulation with results
+ * - Code execution simulation with realistic terminal output
  * - File persistence to store
  * - Auto-save functionality
  * - Template library for quick start
+ * - Execution history tracking
  * - Never let user hit a wall - always show next steps
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -52,6 +53,28 @@ interface CodeTemplate {
   code: string;
   category: 'analysis' | 'visualization' | 'ml' | 'data-import' | 'template';
 }
+
+interface ExecutionRecord {
+  id: string;
+  timestamp: Date;
+  language: string;
+  code: string;
+  output: string;
+  duration: number;
+  success: boolean;
+  memory: string;
+}
+
+interface WorkspaceFile {
+  id: string;
+  name: { value: string };
+  content: { value: string };
+  language: 'python' | 'sql' | 'r' | 'markdown' | 'javascript' | 'bash' | 'java' | 'cpp' | 'typescript';
+  isModified: { value: boolean };
+  lastModified: number;
+}
+
+type ExecutionState = 'idle' | 'compiling' | 'running' | 'complete' | 'error';
 
 // ============ CODE TEMPLATES (Pre-seeded for Zero Friction) ============
 
@@ -767,6 +790,498 @@ console.log(\`Ready to visualize \${data.genes.length} genes\`);
   },
 ];
 
+// ============ EXECUTION SIMULATION HELPERS ============
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const generatePythonOutput = (code: string): string => {
+  const lines = code.split('\n');
+  const outputs: string[] = [];
+  
+  // Detect print statements and generate appropriate output
+  const hasPrint = code.includes('print(');
+  const hasDataFrame = code.includes('pd.DataFrame') || code.includes('DataFrame');
+  const hasMatplotlib = code.includes('plt.') || code.includes('matplotlib');
+  const hasDescribe = code.includes('.describe()');
+  
+  if (hasDataFrame || hasPrint) {
+    // Simulate DataFrame creation
+    if (hasDataFrame) {
+      outputs.push('');
+      outputs.push('   gene_id  expression   p_value  log2_fold_change     pathway');
+      outputs.push('0   GENE_0    9.823452  0.045678          -0.234567   Cell Cycle');
+      outputs.push('1   GENE_1   11.234567  0.023456           1.345678  Apoptosis');
+      outputs.push('2   GENE_2    8.765432  0.067890          -0.987654   DNA Repair');
+      outputs.push('3   GENE_3   12.345678  0.012345           2.123456   Signaling');
+      outputs.push('4   GENE_4   10.123456  0.056789          -0.456789   Cell Cycle');
+      outputs.push('...');
+      outputs.push(`[${Math.floor(Math.random() * 50 + 80)} rows x 5 columns]`);
+    }
+    
+    // Simulate print statements
+    if (hasPrint) {
+      outputs.push('');
+      if (code.includes('Loading dataset')) {
+        outputs.push('Loading dataset: ds-001');
+      }
+      if (code.includes('Loaded')) {
+        outputs.push(`Loaded ${Math.floor(Math.random() * 50 + 80)} genes with columns: ['gene_id', 'expression', 'p_value', 'log2_fold_change', 'pathway']`);
+      }
+      if (code.includes('Data Quality')) {
+        outputs.push('');
+        outputs.push('--- Data Quality Report ---');
+        outputs.push('Missing values:');
+        outputs.push('gene_id             0');
+        outputs.push('expression          0');
+        outputs.push('p_value             0');
+        outputs.push('log2_fold_change    0');
+        outputs.push('pathway             0');
+        outputs.push('dtype: int64');
+      }
+      if (code.includes('Outliers detected')) {
+        const outlierCount = Math.floor(Math.random() * 10 + 3);
+        outputs.push(`\\nOutliers detected: ${outlierCount} (${(outlierCount / 100 * 100).toFixed(1)}%)`);
+      }
+      if (code.includes('Statistical Summary') || hasDescribe) {
+        outputs.push('');
+        outputs.push('--- Statistical Summary ---');
+        outputs.push('         expression      p_value  log2_fold_change');
+        outputs.push('count   100.000000   100.000000        100.000000');
+        outputs.push('mean     10.023456     0.048765          0.123456');
+        outputs.push('std       2.012345     0.028765          1.487654');
+        outputs.push('min       4.567890     0.001234         -3.987654');
+        outputs.push('25%       8.654321     0.025678         -0.987654');
+        outputs.push('50%      10.012345     0.048765          0.098765');
+        outputs.push('75%     11.345678     0.069876          1.234567');
+        outputs.push('max      15.678901     0.098765          4.567890');
+      }
+      if (code.includes('Significant genes found')) {
+        const sigCount = Math.floor(Math.random() * 20 + 10);
+        outputs.push(`\\nSignificant genes found: ${sigCount} (${sigCount}%)`);
+      }
+      if (code.includes('Visualization saved')) {
+        outputs.push('\\n✅ Visualization saved to \'analysis_results.png\'');
+      }
+      if (code.includes('exported')) {
+        outputs.push('✅ Results exported to \'significant_genes.csv\'');
+      }
+      if (code.includes('complete')) {
+        outputs.push('\\n🎉 Analysis complete!');
+      }
+    }
+  } else {
+    // Generic Python output
+    outputs.push('Hello, Science!');
+    outputs.push('');
+    outputs.push('[Execution completed successfully]');
+  }
+  
+  // ASCII Chart simulation if matplotlib is used
+  if (hasMatplotlib) {
+    outputs.push('');
+    outputs.push('┌─────────────────────────────────────────────────────────────┐');
+    outputs.push('│                    Volcano Plot                            │');
+    outputs.push('│                                                             │');
+    outputs.push('│  5 │                                    ●                   │');
+    outputs.push('│    │                               ●     ●                  │');
+    outputs.push('│  4 │                          ●  ●  ●     ●                │');
+    outputs.push('│    │                     ●  ●  ●        ●  ●               │');
+    outputs.push('│  3 │                ●  ●  ●                 ●              │');
+    outputs.push('│    │           ●  ●  ●        ----|----●  ●                 │');
+    outputs.push('│  2 │      ●  ●  ●              |    |                       │');
+    outputs.push('│    │   ●  ●                     |    |                       │');
+    outputs.push('│  1 │  ●  ●                      |    |                       │');
+    outputs.push('│    │●                            |    |                       │');
+    outputs.push('│  0 ┼────────────────────────────┼────┼──────────────────────│');
+    outputs.push('│   -4  -3  -2  -1   0   1   2   3    4   Log2 Fold Change    │');
+    outputs.push('└─────────────────────────────────────────────────────────────┘');
+  }
+  
+  return outputs.length > 0 ? '\n' + outputs.join('\n') : '\n[No output]';
+};
+
+const generateSQLOutput = (code: string): string => {
+  const outputs: string[] = [];
+  
+  // Detect query type
+  const hasSelect = code.toUpperCase().includes('SELECT');
+  const hasJoin = code.toUpperCase().includes('JOIN');
+  const hasGroupBy = code.toUpperCase().includes('GROUP BY');
+  const hasCTE = code.toUpperCase().includes('WITH');
+  const hasWindowFunc = code.includes('OVER (');
+  
+  if (hasSelect) {
+    // Query plan
+    outputs.push('');
+    outputs.push('→ Query Plan: Seq Scan on gene_expression_dataset (cost=0.00..142.50 rows=100 width=124)');
+    
+    if (code.toUpperCase().includes('WHERE')) {
+      outputs.push('→ Filter: (p_value < 0.05::double precision)');
+    }
+    if (hasJoin) {
+      outputs.push('→ Hash Join: (cost=145.00..520.30 rows=50 width=256)');
+      outputs.push('→   Hash Cond: (g.gene_id = p.gene_id)');
+    }
+    if (hasGroupBy) {
+      outputs.push('→ GroupAggregate (cost=120.00..180.00 rows=10 width=64)');
+      outputs.push('→   Group Key: pathway');
+      outputs.push('→   Sort Key: sig_count DESC');
+    }
+    
+    outputs.push('');
+    
+    // Result table based on query type
+    if (code.includes('COUNT(*)') && !hasGroupBy) {
+      outputs.push('┌──────────────┬─────────────┬───────────────┬──────────────┬──────────────┬──────────────┐');
+      outputs.push('│ total_records│ unique_genes│ avg_expression│ std_expression│ min_expression│ max_expression│');
+      outputs.push('├──────────────┼─────────────┼───────────────┼──────────────┼──────────────┼──────────────┤');
+      outputs.push('│        1,247│         892│      10.2345  │     2.0123   │     4.5679   │    15.6789   │');
+      outputs.push('└──────────────┴─────────────┴───────────────┴──────────────┴──────────────┴──────────────┘');
+      outputs.push('');
+      outputs.push('→ Returned 1 row in 45ms');
+    } else if (hasGroupBy) {
+      outputs.push('┌───────────────┬───────────┬───────────────┬────────────────┬──────────┐');
+      outputs.push('│    pathway    │ gene_count│ mean_expression│ median_expression│ sig_count│');
+      outputs.push('├───────────────┼───────────┼───────────────┼────────────────┼──────────┤');
+      outputs.push('│ Cell Cycle    │       245│       10.4567  │       10.2345  │       42│');
+      outputs.push('│ Apoptosis     │       198│        9.8765  │        9.7654  │       38│');
+      outputs.push('│ DNA Repair    │       176│       11.2345  │       11.0123  │       28│');
+      outputs.push('│ Signaling     │       234│        9.5432  │        9.4321  │       35│');
+      outputs.push('│ Metabolism    │       187│       10.1234  │        9.9876  │       31│');
+      outputs.push('└───────────────┴───────────┴───────────────┴────────────────┴──────────┘');
+      outputs.push('');
+      outputs.push('→ Returned 5 rows in 128ms');
+    } else if (hasJoin) {
+      outputs.push('┌─────────┬───────────┬────────────┬──────────┬──────────────────┬───────────────────┬────────────────┬───────────────┬──────────────┐');
+      outputs.push('│ gene_id │ gene_name │ expression │ p_value  │   protein_name   │ function_description│ cellular_location│ compound_name │binding_affinity│');
+      outputs.push('├─────────┼───────────┼────────────┼──────────┼──────────────────┼───────────────────┼────────────────┼───────────────┼──────────────┤');
+      outputs.push('│ GENE_042│ TP53      │   14.5678 │ 0.00123  │ P53 protein      │ Tumor suppressor  │ Nucleus        │ Nutlin-3      │          5.2  │');
+      outputs.push('│ GENE_089│ BRCA1     │   13.2345 │ 0.00234  │ BRCA1 protein    │ DNA repair        │ Nucleus        │ Olaparib      │         42.1  │');
+      outputs.push('│ GENE_156│ EGFR      │   12.9876 │ 0.00345  │ EGFR receptor    │ Signal transduction│ Membrane       │ Gefitinib     │        125.6  │');
+      outputs.push('│ ...     │           │            │          │                  │                  │                │               │              │');
+      outputs.push('└─────────┴───────────┴────────────┴──────────┴──────────────────┴───────────────────┴────────────────┴───────────────┴──────────────┘');
+      outputs.push('');
+      outputs.push('→ Returned 47 rows in 234ms');
+    } else if (hasWindowFunc) {
+      outputs.push('┌──────────┬────────────┬───────────┬───────────┬──────────────┬───────────────────┬────────────────────┬────────────────┐');
+      outputs.push('│  gene_id │ expression │  p_value  │fold_change│  expr_rank   │expression_quartile│ prev_expression    │    sample_id   │');
+      outputs.push('├──────────┼────────────┼───────────┼───────────┼──────────────┼───────────────────┼────────────────────┼────────────────┤');
+      outputs.push('│ GENE_012 │   15.2345  │ 0.00234   │  2.34567  │      1       │        4         │     14.1234        │  sample_001    │');
+      outputs.push('│ GENE_045 │   14.9876  │ 0.00345   │  2.12345  │      2       │        4         │     14.5678        │  sample_001    │');
+      outputs.push('│ GENE_078 │   14.5678  │ 0.00456   │  1.98765  │      3       │        4         │     14.2345        │  sample_001    │');
+      outputs.push('│ GENE_023 │   11.2345  │ 0.02345   │ -1.23456  │     45       │        2         │     11.5678        │  sample_001    │');
+      outputs.push('│ ...      │            │           │           │             │                   │                    │                │');
+      outputs.push('└──────────┴────────────┴───────────┴───────────┴──────────────┴───────────────────┴────────────────────┴────────────────┘');
+      outputs.push('');
+      outputs.push('→ Returned 200 rows in 189ms');
+    } else {
+      // Default SELECT result
+      outputs.push('┌─────────┬───────────┬────────────┬──────────┬────────────────┐');
+      outputs.push('│ gene_id │ gene_name │ expression │ p_value  │ log2_fold_change│');
+      outputs.push('├─────────┼───────────┼────────────┼──────────┼────────────────┤');
+      outputs.push('│ GENE_001│ GENEA     │   9.8234   │ 0.04567  │    -0.23456    │');
+      outputs.push('│ GENE_002│ GENEB     │  11.2345   │ 0.02345  │     1.34567    │');
+      outputs.push('│ GENE_003│ GENEC     │   8.7654   │ 0.06789  │    -0.98765    │');
+      outputs.push('│ GENE_004| GENED     │  12.3456   │ 0.01234  │     2.12345    │');
+      outputs.push('│ GENE_005| GENEE     │  10.1234   │ 0.05678  │    -0.45678    │');
+      outputs.push('│ ...     │           │            │          │                │');
+      outputs.push('└─────────┴───────────┴────────────┴──────────┴────────────────┘');
+      outputs.push('');
+      outputs.push('→ Returned 87 rows in 156ms');
+    }
+  }
+  
+  if (hasCTE) {
+    outputs.push('');
+    outputs.push('→ CTE "gene_stats": Materialized (892 rows)');
+    outputs.push('→ CTE "normalized": Materialized (892 rows, filtered to 43 outliers)');
+  }
+  
+  return outputs.length > 0 ? outputs.join('\n') : '\nQuery executed successfully.';
+};
+
+const generateROutput = (code: string): string => {
+  const outputs: string[] = [];
+  
+  const hasCat = code.includes('cat(');
+  const hasPrint = code.includes('print(');
+  const hasSummary = code.includes('summary(');
+  const hasTTest = code.includes('t.test(');
+  const hasAnova = code.includes('aov(');
+  const hasCorr = code.includes('cor(');
+  const hasPCA = code.includes('prcomp(');
+  const hasGgplot = code.includes('ggplot(');
+  
+  // Library loading messages
+  if (code.includes('library(')) {
+    outputs.push('Loading required package: ggplot2');
+    outputs.push('Warning: package \'ggplot2\' was built under R version 4.3.3');
+    outputs.push('Loading required package: pheatmap');
+    outputs.push('Loading required package: corrplot');
+    outputs.push('corrplot 0.92 loaded');
+    outputs.push('');
+  }
+  
+  if (hasCat) {
+    if (code.includes('Dataset loaded')) {
+      outputs.push('Dataset loaded: 100 samples x 4 features');
+    }
+    if (code.includes('Data Summary')) {
+      outputs.push('');
+      outputs.push('=== Data Summary ===');
+      outputs.push('');
+      outputs.push('     gene_A          gene_B          gene_C       ');
+      outputs.push(' Min.   : 4.567   Min.   : 8.123   Min.   :1.234  ');
+      outputs.push(' 1st Qu.: 8.654   1st Qu.:10.456   1st Qu.:3.987  ');
+      outputs.push(' Median :10.123   Median :11.987   Median :5.012  ');
+      outputs.push(' Mean   :10.023   Mean   :11.876   Mean   :5.034  ');
+      outputs.push(' 3rd Qu.:11.456   3rd Qu.:13.234   3rd Qu.:6.078  ');
+      outputs.push(' Max.   :15.678   Max.   :15.987   Max.   :8.976  ');
+    }
+    if (code.includes('Missing values')) {
+      outputs.push('');
+      outputs.push('Missing values:');
+      outputs.push('sample_id       gene_A       gene_B       gene_C        batch ');
+      outputs.push('        0           0           0           0           0 ');
+    }
+  }
+  
+  if (hasSummary) {
+    outputs.push('');
+    outputs.push('=== Statistical Tests ===');
+    outputs.push('');
+    outputs.push('T-test (Gene B):');
+  }
+  
+  if (hasTTest) {
+    outputs.push('');
+    outputs.push('\tWelch Two Sample t-test');
+    outputs.push('');
+    outputs.push('data:  gene_B by group');
+    outputs.push('t = 4.2345, df = 97.123, p-value = 0.0000523');
+    outputs.push('alternative hypothesis: true difference in means is not equal to 0');
+    outputs.push('95 percent confidence interval:');
+    outputs.push(' 1.234567 3.456789');
+    outputs.push('sample estimates:');
+    outputs.push('mean in group Control mean in group Treatment ');
+    outputs.push('           10.123456            11.768789 ');
+    outputs.push('');
+    outputs.push("Cohen's d: 0.847");
+  }
+  
+  if (hasAnova) {
+    outputs.push('');
+    outputs.push('ANOVA (Gene A by Batch):');
+    outputs.push('            Df Sum Sq Mean Sq F value Pr(>F)  ');
+    outputs.push('batch        4  45.67  11.418   2.987  0.0234 *');
+    outputs.push('Residuals   95 364.32   3.835                 ');
+    outputs.push('---');
+    outputs.push('Signif. codes:  0 \'***\' 0.001 \'**\' 0.01 \'*\' 0.05 \'.\' 0.1 \' \' 1');
+  }
+  
+  if (hasCorr) {
+    outputs.push('');
+    outputs.push('Correlation Matrix:');
+    outputs.push('         gene_A gene_B gene_C');
+    outputs.push('gene_A  1.000  0.234 -0.123');
+    outputs.push('gene_B  0.234  1.000  0.456');
+    outputs.push('gene_C -0.123  0.456  1.000');
+  }
+  
+  if (hasPCA) {
+    outputs.push('');
+    outputs.push('=== PCA Results ===');
+    outputs.push('Variance explained:');
+    outputs.push('                            PC1     PC2     PC3');
+    outputs.push('Standard deviation     1.4567  0.9876  0.8234');
+    outputs.push('Proportion of Variance 0.5234  0.2401  0.1665');
+    outputs.push('Cumulative Proportion  0.5234  0.7635  1.0000');
+  }
+  
+  if (hasGgplot) {
+    outputs.push('');
+    outputs.push('`geom_smooth()` using formula = \'y ~ x\'');
+    outputs.push('');
+    outputs.push('┌─────────────────────────────────────────────────────────────┐');
+    outputs.push('│              Gene A Distribution by Group                 │');
+    outputs.push('│                                                             │');
+    outputs.push('│  Count  30 │  ████                                           │');
+    outputs.push('│         25 │  █████                                         │');
+    outputs.push('│         20 │  ███████                                       │');
+    outputs.push('│         15 │  █████████                                     │');
+    outputs.push('│         10 │  ███████████                                   │');
+    outputs.push('│          5 │  █████████████                                 │');
+    outputs.push('│          0 │  ████████████████                              │');
+    outputs.push('│             └────────────────────────────────              │');
+    outputs.push('│              6    8   10   12   14                         │');
+    outputs.push('│                        Expression                           │');
+    outputs.push('└─────────────────────────────────────────────────────────────┘');
+  }
+  
+  if (code.includes('saveRDS')) {
+    outputs.push('');
+    outputs.push('✅ Results saved to \'statistical_results.rds\'');
+    outputs.push('🎉 Analysis complete!');
+  }
+  
+  return outputs.length > 0 ? '\n' + outputs.join('\n') : '\n[No output]';
+};
+
+const generateJSOutput = (code: string): string => {
+  const outputs: string[] = [];
+  
+  const hasConsoleLog = code.includes('console.log');
+  const hasD3 = code.includes('d3.');
+  const hasData = code.includes('const data');
+  
+  if (hasConsoleLog) {
+    if (code.includes('loaded successfully')) {
+      outputs.push('Visualization templates loaded successfully!');
+    }
+    if (code.includes('Ready to visualize')) {
+      outputs.push('Ready to visualize 50 genes');
+    }
+    if (code.includes('Hello, Science!')) {
+      outputs.push('Hello, Science!');
+    }
+  }
+  
+  if (hasData) {
+    outputs.push('');
+    outputs.push('{');
+    outputs.push('  genes: [');
+    outputs.push('    { id: \'GENE_1\', expression: 18.23, pValue: 0.045, foldChange: 2.34, pathway: \'Cell Cycle\', significant: false },');
+    outputs.push('    { id: \'GENE_2\', expression: 12.45, pValue: 0.023, foldChange: -1.56, pathway: \'Apoptosis\', significant: true },');
+    outputs.push('    { id: \'GENE_3\', expression: 22.67, pValue: 0.012, foldChange: 1.89, pathway: \'DNA Repair\', significant: true },');
+    outputs.push('    ... 47 more items');
+    outputs.push('  ]');
+    outputs.push('}');
+  }
+  
+  if (hasD3) {
+    outputs.push('');
+    outputs.push('SVG created: 800x500');
+    outputs.push('Data points rendered: 50');
+    outputs.push('Threshold lines added: 3');
+    outputs.push('Axes configured: X (Log2 Fold Change), Y (-Log10 P-value)');
+  }
+  
+  // Object inspection
+  if (code.includes('createVolcanoPlot')) {
+    outputs.push('');
+    outputs.push('[Function: createVolcanoPlot] {');
+    outputs.push('  length: 1,');
+    outputs.push('  name: \'createVolcanoPlot\'');
+    outputs.push('}');
+  }
+  
+  if (code.includes('createHeatmap')) {
+    outputs.push('');
+    outputs.push('[Function: createHeatmap] {');
+    outputs.push('  length: 1,');
+    outputs.push('  name: \'createHeatmap\'');
+    outputs.push('}');
+  }
+  
+  return outputs.length > 0 ? '\n' + outputs.join('\n') : '\n[No output]';
+};
+
+const generateMarkdownOutput = (code: string): string => {
+  const outputs: string[] = [];
+  
+  outputs.push('');
+  outputs.push('#'.repeat(60));
+  outputs.push('# RENDERED MARKDOWN PREVIEW');
+  outputs.push('#'.repeat(60));
+  outputs.push('');
+  
+  // Simple markdown rendering simulation
+  const lines = code.split('\n');
+  let inCodeBlock = false;
+  
+  for (const line of lines) {
+    if (line.trim().startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      if (inCodeBlock) {
+        outputs.push('<div class="code-block">');
+      } else {
+        outputs.push('</div>');
+      }
+      continue;
+    }
+    
+    if (inCodeBlock) {
+      outputs.push('  ' + line);
+      continue;
+    }
+    
+    // Headers
+    if (line.startsWith('# ')) {
+      outputs.push(`<h1>${line.substring(2)}</h1>`);
+    } else if (line.startsWith('## ')) {
+      outputs.push(`<h2>${line.substring(3)}</h2>`);
+    } else if (line.startsWith('### ')) {
+      outputs.push(`<h3>${line.substring(4)}</h3>`);
+    } else if (line.startsWith('> ')) {
+      outputs.push(`<blockquote>${line.substring(2)}</blockquote>`);
+    } else if (line.startsWith('- ') || line.startsWith('* ')) {
+      outputs.push(`<li>${line.substring(2)}</li>`);
+    } else if (line.match(/^\d+\.\s/)) {
+      outputs.push(`<li>${line.replace(/^\d+\.\s/, '')}</li>`);
+    } else if (line.trim() === '---') {
+      outputs.push('<hr/>');
+    } else if (line.trim()) {
+      outputs.push(`<p>${line}</p>`);
+    }
+  }
+  
+  outputs.push('');
+  outputs.push('#'.repeat(60));
+  outputs.push('*Full Markdown rendering would include syntax highlighting,');
+  outputs.push('table formatting, image embedding, and MathJax support*');
+  outputs.push('#'.repeat(60));
+  
+  return outputs.join('\n');
+};
+
+const generateSimulatedOutput = (lang: string, code: string, duration: number): string => {
+  const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+  const headers: Record<string, string> = {
+    python: `[SciHub Pro] Python 3.11.5 | Started at: ${timestamp}`,
+    sql: `[SciHub Pro] PostgreSQL 16.1 | Started at: ${timestamp}`,
+    r: `[SciHub Pro] R 4.3.2 | Started at: ${timestamp}`,
+    javascript: `[SciHub Pro] Node.js 20.10 | Started at: ${timestamp}`,
+    markdown: `[SciHub Pro] Markdown Renderer | Started at: ${timestamp}`,
+  };
+  
+  let body = '';
+  
+  switch (lang) {
+    case 'python':
+      body = generatePythonOutput(code);
+      break;
+    case 'sql':
+      body = generateSQLOutput(code);
+      break;
+    case 'r':
+      body = generateROutput(code);
+      break;
+    case 'javascript':
+      body = generateJSOutput(code);
+      break;
+    case 'markdown':
+      body = generateMarkdownOutput(code);
+      break;
+    default:
+      body = `\n${'#'.repeat(50)}\n# Output for ${lang.toUpperCase()}\n${'#'.repeat(50)}\n\n[Execution completed successfully]\n`;
+  }
+  
+  const memoryUsage = (Math.random() * 100 + 20).toFixed(1);
+  const footer = `\n[SciHub Pro] Execution completed in ${(duration / 1000).toFixed(3)}s | Memory: ${memoryUsage} MB | Exit code: 0`;
+  
+  return `${headers[lang]}${body}${footer}`;
+};
+
 // ============ WORKSPACE PAGE COMPONENT ============
 
 export default function WorkspacePage() {
@@ -800,11 +1315,27 @@ export default function WorkspacePage() {
   const [executionError, setExecutionError] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
 
+  // NEW: Terminal & Execution Simulation State
+  const [executionState, setExecutionState] = useState<ExecutionState>('idle');
+  const [terminalOutput, setTerminalOutput] = useState<string>('');
+  const [executionHistory, setExecutionHistory] = useState<ExecutionRecord[]>([]);
+  const [showTerminal, setShowTerminal] = useState(true);
+  const [executionStats, setExecutionStats] = useState<{ duration: number; memory: string; exitCode: number } | null>(null);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const terminalRef = useRef<HTMLDivElement>(null);
+
   // Get active file
   const activeFile = workspaceFiles.find((f) => f.id === activeFileId);
 
   // Guidance for this context
   const relevantGuidance = getRelevantGuidance('workspace');
+
+  // Auto-scroll terminal when new output appears
+  useEffect(() => {
+    if (terminalRef.current && showTerminal) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [terminalOutput, executionState, showTerminal]);
 
   // Auto-save effect
   useEffect(() => {
@@ -849,37 +1380,102 @@ export default function WorkspacePage() {
     setAutoSaveStatus('unsaved');
   };
 
-  const handleExecute = async () => {
-    if (!activeFileId) return;
+  // ENHANCED: Run Code with full execution simulation
+  const handleRunCode = async () => {
+    if (!activeFileId || !activeFile) return;
     
-    setIsExecuting(true);
-    setExecutionResult(null);
-    setExecutionError(null);
+    const code = activeFile.content.value;
+    const currentLanguage = activeFile.language;
+    
+    // 1. Set state to compiling
+    setExecutionState('compiling');
+    setSelectedHistoryId(null);
+    const startTime = new Date();
+    setTerminalOutput(`[${startTime.toLocaleTimeString()}] Compiling ${currentLanguage.toUpperCase()} code...\n`);
+    setShowTerminal(true);
+    
+    await sleep(500);
+    
+    // 2. Set state to running with animation
+    setExecutionState('running');
+    setTerminalOutput(prev => prev + `[${new Date().toLocaleTimeString()}] Executing...\n`);
+    
+    // Add running animation dots
+    let dotCount = 0;
+    const dotInterval = setInterval(() => {
+      dotCount = (dotCount + 1) % 4;
+      setTerminalOutput(prev => {
+        // Remove previous animation line and add new one
+        const lines = prev.split('\n');
+        const filteredLines = lines.filter(l => !l.startsWith('[Running]'));
+        return [...filteredLines, `[Running]${'.'.repeat(dotCount)}`].join('\n');
+      });
+    }, 300);
+    
+    // 3. Simulate execution time based on language
+    const execTimes: Record<string, number> = {
+      python: 1200 + Math.random() * 800,
+      sql: 400 + Math.random() * 400,
+      r: 1500 + Math.random() * 1000,
+      javascript: 600 + Math.random() * 600,
+      markdown: 200 + Math.random() * 200,
+    };
+    const execTime = execTimes[currentLanguage] || 1000;
+    
+    await sleep(execTime);
+    
+    // Stop animation
+    clearInterval(dotInterval);
+    
+    // 4. Generate simulated output
+    const output = generateSimulatedOutput(currentLanguage, code, execTime);
+    const memoryUsage = (Math.random() * 100 + 20).toFixed(1);
+    
+    // 5. Show final output (remove animation line)
+    setTerminalOutput(prev => {
+      const lines = prev.split('\n').filter(l => !l.startsWith('[Running]'));
+      return lines.join('\n') + '\n' + output;
+    });
+    
+    setExecutionState('complete');
+    setExecutionStats({
+      duration: execTime,
+      memory: `${memoryUsage} MB`,
+      exitCode: 0,
+    });
+    
+    // Also update legacy state for backward compatibility
+    setExecutionResult(output);
+    
+    // 6. Add to history
+    const record: ExecutionRecord = {
+      id: Date.now().toString(),
+      timestamp: new Date(),
+      language: currentLanguage,
+      code: code.substring(0, 200),
+      output: output,
+      duration: execTime,
+      success: true,
+      memory: `${memoryUsage} MB`,
+    };
+    setExecutionHistory(prev => [record, ...prev].slice(0, 5));
+    
+    // 7. Log activity
+    addActivity({
+      type: 'compute',
+      message: createDynamicField(`Executed ${activeFile.name.value}: Success (${(execTime/1000).toFixed(2)}s)`),
+      icon: '✅',
+    });
+    
+    // 8. Reset to idle after 3 seconds
+    setTimeout(() => {
+      setExecutionState('idle');
+    }, 3000);
+  };
 
-    try {
-      const result = await executeCode(activeFileId);
-      
-      if (result.status === 'success') {
-        setExecutionResult(result.output);
-        addActivity({
-          type: 'compute',
-          message: createDynamicField(`Executed ${activeFile?.name.value}: Success`),
-          icon: '✅',
-        });
-      } else {
-        setExecutionError(result.error || 'Unknown error occurred');
-        addActivity({
-          type: 'error_recovery',
-          message: createDynamicField(`Execution error in ${activeFile?.name.value}`),
-          icon: '⚠️',
-          metadata: { error: result.error },
-        });
-      }
-    } catch (error) {
-      setExecutionError('Failed to execute code');
-    } finally {
-      setIsExecuting(false);
-    }
+  // Legacy handler wrapper for backward compatibility
+  const handleExecute = async () => {
+    await handleRunCode();
   };
 
   const handleUseTemplate = (template: CodeTemplate) => {
@@ -909,6 +1505,25 @@ export default function WorkspacePage() {
       message: createDynamicField(`Deleted file: ${file.name.value}`),
       icon: '🗑️',
     });
+  };
+
+  // View historical execution
+  const handleViewHistory = (record: ExecutionRecord) => {
+    setSelectedHistoryId(record.id);
+    setTerminalOutput(record.output);
+    setExecutionStats({
+      duration: record.duration,
+      memory: record.memory,
+      exitCode: 0,
+    });
+    setShowTerminal(true);
+  };
+
+  // Clear terminal
+  const handleClearTerminal = () => {
+    setTerminalOutput('');
+    setExecutionStats(null);
+    setSelectedHistoryId(null);
   };
 
   // ============ HELPERS ============
@@ -958,6 +1573,44 @@ export default function WorkspacePage() {
     return colors[lang] || 'bg-gray-100 text-gray-800';
   };
 
+  // Get run button configuration based on state
+  const getRunButtonConfig = () => {
+    switch (executionState) {
+      case 'compiling':
+        return {
+          text: '⏳ Compiling...',
+          className: 'bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-white',
+          disabled: true,
+        };
+      case 'running':
+        return {
+          text: '● Executing...',
+          className: 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white animate-pulse',
+          disabled: true,
+        };
+      case 'complete':
+        return {
+          text: '✓ Complete',
+          className: 'bg-gradient-to-r from-green-600 to-teal-600 text-white',
+          disabled: false,
+        };
+      case 'error':
+        return {
+          text: '✗ Error - Retry?',
+          className: 'bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white',
+          disabled: false,
+        };
+      default:
+        return {
+          text: '▶ Run Code',
+          className: 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white',
+          disabled: false,
+        };
+    }
+  };
+
+  const runButtonConfig = getRunButtonConfig();
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -974,6 +1627,24 @@ export default function WorkspacePage() {
 
           {/* Status Indicators */}
           <div className="flex items-center gap-4">
+            {/* Execution Status */}
+            {executionState !== 'idle' && (
+              <Badge 
+                variant="secondary" 
+                className={
+                  executionState === 'running' ? 'animate-pulse bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                  executionState === 'compiling' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
+                  executionState === 'complete' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
+                  'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                }
+              >
+                {executionState === 'compiling' && '⏳ Compiling'}
+                {executionState === 'running' && '● Running'}
+                {executionState === 'complete' && '✓ Complete'}
+                {executionState === 'error' && '✗ Error'}
+              </Badge>
+            )}
+
             {/* Auto-save Status */}
             <div className="flex items-center gap-2 text-sm">
               {autoSaveStatus === 'saved' && <span className="text-green-500">● Saved</span>}
@@ -991,7 +1662,7 @@ export default function WorkspacePage() {
 
       {/* Main Layout */}
       <div className="flex h-[calc(100vh-120px)] mt-6">
-        {/* Sidebar - File List */}
+        {/* Sidebar - File List & History */}
         <div className="w-72 border-r bg-muted/30 flex flex-col">
           {/* File Actions */}
           <div className="p-4 border-b space-y-2">
@@ -1135,6 +1806,47 @@ export default function WorkspacePage() {
               </div>
             )}
           </div>
+
+          {/* Execution History Panel */}
+          {executionHistory.length > 0 && (
+            <div className="border-t p-3 bg-background">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-medium text-sm flex items-center gap-2">
+                  📜 Execution History
+                </h4>
+                <Badge variant="outline" className="text-xs">
+                  {executionHistory.length}
+                </Badge>
+              </div>
+              <div className="space-y-1 max-h-40 overflow-auto">
+                {executionHistory.map((record) => (
+                  <button
+                    key={record.id}
+                    className={`w-full text-left p-2 rounded-md transition-colors text-xs ${
+                      selectedHistoryId === record.id 
+                        ? 'bg-primary/10 border border-primary/30' 
+                        : 'hover:bg-muted'
+                    }`}
+                    onClick={() => handleViewHistory(record)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <span>{getLanguageIcon(record.language as WorkspaceFile['language'])}</span>
+                        <span className="font-medium">{record.language.toUpperCase()}</span>
+                      </span>
+                      <span className={`px-1 rounded ${record.success ? 'text-green-600' : 'text-red-600'}`}>
+                        {record.success ? '✓' : '✗'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between mt-1 text-muted-foreground">
+                      <span>{(record.duration / 1000).toFixed(2)}s</span>
+                      <span>{record.timestamp.toLocaleTimeString()}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Main Editor Area */}
@@ -1152,16 +1864,14 @@ export default function WorkspacePage() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* Enhanced Run Button with States */}
                   <Button
                     size="sm"
                     onClick={handleExecute}
-                    disabled={isExecuting || activeFile.language === 'markdown'}
+                    disabled={runButtonConfig.disabled || (!runButtonConfig.disabled && activeFile.language === 'markdown' && executionState === 'idle')}
+                    className={runButtonConfig.className}
                   >
-                    {isExecuting ? (
-                      <>⏳ Running...</>
-                    ) : (
-                      <>▶️ Run (Ctrl+Enter)</>
-                    )}
+                    {runButtonConfig.text}
                   </Button>
                   
                   <Button
@@ -1186,13 +1896,23 @@ export default function WorkspacePage() {
                   >
                     ⬇️ Download
                   </Button>
+                  
+                  {/* Toggle Terminal Button */}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setShowTerminal(!showTerminal)}
+                    className="gap-1"
+                  >
+                    {showTerminal ? '▼' : '▲'} Terminal
+                  </Button>
                 </div>
               </div>
 
               {/* Editor + Output Split View */}
-              <div className="flex-1 flex overflow-hidden">
+              <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Code Editor */}
-                <div className="flex-1 flex flex-col">
+                <div className={`${showTerminal ? 'flex-1' : 'flex-1'} flex flex-col min-h-0`}>
                   <Textarea
                     value={activeFile.content.value}
                     onChange={(e) => handleContentChange(e.target.value)}
@@ -1224,47 +1944,162 @@ export default function WorkspacePage() {
                   />
                 </div>
 
-                {/* Output Panel */}
-                {(executionResult || executionError || isExecuting) && (
-                  <div className="w-[480px] border-l flex flex-col bg-muted/20">
-                    <div className="px-4 py-2 border-b bg-muted/50 flex items-center justify-between">
-                      <span className="font-medium text-sm">Output</span>
-                      {(executionResult || executionError) && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 w-6 p-0"
-                          onClick={() => {
-                            setExecutionResult(null);
-                            setExecutionError(null);
-                          }}
+                {/* Terminal Output Panel - MAIN FEATURE */}
+                {showTerminal && (
+                  <div className="border-t bg-gray-900 text-gray-100 font-mono text-sm" style={{ height: showTerminal ? '320px' : 'auto', minHeight: '120px', maxHeight: '50vh' }}>
+                    {/* Terminal Header */}
+                    <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-red-500" />
+                        <div className="w-3 h-3 rounded-full bg-yellow-500" />
+                        <div className="w-3 h-3 rounded-full bg-green-500" />
+                        <span className="ml-2 text-xs text-gray-400">
+                          Terminal — {activeFile.language.toUpperCase()}
+                          {selectedHistoryId && ' (History)'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {/* Execution Stats */}
+                        {executionStats && (
+                          <span className="text-xs text-gray-400 flex items-center gap-3">
+                            <span className="flex items-center gap-1">
+                              <span className="text-gray-500">⏱</span>
+                              {(executionStats.duration / 1000).toFixed(2)}s
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <span className="text-gray-500">💾</span>
+                              {executionStats.memory}
+                            </span>
+                            <span className={`flex items-center gap-1 ${executionStats.exitCode === 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              <span>{executionStats.exitCode === 0 ? '✓' : '✗'}</span>
+                              Exit: {executionStats.exitCode}
+                            </span>
+                          </span>
+                        )}
+                        
+                        {/* Terminal Controls */}
+                        <button 
+                          onClick={handleClearTerminal} 
+                          className="text-xs text-gray-400 hover:text-white transition-colors"
                         >
-                          ✕
-                        </Button>
-                      )}
+                          Clear
+                        </button>
+                        <button 
+                          onClick={() => setShowTerminal(false)} 
+                          className="text-xs text-gray-400 hover:text-white transition-colors"
+                        >
+                          Minimize
+                        </button>
+                      </div>
                     </div>
                     
-                    <div className="flex-1 overflow-auto p-4">
-                      {isExecuting && (
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <span className="animate-spin">⏳</span>
-                          <span>Executing code...</span>
+                    {/* Terminal Body */}
+                    <div 
+                      ref={terminalRef}
+                      className="p-4 overflow-y-auto"
+                      style={{ height: 'calc(100% - 40px)' }}
+                    >
+                      {terminalOutput ? (
+                        <pre className="whitespace-pre-wrap text-xs leading-relaxed font-mono">
+                          {/* Syntax highlighting for terminal output */}
+                          {terminalOutput.split('\n').map((line, idx) => {
+                            // Color different parts of the output
+                            if (line.startsWith('[SciHub Pro]')) {
+                              return (
+                                <span key={idx}>
+                                  <span className="text-cyan-400">{line.split('|')[0]}</span>
+                                  {line.includes('|') && <span className="text-gray-400"> | {line.split('|').slice(1).join('|')}</span>}
+                                  {'\n'}
+                                </span>
+                              );
+                            } else if (line.startsWith('[') && line.endsWith(']') && (line.includes('Compiling') || line.includes('Executing'))) {
+                              return <span key={idx} className="text-yellow-400">{line}{'\n'}</span>;
+                            } else if (line.startsWith('[Running]')) {
+                              return <span key={idx} className="text-green-400 animate-pulse">{line}{'\n'}</span>;
+                            } else if (line.startsWith('→ ')) {
+                              return <span key={idx} className="text-blue-400">{line}{'\n'}</span>;
+                            } else if (line.startsWith('│') || line.startsWith('┌') || line.startsWith('├') || line.startsWith('└') || line.startsWith('─')) {
+                              return <span key={idx} className="text-gray-500">{line}{'\n'}</span>;
+                            } else if (line.match(/^(Min\.|Max\.|Mean|Median|1st Qu\.|3rd Qu\.|Standard deviation|count|Df|Sum Sq|Mean Sq|F value|Pr\(>\F\))/)) {
+                              return <span key={idx} className="text-purple-400">{line}{'\n'}</span>;
+                            } else if (/^\s*(True|False)\s*$/.test(line.trim())) {
+                              return <span key={idx} className="text-orange-400">{line}{'\n'}</span>;
+                            } else if (line.includes('✅') || line.includes('🎉')) {
+                              return <span key={idx} className="text-green-400">{line}{'\n'}</span>;
+                            } else if (line.includes('❌') || line.includes('Error')) {
+                              return <span key={idx} className="text-red-400">{line}{'\n'}</span>;
+                            } else if (line.includes('Warning') || line.includes('warning')) {
+                              return <span key={idx} className="text-yellow-400">{line}{'\n'}</span>;
+                            } else if (line.trim() === '' || line.trim() === '...') {
+                              return <span key={idx}>{line}{'\n'}</span>;
+                            } else {
+                              return <span key={idx}>{line}{'\n'}</span>;
+                            }
+                          })}
+                        </pre>
+                      ) : (
+                        <div className="text-gray-500 text-center py-8">
+                          <div className="text-4xl mb-3">▶</div>
+                          <p>Click &quot;Run Code&quot; to execute your code</p>
+                          <p className="text-xs mt-1">(Output will appear here)</p>
+                          
+                          {/* Keyboard shortcut hint */}
+                          <div className="mt-4 inline-flex items-center gap-2 px-3 py-1.5 bg-gray-800 rounded-md text-xs">
+                            <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">Ctrl</kbd>
+                            <span>+</span>
+                            <kbd className="px-1.5 py-0.5 bg-gray-700 rounded text-gray-300">Enter</kbd>
+                          </div>
                         </div>
                       )}
-
-                      {executionResult && (
-                        <pre className="text-sm whitespace-pre-wrap font-mono bg-background p-3 rounded-lg border">
-                          {executionResult}
-                        </pre>
+                      
+                      {/* Running Indicator */}
+                      {executionState === 'running' && (
+                        <div className="flex items-center gap-2 mt-3 text-green-400">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                          </span>
+                          <span className="text-xs">Executing code...</span>
+                        </div>
                       )}
-
-                      {executionError && (
-                        <pre className="text-sm whitespace-pre-wrap font-mono bg-destructive/10 text-destructive p-3 rounded-lg border border-destructive/20">
-                          ❌ Error:\n{executionError}
-                        </pre>
+                      
+                      {/* Compiling Indicator */}
+                      {executionState === 'compiling' && (
+                        <div className="flex items-center gap-2 mt-3 text-yellow-400">
+                          <span className="animate-spin">⏳</span>
+                          <span className="text-xs">Compiling...</span>
+                        </div>
                       )}
                     </div>
                   </div>
+                )}
+
+                {/* Minimized Terminal Bar */}
+                {!showTerminal && (
+                  <button
+                    onClick={() => setShowTerminal(true)}
+                    className="w-full py-2 bg-gray-900 text-gray-100 rounded-t-lg text-sm font-mono flex items-center justify-between px-4 hover:bg-gray-800 transition-colors border-t border-gray-700"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${
+                        executionState === 'running' ? 'bg-green-400 animate-pulse' :
+                        executionState === 'compiling' ? 'bg-yellow-400 animate-pulse' :
+                        executionState === 'complete' ? 'bg-green-500' :
+                        executionState === 'error' ? 'bg-red-500' :
+                        terminalOutput ? 'bg-blue-500' : 'bg-gray-500'
+                      }`} />
+                      Terminal
+                      {executionStats && (
+                        <span className="text-xs text-gray-400">
+                          {(executionStats.duration / 1000).toFixed(2)}s • {executionStats.memory}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-gray-400 flex items-center gap-2">
+                      ↑ Expand
+                      {terminalOutput && <span className="text-green-400">●</span>}
+                    </span>
+                  </button>
                 )}
               </div>
             </>
@@ -1296,6 +2131,8 @@ export default function WorkspacePage() {
                     <li>• Files auto-save every {preferences.autoSaveInterval}s</li>
                     <li>• Use templates for common analysis tasks</li>
                     <li>• Connect datasets from the Data Lake</li>
+                    <li>• View execution history in sidebar</li>
+                    <li>• Terminal shows simulated output per language</li>
                   </ul>
                 </div>
               </div>

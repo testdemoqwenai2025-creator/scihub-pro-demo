@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { ComputeSkeleton, CardSkeleton } from '@/components/SkeletonComponents';
 
 // ============ TYPES ============
 
@@ -177,6 +178,7 @@ export default function ComputePage() {
   const [nodes] = useState<ComputeNode[]>(INITIAL_NODES);
   const [selectedJob, setSelectedJob] = useState<ComputeJob | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Form state
   const [newJobName, setNewJobName] = useState('');
@@ -184,6 +186,12 @@ export default function ComputePage() {
   const [newJobPriority, setNewJobPriority] = useState<ComputeJob['priority']>('normal');
   const [newJobDataset, setNewJobDataset] = useState('');
   const [newJobGpus, setNewJobGpus] = useState(1);
+
+  // Simulate loading on mount
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Auto-update running jobs
   useEffect(() => {
@@ -330,6 +338,15 @@ export default function ComputePage() {
     if (hours < 24) return `${hours}h ago`;
     return `${Math.floor(hours / 24)}d ago`;
   };
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <ComputeSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">

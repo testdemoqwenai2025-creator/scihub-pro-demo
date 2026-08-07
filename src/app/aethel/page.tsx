@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { AethelSkeleton, ChatBubbleSkeleton } from '@/components/SkeletonComponents';
 
 // ============ SUGGESTED PROMPTS ============
 
@@ -92,10 +93,17 @@ export default function AethelPage() {
   const [promptInput, setPromptInput] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [showHistory, setShowHistory] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Get selected model
   const selectedModel = aethelModels.find(m => m.id === selectedModelId);
+
+  // Simulate loading on mount
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Token usage stats
   const totalTokensUsed = aethelQueries.reduce((sum, q) => sum + q.tokensUsed.value, 0);
@@ -163,6 +171,15 @@ export default function AethelPage() {
     if (tokens >= 1000) return `${(tokens / 1000).toFixed(1)}K`;
     return String(tokens);
   };
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <AethelSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">

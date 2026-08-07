@@ -163,7 +163,6 @@ const DATA_FORMAT_CONNECTORS: SuperConnector[] = [
   {
     id: 'apache-iceberg',
     name: 'Apache Iceberg',
-    name: 'Apache Iceberg',
     icon: '🧊',
     category: 'data-format',
     description: 'High-performance table format for huge analytic datasets. Trillion-row scale.',
@@ -526,6 +525,61 @@ const CONNECTOR_CATEGORIES: ConnectorCategory[] = [
   { value: 'cloud-storage', label: 'Cloud Storage', icon: '☁️', color: 'bg-cyan-500', description: 'S3, GCS, Azure Blob, MinIO' },
 ];
 
+// ============ SKELETON COMPONENT ============
+
+const ConnectorSkeleton = () => (
+  <Card className="overflow-hidden">
+    <CardHeader className="pb-3">
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full bg-muted animate-pulse" />
+        <div className="flex-1 space-y-2">
+          <div className="h-5 w-32 bg-muted rounded animate-pulse" />
+          <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+        </div>
+      </div>
+      <div className="h-4 w-full bg-muted rounded animate-pulse mt-2" />
+    </CardHeader>
+    <CardContent className="space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        {[1, 2, 3, 4].map(i => (
+          <div key={i} className="h-10 bg-muted rounded animate-pulse" />
+        ))}
+      </div>
+      <div className="flex gap-2">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="h-6 w-16 bg-muted rounded-full animate-pulse" />
+        ))}
+      </div>
+      <div className="flex gap-2 pt-2">
+        <div className="h-9 flex-1 bg-muted rounded animate-pulse" />
+        <div className="h-9 w-9 bg-muted rounded animate-pulse" />
+        <div className="h-9 w-9 bg-muted rounded animate-pulse" />
+      </div>
+    </CardContent>
+  </Card>
+);
+
+// ============ HIGHLIGHT TEXT COMPONENT ============
+
+const HighlightText = ({ text, highlight }: { text: string; highlight: string }) => {
+  if (!highlight.trim()) return <span>{text}</span>;
+  
+  const regex = new RegExp(`(${highlight.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  const parts = text.split(regex);
+  
+  return (
+    <span>
+      {parts.map((part, i) => 
+        regex.test(part) ? (
+          <strong key={i} className="bg-yellow-200 dark:bg-yellow-800 rounded px-0.5">{part}</strong>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </span>
+  );
+};
+
 // ============ MAIN COMPONENT ============
 
 export default function ConnectorsPage() {
@@ -540,7 +594,27 @@ export default function ConnectorsPage() {
   // UI State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<string>('relevance');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
   const [selectedConnector, setSelectedConnector] = useState<SuperConnector | null>(null);
+
+  // Simulate initial loading
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Debounced search effect
+  useEffect(() => {
+    if (searchQuery) {
+      setIsSearching(true);
+      const timer = setTimeout(() => setIsSearching(false), 300);
+      return () => clearTimeout(timer);
+    }
+    setIsSearching(false);
+  }, [searchQuery]);
   
   // Subscription form state
   const [showSubscriptionForm, setShowSubscriptionForm] = useState(false);
@@ -555,14 +629,41 @@ export default function ConnectorsPage() {
   // Connection state map
   const [connectionState, setConnectionState] = useState<Record<string, boolean>>({});
 
-  // Filter connectors
-  const filteredConnectors = ALL_SUPER_CONNECTORS.filter(connector => {
-    const matchesSearch = connector.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           connector.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                           connector.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'all' || connector.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  // Filter and sort connectors
+  const filteredConnectors = ALL_SUPER_CONNECTORS
+    .filter(connector => {
+      const matchesSearch = connector.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             connector.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                             connector.description.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = selectedCategory === 'all' || connector.category === selectedCategory;
+      const matchesStatus = selectedStatus === 'all' || connector.status === selectedStatus;
+      return matchesSearch && matchesCategory && matchesStatus;
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'name-asc':
+          return a.name.localeCompare(b.name);
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
+        case 'status': {
+          const statusOrder = { stable: 0, beta: 1, experimental: 2, coming: 3 };
+          return (statusOrder[a.status] || 99) - (statusOrder[b.status] || 99);
+        }
+        case 'category':
+          return a.category.localeCompare(b.category);
+        case 'relevance':
+        default: {
+          // Relevance: prioritize items where search query appears in name
+          if (!searchQuery) return 0;
+          const query = searchQuery.toLowerCase();
+          const aNameMatch = a.name.toLowerCase().includes(query);
+          const bNameMatch = b.name.toLowerCase().includes(query);
+          if (aNameMatch && !bNameMatch) return -1;
+          if (!aNameMatch && bNameMatch) return 1;
+          return 0;
+        }
+      }
+    });
 
   // Get category stats
   const getCategoryStats = () => {
@@ -762,49 +863,123 @@ export default function ConnectorsPage() {
 
           {/* ============ FREE CONNECTORS TAB ============ */}
           <TabsContent value="free" className="space-y-6">
-            {/* Search & Filter Bar */}
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
+            {/* Search & Filter Bar - ENHANCED */}
+            <div className="flex flex-col lg:flex-row gap-4 items-start">
+              {/* Search Input with debounce indicator */}
+              <div className="relative flex-1 w-full lg:max-w-md">
                 <Input
-                  placeholder="🔍 Search connectors by name, format, or use case..."
+                  placeholder="🔍 Search connectors..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-11"
+                  className="pl-10 pr-10 h-11"
                 />
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
+                {isSearching && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <span className="animate-spin text-sm">⏳</span>
+                  </div>
+                )}
               </div>
               
-              {/* Category Pills */}
-              <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0">
-                {CONNECTOR_CATEGORIES.map(cat => (
-                  <button
-                    key={cat.value}
-                    onClick={() => setSelectedCategory(cat.value)}
-                    className={`px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
-                      selectedCategory === cat.value
-                        ? 'bg-primary text-primary-foreground shadow-md'
-                        : 'bg-muted hover:bg-muted/80'
-                    }`}
-                  >
-                    <span className="mr-1">{cat.icon}</span>
-                    {cat.label}
-                    {cat.value !== 'all' && (
-                      <span className="ml-1 opacity-60">({stats.categories[cat.value as keyof typeof stats.categories] || 0})</span>
-                    )}
-                  </button>
-                ))}
+              {/* Filter Controls Row */}
+              <div className="flex flex-wrap gap-3 items-center">
+                {/* Status Filter Dropdown */}
+                <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                  <SelectTrigger className="w-[160px] h-11">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="stable">✓ Stable Only</SelectItem>
+                    <SelectItem value="beta">β Beta Only</SelectItem>
+                    <SelectItem value="experimental">Experimental</SelectItem>
+                    <SelectItem value="coming">Coming Soon</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Sort By Dropdown */}
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-[150px] h-11">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="relevance">Relevance</SelectItem>
+                    <SelectItem value="name-asc">Name A→Z</SelectItem>
+                    <SelectItem value="name-desc">Name Z→A</SelectItem>
+                    <SelectItem value="status">Status</SelectItem>
+                    <SelectItem value="category">Category</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                {/* Category Pills (compact) */}
+                <div className="flex gap-1.5 overflow-x-auto">
+                  {CONNECTOR_CATEGORIES.map(cat => (
+                    <button
+                      key={cat.value}
+                      onClick={() => setSelectedCategory(cat.value)}
+                      className={`px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
+                        selectedCategory === cat.value
+                          ? 'bg-primary text-primary-foreground shadow-md'
+                          : 'bg-muted hover:bg-muted/80'
+                      }`}
+                    >
+                      <span className="mr-1">{cat.icon}</span>
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
-            {/* Results Count */}
-            <div className="flex justify-between items-center text-sm text-muted-foreground">
-              <span>Showing {filteredConnectors.length} of {stats.total} connectors</span>
-              {searchQuery && (
-                <button onClick={() => setSearchQuery('')} className="text-primary hover:underline">
-                  Clear search ✕
+            {/* Active Filters Display */}
+            {(searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all') && (
+              <div className="flex flex-wrap gap-2 items-center text-sm p-3 bg-muted/50 rounded-lg">
+                <span className="text-muted-foreground font-medium">Active filters:</span>
+                {searchQuery && (
+                  <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-destructive/20 transition-colors" onClick={() => setSearchQuery('')}>
+                    Search: "{searchQuery}" ✕
+                  </Badge>
+                )}
+                {selectedCategory !== 'all' && (
+                  <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-destructive/20 transition-colors" onClick={() => setSelectedCategory('all')}>
+                    {CONNECTOR_CATEGORIES.find(c => c.value === selectedCategory)?.label} ✕
+                  </Badge>
+                )}
+                {selectedStatus !== 'all' && (
+                  <Badge variant="secondary" className="gap-1 cursor-pointer hover:bg-destructive/20 transition-colors" onClick={() => setSelectedStatus('all')}>
+                    Status: {selectedStatus === 'stable' ? 'Stable' : selectedStatus === 'beta' ? 'Beta' : selectedStatus} ✕
+                  </Badge>
+                )}
+                <button 
+                  onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setSelectedStatus('all'); }}
+                  className="text-primary hover:underline text-xs ml-auto font-medium"
+                >
+                  Clear all filters
                 </button>
+              </div>
+            )}
+
+            {/* Results Count - Enhanced */}
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-muted-foreground">
+                {isLoading ? (
+                  <span className="animate-pulse">Loading connectors...</span>
+                ) : (
+                  <>
+                    Showing <span className="font-semibold text-foreground">{filteredConnectors.length}</span> of{' '}
+                    <span className="font-semibold text-foreground">{stats.total}</span> connectors
+                    {(searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all') && (
+                      <span className="ml-1">(filtered)</span>
+                    )}
+                  </>
+                )}
+              </span>
+              {!isLoading && filteredConnectors.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Sorted by: {sortBy === 'relevance' ? 'Relevance' : sortBy === 'name-asc' ? 'Name A-Z' : sortBy === 'name-desc' ? 'Name Z-A' : sortBy === 'status' ? 'Status' : 'Category'}
+                </span>
               )}
             </div>
 
@@ -818,9 +993,17 @@ export default function ConnectorsPage() {
               </div>
             )}
 
-            {/* Connector Grid */}
+            {/* Connector Grid with Loading State */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredConnectors.map((connector) => (
+              {isLoading ? (
+                // Show skeleton cards while loading
+                Array.from({ length: 6 }).map((_, i) => (
+                  <ConnectorSkeleton key={`skeleton-${i}`} />
+                ))
+              ) : (
+                // Show actual connectors with fade-in animation
+                <div className="contents animate-in fade-in duration-300">
+                  {filteredConnectors.map((connector) => (
                 <Card 
                   key={connector.id} 
                   className={`relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-1 ${
@@ -839,7 +1022,9 @@ export default function ConnectorsPage() {
                       <div className="flex items-center gap-3">
                         <span className="text-3xl">{connector.icon}</span>
                         <div>
-                          <CardTitle className="text-base">{connector.name}</CardTitle>
+                          <CardTitle className="text-base">
+                            <HighlightText text={connector.name} highlight={searchQuery} />
+                          </CardTitle>
                           <StatusBadge status={connector.status} />
                         </div>
                       </div>
@@ -848,7 +1033,7 @@ export default function ConnectorsPage() {
                       )}
                     </div>
                     <CardDescription className="text-xs mt-2 line-clamp-2">
-                      {connector.description}
+                      <HighlightText text={connector.description} highlight={searchQuery} />
                     </CardDescription>
                   </CardHeader>
 
@@ -934,19 +1119,33 @@ export default function ConnectorsPage() {
                   </CardContent>
                 </Card>
               ))}
+                </div>
+              )}
             </div>
 
-            {/* Empty State */}
-            {filteredConnectors.length === 0 && (
+            {/* Empty State - Enhanced with suggestions */}
+            {!isLoading && filteredConnectors.length === 0 && (
               <div className="text-center py-12">
                 <div className="text-6xl mb-4">🔍</div>
                 <h3 className="text-lg font-semibold mb-2">No connectors found</h3>
-                <p className="text-muted-foreground mb-4">
-                  Try adjusting your search or filter criteria
+                <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+                  We couldn't find any connectors matching your criteria.
+                  {searchQuery && ` No results for "${searchQuery}".`}
                 </p>
-                <Button variant="outline" onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }}>
-                  Reset Filters
-                </Button>
+                <div className="space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    <p className="font-medium mb-2">Suggestions:</p>
+                    <ul className="space-y-1">
+                      {searchQuery && <li>• Try different keywords (e.g., "database", "streaming", "scientific")</li>}
+                      {selectedCategory !== 'all' && <li>• Browse other categories</li>}
+                      {selectedStatus !== 'all' && <li>• Include beta or experimental connectors</li>}
+                      {(searchQuery || selectedCategory !== 'all' || selectedStatus !== 'all') && <li>• Clear all filters to see all connectors</li>}
+                    </ul>
+                  </div>
+                  <Button variant="outline" onClick={() => { setSearchQuery(''); setSelectedCategory('all'); setSelectedStatus('all'); }}>
+                    Reset All Filters
+                  </Button>
+                </div>
               </div>
             )}
           </TabsContent>

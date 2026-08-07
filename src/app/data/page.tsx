@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { DataLakeSkeleton, CardSkeleton, StatsCardSkeleton } from '@/components/SkeletonComponents';
 
 // ============ TYPES ============
 
@@ -67,6 +68,13 @@ export default function DataLakePage() {
 
   // Volume threshold
   const [volumeStatus, setVolumeStatus] = useState(checkVolumeThreshold());
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Simulate loading on mount
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Check volume periodically
   useEffect(() => {
@@ -210,6 +218,15 @@ export default function DataLakePage() {
       icon: '📥',
     });
   };
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <DataLakeSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">

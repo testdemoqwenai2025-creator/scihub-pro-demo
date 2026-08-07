@@ -12,7 +12,7 @@
  * - Call-for-action for Pro features
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -40,6 +40,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import { CollaborationSkeleton, ListSkeleton, CardSkeleton } from '@/components/SkeletonComponents';
 
 // ============ COLLABORATION PAGE COMPONENT ============
 
@@ -80,6 +81,13 @@ export default function CollaborationPage() {
   const [newDiscussionTitle, setNewDiscussionTitle] = useState('');
   const [newDiscussionContent, setNewDiscussionContent] = useState('');
   const [newDiscussionTags, setNewDiscussionTags] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Simulate loading on mount
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Get selected project data
   const selectedProjectData = projects.find(p => p.id === selectedProject);
@@ -192,6 +200,15 @@ export default function CollaborationPage() {
     const days = Math.floor(hours / 24);
     return `${days}d ago`;
   };
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <CollaborationSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">

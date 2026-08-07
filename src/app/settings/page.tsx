@@ -13,7 +13,7 @@
  * - Call-for-action prompts
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSciHubStore, VOLUME_TIERS } from '@/store/useSciHubStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -43,6 +43,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { SettingsSkeleton, FormSkeleton } from '@/components/SkeletonComponents';
 
 // ============ SETTINGS PAGE COMPONENT ============
 
@@ -81,6 +82,13 @@ export default function SettingsPage() {
   const [importText, setImportText] = useState('');
   const [importResult, setImportResult] = useState<{ success: boolean; message: string } | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Simulate loading on mount
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Calculate storage percentage for current tier
   const storagePercentage = Math.min(
@@ -160,6 +168,15 @@ export default function SettingsPage() {
   };
 
   // ============ RENDER ============
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <SettingsSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">
