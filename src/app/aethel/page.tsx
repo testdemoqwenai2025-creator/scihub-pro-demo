@@ -1,132 +1,180 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useDynamicStore, createDynamicField } from '@/store/useDynamicStore';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { Switch } from '@/components/ui/switch';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 
 // ============ TYPES ============
 
 interface AIModel {
   id: string;
   name: string;
-  type: 'llm' | 'vision' | 'multimodal' | 'quantum' | 'scientific';
+  type: 'llm' | 'vision' | 'quantum' | 'scientific' | 'multimodal';
   parameters: string;
-  speed: string;
-  description: string;
-  status: 'available' | 'busy' | 'offline';
+  speed: string; // tokens/sec
   specialty: string;
+  isAvailable: boolean;
+  maxContext: number; // tokens
 }
 
-interface JobSubmission {
-  prompt: string;
-  modelId: string;
-  priority: 'low' | 'normal' | 'high' | 'critical';
-  computeBudget: number;
-}
-
-interface CompletedJob {
+interface PromptHistory {
   id: string;
-  model: string;
   prompt: string;
-  result: string;
-  timestamp: Date;
-  computeTime: number;
+  model: string;
+  response?: string;
   tokensUsed: number;
+  computeTime: number;
+  priority: string;
+  timestamp: Date;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+}
+
+interface SystemMetrics {
+  computeUtilization: number;
+  memoryUsage: number;
+  gpuUsage: number;
+  networkIO: number;
+  activeJobs: number;
+  queueDepth: number;
 }
 
 // ============ AI MODELS ============
 
-const aiModels: AIModel[] = [
+const AI_MODELS: AIModel[] = [
   {
     id: 'gpt-turbo-220b',
     name: 'GPT-Turbo 220B',
     type: 'llm',
     parameters: '220B',
-    speed: '45K tok/s',
-    description: 'General-purpose reasoning for literature analysis and hypothesis generation',
-    status: 'available',
-    specialty: 'Natural Language Processing',
+    speed: '45K tokens/s',
+    specialty: 'General reasoning & analysis',
+    isAvailable: true,
+    maxContext: 128000,
   },
   {
     id: 'vision-pro-85b',
     name: 'Vision Pro 85B',
     type: 'vision',
     parameters: '85B',
-    speed: '120 img/s',
-    description: 'Advanced image analysis for microscopy and medical imaging interpretation',
-    status: 'available',
-    specialty: 'Computer Vision',
+    speed: '28K tokens/s',
+    specialty: 'Image & video understanding',
+    isAvailable: true,
+    maxContext: 64000,
   },
   {
     id: 'quantum-sim-150b',
     name: 'Quantum Sim 150B',
     type: 'quantum',
     parameters: '150B',
-    speed: '2.3M qubits/s',
-    description: 'Quantum chemistry simulations and molecular dynamics optimization',
-    status: 'available',
-    specialty: 'Quantum Chemistry',
+    speed: '12K tokens/s',
+    specialty: 'Quantum chemistry simulation',
+    isAvailable: false,
+    maxContext: 32000,
   },
   {
     id: 'bio-intel-300b',
     name: 'Bio Intel 300B',
     type: 'scientific',
     parameters: '300B',
-    speed: '38K tok/s',
-    description: 'Specialized bioinformatics model for genomics and drug discovery pipelines',
-    status: 'busy',
-    specialty: 'Bioinformatics & Drug Discovery',
+    speed: '35K tokens/s',
+    specialty: 'Biomedical & genomics analysis',
+    isAvailable: true,
+    maxContext: 96000,
   },
   {
     id: 'multimodal-300b',
     name: 'MultiModal 300B',
     type: 'multimodal',
     parameters: '300B',
-    speed: '32K mixed/s',
-    description: 'Cross-modal analysis combining text, images, and structured data',
-    status: 'available',
-    specialty: 'Multi-Modal Fusion',
+    speed: '32K tokens/s',
+    specialty: 'Cross-modal scientific reasoning',
+    isAvailable: true,
+    maxContext: 128000,
   },
 ];
 
-// ============ QUICK TEMPLATES ============
+// ============ PROMPT TEMPLATES ============
 
-const quickTemplates = [
+const PROMPT_TEMPLATES = [
   {
     id: 'lit-review',
     name: 'Literature Review',
-    prompt: 'Generate a comprehensive literature review on [TOPIC] focusing on recent advances (2022-2024), key methodologies, and future directions. Include at least 15 relevant papers with DOI references.',
-    icon: '📚',
+    template: `Generate a comprehensive literature review on [TOPIC]. Include:
+1. Recent advances (2022-2024)
+2. Key methodologies
+3. Major findings and controversies
+4. Future directions
+5. Critical analysis of the field
+
+Focus on peer-reviewed sources and provide citations where possible.`,
   },
   {
     id: 'hypothesis',
     name: 'Hypothesis Generation',
-    prompt: 'Based on the following observation: [OBSERVATION], generate 5 testable hypotheses with proposed experimental designs, expected outcomes, and potential implications.',
-    icon: '💡',
+    template: `Based on the following observation: [OBSERVATION]
+
+Generate 3 testable hypotheses that could explain this phenomenon. For each hypothesis:
+1. State the hypothesis clearly
+2. Identify key variables
+3. Suggest experimental approaches
+4. Predict potential outcomes
+5. Discuss implications if confirmed`,
   },
   {
     id: 'data-analysis',
     name: 'Data Analysis Plan',
-    prompt: 'Design a comprehensive data analysis plan for [DATA_TYPE] dataset. Include statistical methods, visualization approaches, validation strategies, and reproducibility considerations.',
-    icon: '📊',
+    template: `I have a dataset with the following characteristics:
+- Type: [DATA_TYPE]
+- Size: [SIZE]
+- Variables: [VARIABLES]
+- Research question: [QUESTION]
+
+Design a comprehensive data analysis plan including:
+1. Data preprocessing steps
+2. Statistical methods to apply
+3. Visualization strategy
+4. Validation approach
+5. Potential pitfalls and how to address them`,
   },
   {
     id: 'method-suggestion',
     name: 'Method Suggestion',
-    prompt: 'For the research question: "[QUESTION]", suggest and compare 3 methodological approaches. Include pros/cons, computational requirements, and recommended tools/libraries.',
-    icon: '🔬',
+    template: `I'm trying to: [GOAL]
+With the following constraints: [CONSTRAINTS]
+
+Suggest the most appropriate computational/experimental methods to achieve this goal. Consider:
+1. Current state-of-the-art approaches
+2. Computational requirements
+3. Data availability needs
+4. Validation strategies
+5. Alternative approaches if primary method fails`,
   },
   {
     id: 'code-generation',
     name: 'Code Generation',
-    prompt: 'Generate production-ready Python code for: [TASK]. Include error handling, documentation, type hints, and example usage. Follow PEP 8 and best practices.',
-    icon: '💻',
+    template: `Generate [LANGUAGE] code for the following task:
+
+[TASK_DESCRIPTION]
+
+Requirements:
+1. Include proper error handling
+2. Add comments explaining key steps
+3. Use best practices for [DOMAIN]
+4. Include example usage
+5. Suggest optimizations if applicable`,
   },
 ];
 
@@ -134,388 +182,605 @@ const quickTemplates = [
 
 export default function AETHELPage() {
   const { t } = useTranslation();
-  
-  // Connection state
+  const {
+    aethelPrompts,
+    submitPrompt,
+    clearPromptHistory,
+    addActivity,
+  } = useDynamicStore();
+
+  // UI State
+  const [selectedModel, setSelectedModel] = useState(AI_MODELS[0].id);
+  const [promptText, setPromptText] = useState('');
+  const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'critical'>('normal');
+  const [computeBudget, setComputeBudget] = useState(50); // percentage
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [currentResponse, setCurrentResponse] = useState<string>('');
   const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState({
-    latency: 0,
-    uptime: '99.97%',
-    version: '2.4.1',
-    computeUnits: 128,
-    queueDepth: 7,
-    activeJobs: 23,
+  const [connectionLatency, setConnectionLatency] = useState<number | null>(null);
+
+  // Metrics (simulated)
+  const [metrics, setMetrics] = useState<SystemMetrics>({
+    computeUtilization: 0,
+    memoryUsage: 0,
+    gpuUsage: 0,
+    networkIO: 0,
+    activeJobs: 0,
+    queueDepth: 0,
   });
 
-  // Job state
-  const [selectedModel, setSelectedModel] = useState(aiModels[0].id);
-  const [prompt, setPrompt] = useState('');
-  const [priority, setPriority] = useState<JobSubmission['priority']>('normal');
-  const [computeBudget, setComputeBudget] = useState(4);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Results state
-  const [completedJobs, setCompletedJobs] = useState<CompletedJob[]>([]);
-  const [showResults, setShowResults] = useState(true);
-
-  // Metrics state (simulated live)
-  const [metrics, setMetrics] = useState({
-    computeUtilization: 67,
-    memoryUsage: 54,
-    gpuUsage: 78,
-    networkIO: 42,
-  });
-
-  // Connect to AETHEL
-  const connectToAETHEL = useCallback(async () => {
-    setIsConnecting(true);
-    
-    // Simulate connection delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setIsConnected(true);
-    setIsConnecting(false);
-  }, []);
-
-  // Disconnect
-  const disconnectFromAETHEL = useCallback(() => {
-    setIsConnected(false);
-  }, []);
-
-  // Submit job
-  const submitJob = async () => {
-    if (!prompt.trim()) return;
-
-    setIsSubmitting(true);
-
-    // Simulate job execution
-    await new Promise(resolve => setTimeout(resolve, 3000 + Math.random() * 4000));
-
-    const model = aiModels.find(m => m.id === selectedModel)!;
-    const newJob: CompletedJob = {
-      id: `job-${Date.now()}`,
-      model: model.name,
-      prompt,
-      result: generateMockResponse(model.type, prompt),
-      timestamp: new Date(),
-      computeTime: parseFloat((3 + Math.random() * 4).toFixed(2)),
-      tokensUsed: Math.floor(1000 + Math.random() * 5000),
-    };
-
-    setCompletedJobs(prev => [newJob, ...prev.slice(0, 9)]);
-    setPrompt('');
-    setIsSubmitting(false);
-  };
-
-  // Generate mock response based on model type
-  const generateMockResponse = (type: AIModel['type'], userPrompt: string): string => {
-    const responses: Record<AIModel['type'], string[]> = {
-      lll: [
-        `## Literature Analysis Complete\n\nBased on your query about "${userPrompt.slice(0, 50)}...", I've analyzed 847 relevant publications from 2022-2024.\n\n### Key Findings:\n\n1. **Recent Advances**: The field has seen significant progress in methodology, with deep learning approaches showing 34% improvement over traditional methods.\n\n2. **Methodological Trends**: Transformer-based architectures dominate current research, with 68% of recent papers utilizing attention mechanisms.\n\n3. **Future Directions**: Emerging areas include multimodal integration and few-shot learning applications.\n\n### Recommended Papers:\n\n| DOI | Citation Count | Key Contribution |\n|-----|---------------|------------------|\n| 10.5555/paper001 | 234 | Novel architecture design |\n| 10.5555/paper002 | 189 | Benchmark dataset creation |\n| 10.5555/paper003 | 156 | Cross-domain evaluation |\n\n**Confidence Score**: 94%`,
-      ],
-      vision: [
-        `## Image Analysis Report\n\nI've processed your microscopy image using advanced computer vision techniques.\n\n### Detection Results:\n\n- **Cell Count**: 1,247 cells detected (confidence: 96.3%)\n- **Classification**: 892 healthy, 355 apoptotic (28.5% apoptosis rate)\n- **Morphology**: Average cell area = 245 μm² (SD ± 42)\n\n### Key Observations:\n\n1. **Nuclear Morphology**: Irregular nuclear envelopes observed in 23% of cells\n2. **Organelle Distribution**: Mitochondrial clustering in perinuclear region\n3. **Membrane Integrity**: 94% of cells show intact plasma membranes\n\n### Recommendations:\n\nConsider additional staining for confirmation of apoptotic markers (caspase-3, Annexin V).`,
-      ],
-      quantum: [
-        `## Quantum Simulation Results\n\nComputation completed using hybrid quantum-classical algorithm.\n\n### System Properties:\n\n- **Total Energy**: -1247.83 Hartree (±0.02)\n- **Optimized Geometry**: Converged after 127 iterations\n- **Electronic Structure**: HOMO-LUMO gap = 4.23 eV\n\n### Molecular Orbitals:\n\n| Orbital | Energy (eV) | Character |\n|---------|------------|----------|\n| HOMO | -6.82 | π-bonding |\n| LUMO | -2.59 | π*-antibonding |\n| HOMO-1 | -7.41 | σ-bonding |\n\n### Vibrational Frequencies:\n\nIdentified 3N-6 = 45 vibrational modes.\nLowest frequency: 87 cm⁻¹ (torsional mode)\nHighest frequency: 3245 cm⁻¹ (O-H stretch)\n\n**Simulation Time**: 2.47 hours on 64-qubit system`,
-      ],
-      scientific: [
-        `## Bioinformatics Analysis Pipeline\n\nExecuting specialized bioinformatics workflow...\n\n### Sequence Analysis:\n\n- **Input Sequence**: ${userPrompt.slice(0, 30)}... (${Math.floor(Math.random() * 50000 + 1000)} bp)\n- **GC Content**: ${(45 + Math.random() * 20).toFixed(1)}%\n- **Complexity Score**: High (entropy = 1.92 bits/base)\n\n### Annotation Results:\n\n| Feature | Position | Score | Function |\n|---------|----------|-------|----------|\n| Promoter | 1-234 | 0.98 | TATA box region |\n| CDS | 235-1523 | 0.99 | Protein coding |\n| Poly-A signal | 1498-1503 | 0.95 | Transcription end |\n\n### Variant Calling:\n\nDetected ${Math.floor(Math.random() * 10 + 1)} variants:\n- ${Math.floor(Math.random() * 5)} missense mutations\n- ${Math.floor(Math.random() * 3)} synonymous variants\n- 1 potential splice site variant\n\n**Recommended Next Steps**: Validate top candidates via Sanger sequencing.`,
-      ],
-      multimodal: [
-        `## Multi-Modal Integration Analysis\n\nSynthesizing information across text, image, and structured data modalities.\n\n### Integrated Insights:\n\n**Text Analysis**: Your query relates to molecular interactions with high confidence (0.93).\n\n**Image Correlation**: Structural data shows binding pocket compatibility score of 0.87.\n\n**Database Cross-Reference**: Found 23 related entries in ChEMBL, 12 in PubChem.\n\n### Unified Conclusion:\n\nThe multi-modal evidence strongly suggests:\n\n1. ✅ **Feasibility**: High probability of successful interaction\n2. ⚠️ **Considerations**: Potential off-target effects at concentration >10μM\n3. 📊 **Recommendation**: Proceed to in vitro validation with suggested assay conditions\n\n**Cross-Modal Confidence**: 89%`,
-      ],
-    };
-
-    return responses[type]?.[0] || responses.lll[0];
-  };
-
-  // Simulate live metrics
+  // Update metrics periodically when connected
   useEffect(() => {
     if (!isConnected) return;
 
     const interval = setInterval(() => {
-      setMetrics(prev => ({
-        computeUtilization: Math.max(30, Math.min(95, prev.computeUtilization + (Math.random() - 0.5) * 10)),
-        memoryUsage: Math.max(40, Math.min(85, prev.memoryUsage + (Math.random() - 0.5) * 5)),
-        gpuUsage: Math.max(50, Math.min(99, prev.gpuUsage + (Math.random() - 0.5) * 8)),
-        networkIO: Math.max(20, Math.min(80, prev.networkIO + (Math.random() - 0.5) * 12)),
-      }));
-
-      setConnectionStatus(prev => ({
-        ...prev,
-        queueDepth: Math.max(0, prev.queueDepth + Math.floor(Math.random() * 3) - 1),
-        activeJobs: Math.max(15, Math.min(35, prev.activeJobs + Math.floor(Math.random() * 3) - 1)),
-        latency: Math.floor(12 + Math.random() * 25),
-      }));
+      setMetrics({
+        computeUtilization: Math.min(100, 20 + Math.random() * 60 + (isProcessing ? 30 : 0)),
+        memoryUsage: Math.min(100, 40 + Math.random() * 30),
+        gpuUsage: Math.min(100, isProcessing ? 70 + Math.random() * 25 : 10 + Math.random() * 20),
+        networkIO: Math.min(100, Math.random() * 40),
+        activeJobs: aethelPrompts.filter(p => p.status === 'processing').length,
+        queueDepth: aethelPrompts.filter(p => p.status === 'queued').length,
+      });
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [isConnected]);
+  }, [isConnected, isProcessing, aethelPrompts]);
+
+  // Handle connection toggle
+  const handleToggleConnection = async () => {
+    if (isConnected) {
+      setIsConnected(false);
+      setConnectionLatency(null);
+      addActivity({
+        type: 'disconnect',
+        message: createDynamicField('Disconnected from AETHEL AI'),
+        icon: '🔌',
+      });
+    } else {
+      // Simulate connection
+      setIsProcessing(true);
+      await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1500));
+      
+      setIsConnected(true);
+      setConnectionLatency(Math.floor(15 + Math.random() * 35));
+      setIsProcessing(false);
+
+      addActivity({
+        type: 'connect',
+        message: createDynamicField(`Connected to AETHEL AI (${connectionLatency}ms latency)`),
+        icon: '🤖',
+      });
+    }
+  };
+
+  // Handle prompt submission
+  const handleSubmitPrompt = async () => {
+    if (!promptText.trim() || !isConnected) return;
+
+    setIsProcessing(true);
+    setProcessingProgress(0);
+    setCurrentResponse('');
+
+    // Create prompt entry
+    submitPrompt({
+      prompt: createDynamicField(promptText),
+      model: createDynamicField(selectedModel),
+      tokensUsed: createDynamicField(0),
+      computeTime: createDynamicField(0),
+      priority: createDynamicField(priority),
+      computeBudget: createDynamicField(computeBudget),
+    });
+
+    // Simulate processing progress
+    const totalTime = 3000 + Math.random() * 4000;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < totalTime) {
+      const elapsed = Date.now() - startTime;
+      setProcessingProgress(Math.min(95, (elapsed / totalTime) * 90));
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+
+    // Generate mock response based on model type
+    const model = AI_MODELS.find(m => m.id === selectedModel)!;
+    const response = generateMockResponse(model.type, promptText);
+    
+    setCurrentResponse(response);
+    setProcessingProgress(100);
+
+    // Update the prompt in history with results
+    const prompts = useDynamicStore.getState().aethelPrompts;
+    if (prompts.length > 0) {
+      const lastPrompt = prompts[0];
+      // Response would be updated in store in real implementation
+    }
+
+    setIsProcessing(false);
+
+    addActivity({
+      type: 'compute',
+      message: createDynamicField(`AETHEL ${model.name} completed analysis`),
+      icon: '✨',
+    });
+  };
+
+  // Generate mock response based on model type
+  const generateMockResponse = (type: AIModel['type'], prompt: string): string => {
+    switch (type) {
+      case 'llm':
+        return `## Analysis Complete
+
+Based on your query about "${prompt.substring(0, 50)}...", here's my comprehensive analysis:
+
+### Key Findings
+
+1. **Primary Insight**: The data suggests significant patterns that warrant further investigation. Current research indicates multiple factors contribute to the observed phenomenon.
+
+2. **Supporting Evidence**: 
+   - Recent studies (2023-2024) show consistent results across different methodologies
+   - Meta-analyses confirm statistical significance (p < 0.001)
+   - Effect sizes range from moderate to large (Cohen's d > 0.5)
+
+3. **Methodological Considerations**:
+   - Sample size adequacy confirmed
+   - Potential confounding variables identified
+   - Recommendations for replication studies provided
+
+### Recommendations
+
+1. **Immediate Actions**: Validate findings with independent dataset
+2. **Short-term**: Expand scope to include additional variables
+3. **Long-term**: Develop predictive models based on identified patterns
+
+### References
+
+This analysis draws upon current literature and established methodologies. Full citation list available upon request.
+
+---
+*Generated by GPT-Turbo 220B • Tokens: ~1,250 • Confidence: High*`;
+
+      case 'scientific':
+        return `## Scientific Analysis Results
+
+### Query: "${prompt.substring(0, 60)}..."
+
+### Biological Interpretation
+
+**Gene/Protein Analysis**:
+- Identified 23 significant variants (p < 5e-8)
+- Pathway enrichment observed in MAPK signaling cascade
+- Conservation score: 0.89 (highly conserved across species)
+
+**Structural Insights**:
+- Predicted binding affinity: ΔG = -8.2 kcal/mol
+- Active site residues: HIS41, CYS145, MET165
+- Solvent accessibility: 45% (partially exposed)
+
+### Statistical Summary
+
+| Metric | Value | Significance |
+|--------|-------|-------------|
+| p-value | 2.3e-9 | *** |
+| Effect size | 0.72 | Large |
+| CI 95% | [0.58, 0.86] | - |
+| Power | 0.94 | Adequate |
+
+### Experimental Validation Recommended
+
+1. **In vitro**: Enzyme kinetics assay
+2. **In vivo**: Animal model validation
+3. **Clinical**: Phase I trial feasibility
+
+---
+*Generated by Bio Intel 300B • Domain: Biomedical • Confidence: Very High*`;
+
+      case 'multimodal':
+        return `## Multi-Modal Analysis
+
+### Integrated Assessment
+
+Combining textual analysis with structural and functional data:
+
+#### Textual Analysis
+Your query relates to "${prompt.substring(0, 40)}..." which connects to:
+- 147 related publications (2020-2024)
+- 23 clinical trials (12 completed, 11 ongoing)
+- 4 FDA-approved interventions in similar domain
+
+#### Structural Correlation
+- Molecular docking scores correlate with experimental IC50 (R² = 0.78)
+- 3D pharmacophore features align with known binders
+- ADMET predictions favorable
+
+#### Functional Implications
+- Pathway impact: Moderate-high (Z-score = 2.34)
+- Network centrality: Top 5% of target interactome
+- Disease association: Strong (OR = 3.2)
+
+### Synthesis
+
+The convergence of evidence from multiple modalities supports:
+✅ Valid therapeutic target
+✅ Drug-like properties achievable
+✅ Mechanism of action well-characterized
+
+### Next Steps
+1. Lead optimization cycle
+2. Preclinical toxicity screening
+3. IND-enabling studies
+
+---
+*Generated by MultiModal 300B • Modalities: Text+Structure+Function*`;
+
+      default:
+        return `## Processing Complete
+
+Your query has been analyzed by the selected AI model.
+
+### Summary
+The system has processed your input and generated relevant insights based on the available knowledge base.
+
+### Key Points
+- Analysis completed successfully
+- Results are ready for review
+- Additional details available on request
+
+### Action Items
+1. Review generated insights
+2. Validate critical findings
+3. Document conclusions
+
+---
+*Response generated by ${AI_MODELS.find(m => m.id === selectedModel)?.name}*`;
+    }
+  };
+
+  // Load template
+  const handleLoadTemplate = (templateId: string) => {
+    const template = PROMPT_TEMPLATES.find(t => t.id === templateId);
+    if (template) {
+      setPromptText(template.template);
+    }
+  };
+
+  // Get model badge color
+  const getModelBadgeColor = (type: AIModel['type']) => {
+    const colors: Record<string, string> = {
+      llm: 'bg-blue-500',
+      vision: 'bg-purple-500',
+      quantum: 'bg-cyan-500',
+      scientific: 'bg-green-500',
+      multimodal: 'bg-orange-500',
+    };
+    return colors[type] || 'bg-gray-500';
+  };
 
   return (
     <div className="min-h-screen bg-background p-6">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-foreground">{t('aethel.title')}</h1>
-        <p className="text-muted-foreground mt-1">{t('aethel.subtitle')}</p>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-foreground">{t('aethel.title') || 'AETHEL AI Platform'}</h1>
+        <p className="text-muted-foreground mt-1">
+          Advanced Experimental Theoretical Hypercomputing Emulation Layer
+        </p>
+        
+        {/* Connection Status */}
+        <div className="mt-3 flex items-center gap-3">
+          <Button
+            variant={isConnected ? 'default' : 'outline'}
+            onClick={handleToggleConnection}
+            disabled={isProcessing}
+          >
+            {isConnected ? '🟢 Connected' : '⚫ Connect to AETHEL'}
+          </Button>
+          
+          {connectionLatency && (
+            <span className="text-sm text-muted-foreground">
+              Latency: {connectionLatency}ms
+            </span>
+          )}
+          
+          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+            🆓 Free Tier Active
+          </Badge>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Panel - Job Submission */}
+        {/* Left Panel - Models & Input */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Connection Status */}
+          {/* Model Selection */}
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">{t('aethel.connection_status')}</CardTitle>
-                <Badge 
-                  variant={isConnected ? 'default' : isConnecting ? 'secondary' : 'outline'}
-                  className={isConnected ? 'bg-green-500' : ''}
-                >
-                  {isConnected ? t('aethel.connected') : isConnecting ? t('aethel.connecting') : t('aethel.disconnected')}
-                </Badge>
-              </div>
+              <CardTitle className="text-base">Select AI Model</CardTitle>
             </CardHeader>
             <CardContent>
-              {!isConnected ? (
-                <Button 
-                  onClick={connectToAETHEL} 
-                  disabled={isConnecting}
-                  className="w-full"
-                  size="lg"
-                >
-                  {isConnecting ? '⏳ Connecting...' : '🔌 Connect to AETHEL'}
-                </Button>
-              ) : (
-                <div className="space-y-4">
-                  {/* Status Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                      <p className="text-sm text-muted-foreground">{t('aethel.latency')}</p>
-                      <p className="text-xl font-bold">{connectionStatus.latency}ms</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-muted-foreground">{t('aethel.compute_units')}</p>
-                      <p className="text-xl font-bold">{connectionStatus.computeUnits}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-muted-foreground">{t('aethel.queue_depth')}</p>
-                      <p className="text-xl font-bold">{connectionStatus.queueDepth}</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm text-muted-foreground">{t('aethel.active_jobs')}</p>
-                      <p className="text-xl font-bold">{connectionStatus.activeJobs}</p>
-                    </div>
-                  </div>
-
-                  <Button onClick={disconnectFromAETHEL} variant="outline" size="sm">
-                    Disconnect
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Model Selection & Job Form */}
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('aethel.models')}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Model Selection */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {aiModels.map(model => (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {AI_MODELS.map(model => (
                   <button
                     key={model.id}
                     onClick={() => setSelectedModel(model.id)}
-                    disabled={model.status === 'offline'}
+                    disabled={!model.isAvailable || !isConnected}
                     className={`p-3 rounded-lg border text-left transition-all ${
-                      selectedModel === model.id 
-                        ? 'border-primary bg-primary/5 ring-2 ring-primary/20' 
-                        : 'hover:border-primary/50'
-                    } ${model.status === 'offline' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      selectedModel === model.id
+                        ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                        : !model.isAvailable
+                          ? 'opacity-50 cursor-not-allowed'
+                          : 'hover:border-primary/50 hover:bg-muted/50'
+                    }`}
                   >
-                    <div className="flex items-start justify-between mb-1">
-                      <span className="font-medium text-sm">{model.name}</span>
-                      <Badge 
-                        variant={model.status === 'available' ? 'default' : 'secondary'}
-                        className={model.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'}
-                      >
-                        {model.status}
-                      </Badge>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className={`px-2 py-0.5 rounded text-xs text-white ${getModelBadgeColor(model.type)}`}>
+                        {model.type.toUpperCase()}
+                      </span>
+                      {!model.isAvailable && (
+                        <Badge variant="secondary" className="text-xs">Offline</Badge>
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">{model.description}</p>
-                    <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                      <span>{model.parameters} params</span>
+                    <h4 className="font-medium text-sm">{model.name}</h4>
+                    <p className="text-xs text-muted-foreground mt-1">{model.specialty}</p>
+                    <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+                      <span>{model.parameters}</span>
                       <span>•</span>
                       <span>{model.speed}</span>
                     </div>
                   </button>
                 ))}
               </div>
+            </CardContent>
+          </Card>
 
-              {/* Prompt Input */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t('aethel.job_prompt')}</label>
-                <Textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder="Describe your computational task or research question..."
-                  rows={4}
-                  disabled={!isConnected}
-                />
-              </div>
-
-              {/* Quick Templates */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium">{t('aethel.quick_templates')}</label>
-                <div className="flex flex-wrap gap-2">
-                  {quickTemplates.map(template => (
-                    <Button
-                      key={template.id}
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setPrompt(template.prompt)}
-                      disabled={!isConnected}
-                      title={template.name}
-                    >
-                      {template.icon} {template.name}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Options */}
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1 space-y-1">
-                  <label className="text-sm font-medium">{t('aethel.priority')}</label>
-                  <select
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value as JobSubmission['priority'])}
-                    className="w-full px-3 py-2 rounded-md border bg-background text-sm"
+          {/* Prompt Templates */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Quick Templates</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {PROMPT_TEMPLATES.map(template => (
+                  <Button
+                    key={template.id}
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleLoadTemplate(template.id)}
                     disabled={!isConnected}
                   >
-                    <option value="low">Low</option>
-                    <option value="normal">Normal</option>
-                    <option value="high">High</option>
-                    <option value="critical">Critical</option>
-                  </select>
-                </div>
-                <div className="flex-1 space-y-1">
-                  <label className="text-sm font-medium">{t('aethel.compute_budget')} (hours)</label>
-                  <Input
-                    type="number"
+                    {template.name}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Prompt Input */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Enter Your Prompt</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Select value={priority} onValueChange={(v) => setPriority(v as typeof priority)} disabled={!isConnected}>
+                    <SelectTrigger className="w-[110px] h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Low Priority</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="high">High Priority</SelectItem>
+                      <SelectItem value="critical">Critical</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <span className="text-xs text-muted-foreground w-20">
+                    Budget: {computeBudget}%
+                  </span>
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
                     value={computeBudget}
-                    onChange={(e) => setComputeBudget(Number(e.target.value))}
-                    min={1}
-                    max={100}
+                    onChange={(e) => setComputeBudget(parseInt(e.target.value))}
+                    className="w-24"
                     disabled={!isConnected}
                   />
                 </div>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Textarea
+                value={promptText}
+                onChange={(e) => setPromptText(e.target.value)}
+                placeholder={
+                  isConnected 
+                    ? "Enter your research query or paste your prompt here..."
+                    : "Connect to AETHEL AI to start querying..."
+                }
+                rows={6}
+                className="resize-none font-mono text-sm"
+                disabled={!isConnected}
+              />
 
-              {/* Submit */}
-              <Button 
-                onClick={submitJob} 
-                disabled={!isConnected || !prompt.trim() || isSubmitting}
-                className="w-full"
-                size="lg"
-              >
-                {isSubmitting ? '⏳ Processing...' : '🚀 Submit to AETHEL'}
-              </Button>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  {promptText.length} characters • ~{Math.ceil(promptText.length / 4)} tokens
+                </span>
+                <Button
+                  onClick={handleSubmitPrompt}
+                  disabled={!promptText.trim() || !isConnected || isProcessing}
+                >
+                  {isProcessing ? (
+                    <>⏳ Processing... {Math.round(processingProgress)}%</>
+                  ) : (
+                    '🚀 Submit to AETHEL'
+                  )}
+                </Button>
+              </div>
+
+              {isProcessing && (
+                <Progress value={processingProgress} className="h-2" />
+              )}
             </CardContent>
           </Card>
-        </div>
 
-        {/* Right Panel - Results & Metrics */}
-        <div className="space-y-6">
-          {/* Live Metrics */}
-          {isConnected && (
+          {/* Response Display */}
+          {(currentResponse || aethelPrompts.some(p => p.response)) && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Live Metrics</CardTitle>
+                <CardTitle className="text-base flex items-center gap-2">
+                  AI Response
+                  <Badge variant="secondary" className="text-xs">
+                    {AI_MODELS.find(m => m.id === selectedModel)?.name}
+                  </Badge>
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>Compute Utilization</span>
-                    <span>{Math.round(metrics.computeUtilization)}%</span>
-                  </div>
-                  <Progress value={metrics.computeUtilization} />
+              <CardContent>
+                <div className="prose prose-sm max-w-none bg-muted/30 p-4 rounded-lg max-h-[500px] overflow-auto">
+                  {currentResponse || (
+                    <pre className="whitespace-pre-wrap font-mono text-sm">
+                      {aethelPrompts.find(p => p.response)?.response}
+                    </pre>
+                  )}
                 </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>Memory Usage</span>
-                    <span>{Math.round(metrics.memoryUsage)}%</span>
-                  </div>
-                  <Progress value={metrics.memoryUsage} />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>GPU Usage</span>
-                    <span>{Math.round(metrics.gpuUsage)}%</span>
-                  </div>
-                  <Progress value={metrics.gpuUsage} />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex justify-between text-sm">
-                    <span>Network I/O</span>
-                    <span>{Math.round(metrics.networkIO)}%</span>
-                  </div>
-                  <Progress value={metrics.networkIO} />
+                
+                <div className="flex gap-2 mt-4 pt-4 border-t">
+                  <Button size="sm" variant="outline" onClick={() => {
+                    navigator.clipboard.writeText(currentResponse);
+                  }}>
+                    📋 Copy Response
+                  </Button>
+                  <Button size="sm" variant="outline">
+                    💾 Save to Workspace
+                  </Button>
+                  <Button size="sm" variant="outline">
+                    🔄 Refine Response
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           )}
+        </div>
 
-          {/* Results History */}
+        {/* Right Panel - Status & History */}
+        <div className="space-y-4">
+          {/* Connection Status */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">System Status</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <StatusItem label="Compute Utilization" value={metrics.computeUtilization} unit="%" />
+              <StatusItem label="Memory Usage" value={metrics.memoryUsage} unit="%" />
+              <StatusItem label="GPU Usage" value={metrics.gpuUsage} unit="%" />
+              <StatusItem label="Network I/O" value={metrics.networkIO} unit="%" />
+              
+              <div className="pt-3 border-t space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Active Jobs</span>
+                  <span className="font-medium">{metrics.activeJobs}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Queue Depth</span>
+                  <span className="font-medium">{metrics.queueDepth}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Prompt History */}
           <Card>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm">{t('aethel.results_history')}</CardTitle>
-                <Switch checked={showResults} onCheckedChange={setShowResults} />
+                <CardTitle className="text-sm">Recent Prompts</CardTitle>
+                <Button size="sm" variant="ghost" onClick={clearPromptHistory}>
+                  Clear
+                </Button>
               </div>
             </CardHeader>
-            <CardContent className="max-h-[500px] overflow-auto space-y-3">
-              {completedJobs.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  {t('aethel.no_results')}
-                </p>
-              ) : (
-                completedJobs.map(job => (
-                  <div key={job.id} className="p-3 rounded-lg border space-y-2">
-                    <div className="flex items-start justify-between">
-                      <span className="font-medium text-sm">{job.model}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {job.tokensUsed.toLocaleString()} tokens
+            <CardContent>
+              <div className="space-y-2 max-h-[400px] overflow-auto">
+                {aethelPrompts.slice(0, 10).map(entry => (
+                  <button
+                    key={entry.id}
+                    onClick={() => {
+                      setPromptText(entry.prompt.value);
+                      setSelectedModel(entry.model.value);
+                    }}
+                    className={`w-full text-left p-2 rounded text-xs hover:bg-muted transition-colors ${
+                      entry.status === 'processing' ? 'animate-pulse bg-blue-50' :
+                      entry.status === 'completed' ? '' :
+                      ''
+                    }`}
+                  >
+                    <div className="font-medium truncate">{entry.prompt.value.substring(0, 60)}...</div>
+                    <div className="flex items-center gap-2 mt-1 text-muted-foreground">
+                      <span>{entry.model.value.split(' ')[0]}</span>
+                      <span>{entry.timestamp.toLocaleTimeString()}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        {entry.status}
                       </Badge>
                     </div>
-                    
-                    <p className="text-xs text-muted-foreground line-clamp-2">
-                      {job.prompt}
-                    </p>
-                    
-                    <div className="bg-muted/50 rounded p-2 max-h-40 overflow-auto">
-                      <pre className="text-xs whitespace-pre-wrap font-mono">
-                        {job.result.length > 500 
-                          ? job.result.substring(0, 500) + '...' 
-                          : job.result
-                        }
-                      </pre>
-                    </div>
-                    
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>{t('aethel.compute_time')}: {job.computeTime}s</span>
-                      <span>{job.timestamp.toLocaleTimeString()}</span>
-                    </div>
-                  </div>
-                ))
-              )}
+                  </button>
+                ))}
+                
+                {aethelPrompts.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No prompts yet. Submit one above!
+                  </p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Usage Stats */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm">Session Usage</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total Prompts</span>
+                <span className="font-medium">{aethelPrompts.length}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Tokens Used</span>
+                <span className="font-medium">
+                  {aethelPrompts.reduce((acc, p) => acc + p.tokensUsed.value, 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Avg Compute Time</span>
+                <span className="font-medium">
+                  {aethelPrompts.length > 0
+                    ? `${(aethelPrompts.reduce((acc, p) => acc + p.computeTime.value, 0) / aethelPrompts.length).toFixed(1)}s`
+                    : '-'
+                  }
+                </span>
+              </div>
+              
+              <div className="pt-3 border-t mt-3">
+                <p className="text-xs text-muted-foreground">
+                  🆓 Free tier: Unlimited queries during demo period
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ============ SUB-COMPONENTS ============
+
+function StatusItem({ label, value, unit }: { label: string; value: number; unit: string }) {
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium">{value}{unit}</span>
+      </div>
+      <Progress value={value} className="h-1.5" />
     </div>
   );
 }
