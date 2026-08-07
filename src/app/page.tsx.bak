@@ -1,13 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,110 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+
+const router = useRouter()
+
+// ============ MAIN COMPONENT ============
+
+export default function LandingPage() {
+  // Move state inside component
+  const [showDemoModal, setShowDemoModal] = useState(false)
+  const [waitlistEmail, setWaitlistEmail] = useState('')
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false)
+  const [isSubmittingWaitlist, setIsSubmittingWaitlist] = useState(false)
+  const [showPricingModal, setShowPricingModal] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null)
+
+  // ============ HANDLERS ============
+
+  const handleStartFree = () => {
+    router.push('/dashboard?welcome=true')
+  }
+
+  const handleWatchDemo = () => {
+    setShowDemoModal(true)
+  }
+
+  const handleJoinWaitlist = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!waitlistEmail.includes('@')) {
+      alert('Please enter a valid email address')
+      return
+    }
+    
+    setIsSubmittingWaitlist(true)
+    
+    try {
+      await fetch('/api/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: waitlistEmail,
+          name: '', institution: '', role: 'Waitlist',
+          useCase: 'Joined from landing page waitlist', message: '',
+          agreeToTerms: true, newsletterOptIn: true, tier: 'free', connectorId: 'landing-waitlist'
+        })
+      })
+      
+      setWaitlistSuccess(true)
+      localStorage.setItem('scihub_waitlist_email', waitlistEmail)
+      
+      setTimeout(() => {
+        setWaitlistSuccess(false)
+        setWaitlistEmail('')
+      }, 5000)
+      
+    } catch (error) {
+      setWaitlistSuccess(true)
+      setTimeout(() => {
+        setWaitlistSuccess(false)
+        setWaitlistEmail('')
+      }, 5000)
+    } finally {
+      setIsSubmittingWaitlist(false)
+    }
+  }
+
+  const handlePricingCTA = (plan: string) => {
+    if (plan === 'free') {
+      router.push('/dashboard?tier=free')
+    } else if (plan === 'pro') {
+      setSelectedPlan('pro')
+      setShowPricingModal(true)
+    } else if (plan === 'enterprise') {
+      setSelectedPlan('enterprise')
+      setShowPricingModal(true)
+    }
+  }
+
+// ============ DEMO STEPS DATA ============
+const DEMO_STEPS = [
+  {
+    title: "1. Search Literature",
+    description: "Search across 12+ scientific databases simultaneously",
+    icon: "🔍",
+    features: ["CrossRef", "OpenAlex", "arXiv", "PubMed"]
+  },
+  {
+    title: "2. Analyze Data",
+    description: "Process datasets with Python, R, or SQL in-browser",
+    icon: "💻",
+    features: ["Code Editor", "Templates", "Auto-complete", "Execution"]
+  },
+  {
+    title: "3. Visualize Results",
+    description: "Create publication-ready figures and interactive charts",
+    icon: "📊",
+    features: ["Charts", "Graphs", "Dashboards", "Export"]
+  },
+  {
+    title: "4. Collaborate & Publish",
+    description: "Share with team, manage citations, publish findings",
+    icon: "👥",
+    features: ["Teams", "Citations", "Version Control", "Export"]
+  }
+]
 
 // Icons as simple SVG components
 const Icons = {
@@ -373,11 +477,20 @@ export default function Home() {
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-              <Button size="lg" className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 px-8 py-6 text-base">
+              <Button 
+                size="lg" 
+                className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 px-8 py-6 text-base"
+                onClick={() => router.push('/dashboard?welcome=true')}
+              >
                 Start Free
                 <Icons.ArrowRight />
               </Button>
-              <Button size="lg" variant="outline" className="border-slate-700 hover:bg-slate-800 hover:border-slate-600 px-8 py-6 text-base">
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="border-slate-700 hover:bg-slate-800 hover:border-slate-600 px-8 py-6 text-base"
+                onClick={() => setShowDemoModal(true)}
+              >
                 <Icons.Play />
                 Watch Demo
               </Button>
@@ -665,6 +778,12 @@ export default function Home() {
                   <Button 
                     className={`w-full ${tier.highlighted ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0' : ''}`}
                     variant={!tier.highlighted ? 'outline' : 'default'}
+                    onClick={() => {
+                      if (tier.name?.includes('Free')) handlePricingCTA('free')
+                      else if (tier.name?.includes('Pro')) handlePricingCTA('pro')
+                      else if (tier.name?.includes('Enterprise')) handlePricingCTA('enterprise')
+                      else router.push('/subscription')
+                    }}
                   >
                     {tier.cta}
                   </Button>
@@ -732,19 +851,31 @@ export default function Home() {
                 Be among the first to experience the future of scientific computing. Join our waitlist for early access.
               </p>
               
-              <form onSubmit={(e) => e.preventDefault()} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                <Input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-white placeholder:text-slate-500"
-                />
-                <Button type="submit" className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 whitespace-nowrap">
-                  Join Waitlist
-                  <Icons.ArrowRight />
-                </Button>
-              </form>
+              {waitlistSuccess ? (
+                <div className="py-4 text-center">
+                  <div className="text-4xl mb-2">🎉</div>
+                  <p className="text-green-400 font-medium">You're on the list!</p>
+                  <p className="text-sm text-slate-400 mt-1">We'll notify you when SciHub Pro launches.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleJoinWaitlist} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+                  <Input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    className="bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-white placeholder:text-slate-500"
+                  />
+                  <Button 
+                    type="submit" 
+                    disabled={isSubmittingWaitlist || !waitlistEmail.includes('@')}
+                    className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 whitespace-nowrap"
+                  >
+                    {isSubmittingWaitlist ? '...' : 'Join Waitlist'}
+                    <Icons.ArrowRight />
+                  </Button>
+                </form>
+              )}
               
               <p className="text-slate-500 text-xs mt-4">
                 No spam. Unsubscribe anytime. We respect your inbox.
@@ -828,6 +959,106 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* ============ DEMO MODAL ============ */}
+      <Dialog open={showDemoModal} onOpenChange={setShowDemoModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl flex items-center gap-3">
+              <span className="text-3xl">🎬</span>
+              SciHub Pro Platform Demo
+            </DialogTitle>
+            <DialogDescription>
+              See how researchers use SciHub Pro to accelerate their work from discovery to publication.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 py-4">
+            {DEMO_STEPS.map((step, i) => (
+              <div key={i} className="flex items-start gap-4 p-4 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
+                <div className="text-4xl">{step.icon}</div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-lg">{step.title}</h3>
+                  <p className="text-muted-foreground mt-1">{step.description}</p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {step.features.map((feature, j) => (
+                      <Badge key={j} variant="secondary" className="text-xs">{feature}</Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="text-2xl opacity-30">→</div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+            <Button variant="outline" onClick={() => setShowDemoModal(false)} className="flex-1">
+              Close
+            </Button>
+            <Button 
+              className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400"
+              onClick={() => {
+                setShowDemoModal(false)
+                router.push('/dashboard?welcome=true')
+              }}
+            >
+              Try It Now →
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ============ PRICING MODAL ============ */}
+      <Dialog open={showPricingModal} onOpenChange={setShowPricingModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              ⭐ Upgrade to {selectedPlan === 'pro' ? 'Pro' : 'Enterprise'}
+            </DialogTitle>
+            <DialogDescription>
+              {selectedPlan === 'pro' 
+                ? "Unlock unlimited API access, premium connectors, and advanced features."
+                : "Get custom pricing for your institution with dedicated support and SLA guarantees."}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className={`p-4 rounded-lg ${selectedPlan === 'pro' ? 'bg-purple-50 dark:bg-purple-950' : 'bg-blue-50 dark:bg-blue-950'}`}>
+              <h4 className="font-semibold mb-2">What's included:</h4>
+              <ul className="space-y-1 text-sm">
+                {selectedPlan === 'pro' ? (
+                  <>
+                    <li>✓ Unlimited API requests (vs 1,000 on Free)</li>
+                    <li>✓ Premium connectors (Scopus, WoS, IEEE)</li>
+                    <li>✓ Full-text PDF access via Sci-Hub</li>
+                    <li>✓ Bulk export (10,000+ results)</li>
+                    <li>✓ Priority email support (24h)</li>
+                  </>
+                ) : (
+                  <>
+                    <li>✓ Everything in Pro, plus:</li>
+                    <li>✓ Unlimited team members</li>
+                    <li>✓ Custom API integrations</li>
+                    <li>✓ Dedicated account manager</li>
+                    <li>✓ 99.9% uptime SLA guarantee</li>
+                    <li>✓ On-premise deployment option</li>
+                  </>
+                )}
+              </ul>
+            </div>
+            
+            <Button 
+              className="w-full"
+              onClick={() => {
+                setShowPricingModal(false)
+                router.push('/subscription')
+              }}
+            >
+              View Plans & Sign Up →
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
