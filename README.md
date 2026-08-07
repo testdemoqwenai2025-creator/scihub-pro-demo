@@ -153,7 +153,7 @@ SciHub Pro leverages the strengths of multiple programming languages:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/scihub-pro.git
+git clone https://github.com/Demo1/scihub-pro.git
 cd scihub-pro
 
 # Install dependencies
@@ -168,6 +168,12 @@ npm run dev
 
 # Open http://localhost:3000 in your browser
 ```
+
+### 🚀 Live Preview
+
+**[View Live Demo on Preview Server](https://preview-<bot-id>.space-z.ai/)**
+
+The application is running on the preview server for immediate access.
 
 ### Demo Credentials
 
@@ -185,6 +191,14 @@ npm run build
 # Start production server
 npm start
 ```
+
+### Deploy to Vercel (One-Click)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Demo1/scihub-pro)
+
+### Deploy to Netlify
+
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/Demo1/scihub-pro)
 
 ---
 
