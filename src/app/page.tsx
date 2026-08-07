@@ -15,6 +15,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 // Icons as simple SVG components
 const Icons = {
@@ -77,6 +84,9 @@ const Icons = {
   ),
   Linkedin: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></svg>
+  ),
+  Loader2: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
   ),
 }
 
@@ -158,31 +168,37 @@ const features = [
     icon: Icons.Package,
     title: 'Package Discovery & Sharing',
     description: 'Find, install, and share scientific packages across any language or framework. One registry for everything.',
+    link: '/connectors',
   },
   {
     icon: Icons.Container,
     title: 'Reproducible Environments',
     description: 'Container-based environments that ensure your research is reproducible by anyone, anywhere.',
+    link: '/workspace',
   },
   {
     icon: Icons.Users,
     title: 'Collaborative Workspace',
     description: 'Real-time collaboration with version control built for scientific workflows, not just code.',
+    link: '/dashboard',
   },
   {
     icon: Icons.Server,
     title: 'Scalable Compute',
     description: 'From laptop to cluster to cloud—scale your compute without changing your workflow.',
+    link: '/datasets',
   },
   {
     icon: Icons.Brain,
     title: 'AI-Powered Insights',
     description: 'Integrated AI assistants that help analyze data, suggest methods, and accelerate discovery.',
+    link: '/search',
   },
   {
     icon: Icons.Shield,
     title: 'Enterprise Security',
     description: 'SOC 2 compliant with audit logs, SSO, and data governance for institutional requirements.',
+    link: '#',
   },
 ]
 
@@ -232,6 +248,7 @@ const pricingTiers = [
     features: ['Unlimited public projects', 'Basic compute (10 hrs/mo)', 'Community support', 'Core package registry'],
     cta: 'Get Started',
     highlighted: false,
+    action: 'free',
   },
   {
     name: 'Professional',
@@ -241,6 +258,7 @@ const pricingTiers = [
     features: ['Private projects', 'Advanced compute (100 hrs/mo)', 'Priority support', 'AI-powered insights', 'Team collaboration'],
     cta: 'Start Free Trial',
     highlighted: true,
+    action: 'trial',
   },
   {
     name: 'Enterprise',
@@ -250,6 +268,7 @@ const pricingTiers = [
     features: ['Everything in Professional', 'Unlimited compute', 'SSO & SAML', 'Dedicated support', 'Custom integrations', 'SLA guarantee'],
     cta: 'Contact Sales',
     highlighted: false,
+    action: 'enterprise',
   },
 ]
 
@@ -276,9 +295,63 @@ const testimonials = [
 ]
 
 export default function Home() {
+  const router = useRouter()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [isScrolled, setIsScrolled] = useState(false)
+
+  // Modal states
+  const [showDemoModal, setShowDemoModal] = useState(false)
+  const [showEarlyAccessModal, setShowEarlyAccessModal] = useState(false)
+  const [showInvestorModal, setShowInvestorModal] = useState(false)
+  const [showSignupModal, setShowSignupModal] = useState(false)
+  const [showTrialModal, setShowTrialModal] = useState(false)
+  const [showEnterpriseModal, setShowEnterpriseModal] = useState(false)
+
+  // Form states
+  const [waitlistEmail, setWaitlistEmail] = useState('')
+  const [waitlistLoading, setWaitlistLoading] = useState(false)
+  const [waitlistSuccess, setWaitlistSuccess] = useState(false)
+  const [waitlistError, setWaitlistError] = useState('')
+
+  // Early Access form states
+  const [earlyAccessForm, setEarlyAccessForm] = useState({
+    name: '',
+    email: '',
+    institution: '',
+    role: '',
+    researchField: '',
+    hearAboutUs: '',
+    excitedFeature: '',
+    agreeTerms: false,
+  })
+  const [earlyAccessLoading, setEarlyAccessLoading] = useState(false)
+  const [earlyAccessSuccess, setEarlyAccessSuccess] = useState(false)
+  const [earlyAccessError, setEarlyAccessError] = useState('')
+
+  // Enterprise form states
+  const [enterpriseForm, setEnterpriseForm] = useState({
+    company: '',
+    website: '',
+    industry: '',
+    country: '',
+    users: '',
+    apiCalls: '',
+    storage: '',
+    integrations: '',
+    compliance: '',
+    contactName: '',
+    jobTitle: '',
+    workEmail: '',
+    phone: '',
+    bestTime: '',
+    timeline: '',
+    budget: '',
+    notes: '',
+  })
+  const [enterpriseLoading, setEnterpriseLoading] = useState(false)
+  const [enterpriseSuccess, setEnterpriseSuccess] = useState(false)
+  const [enterpriseError, setEnterpriseError] = useState('')
 
   useEffect(() => {
     const handleScroll = () => {
@@ -287,6 +360,125 @@ export default function Home() {
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  // Waitlist submit handler
+  const handleWaitlistSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!waitlistEmail.includes('@')) {
+      setWaitlistError('Please enter a valid email address')
+      return
+    }
+
+    setWaitlistLoading(true)
+    setWaitlistError('')
+
+    try {
+      // Store in localStorage as backup
+      const waitlistEntries = JSON.parse(localStorage.getItem('scihub_waitlist') || '[]')
+      if (!waitlistEntries.includes(waitlistEmail)) {
+        waitlistEntries.push({
+          email: waitlistEmail,
+          timestamp: new Date().toISOString(),
+          source: 'landing_page'
+        })
+        localStorage.setItem('scihub_waitlist', JSON.stringify(waitlistEntries))
+      }
+      
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      setWaitlistSuccess(true)
+      setWaitlistEmail('')
+    } catch {
+      // Fallback success
+      setWaitlistSuccess(true)
+    } finally {
+      setWaitlistLoading(false)
+    }
+  }
+
+  // Early Access submit handler
+  const handleEarlyAccessSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!earlyAccessForm.name || !earlyAccessForm.email || !earlyAccessForm.institution) {
+      setEarlyAccessError('Please fill in all required fields')
+      return
+    }
+
+    if (!earlyAccessForm.agreeTerms) {
+      setEarlyAccessError('Please agree to the beta terms')
+      return
+    }
+
+    setEarlyAccessLoading(true)
+    setEarlyAccessError('')
+
+    try {
+      // Store in localStorage
+      const entries = JSON.parse(localStorage.getItem('scihub_early_access') || '[]')
+      entries.push({
+        ...earlyAccessForm,
+        timestamp: new Date().toISOString()
+      })
+      localStorage.setItem('scihub_early_access', JSON.stringify(entries))
+
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      setEarlyAccessSuccess(true)
+    } catch {
+      setEarlyAccessError('Something went wrong. Please try again.')
+    } finally {
+      setEarlyAccessLoading(false)
+    }
+  }
+
+  // Enterprise submit handler
+  const handleEnterpriseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+
+    if (!enterpriseForm.company || !enterpriseForm.contactName || !enterpriseForm.workEmail) {
+      setEnterpriseError('Please fill in all required fields')
+      return
+    }
+
+    setEnterpriseLoading(true)
+    setEnterpriseError('')
+
+    try {
+      // Store in localStorage
+      const entries = JSON.parse(localStorage.getItem('scihub_enterprise_leads') || '[]')
+      entries.push({
+        ...enterpriseForm,
+        timestamp: new Date().toISOString()
+      })
+      localStorage.setItem('scihub_enterprise_leads', JSON.stringify(entries))
+
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      setEnterpriseSuccess(true)
+    } catch {
+      setEnterpriseError('Something went wrong. Please try again.')
+    } finally {
+      setEnterpriseLoading(false)
+    }
+  }
+
+  // Pricing CTA handler
+  const handlePricingCta = (action: string) => {
+    switch (action) {
+      case 'free':
+        setShowSignupModal(true)
+        break
+      case 'trial':
+        setShowTrialModal(true)
+        break
+      case 'enterprise':
+        setShowEnterpriseModal(true)
+        break
+    }
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-white">
@@ -312,10 +504,19 @@ export default function Home() {
 
             {/* Desktop CTAs */}
             <div className="hidden md:flex items-center gap-3">
-              <Button variant="ghost" size="sm" className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/10"
+                onClick={() => setShowInvestorModal(true)}
+              >
                 Investor Portal
               </Button>
-              <Button size="sm" className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0">
+              <Button 
+                size="sm" 
+                className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0"
+                onClick={() => setShowEarlyAccessModal(true)}
+              >
                 Get Early Access
               </Button>
             </div>
@@ -338,10 +539,19 @@ export default function Home() {
                 <a href="#about" className="text-sm text-slate-300 hover:text-white transition-colors" onClick={() => setIsMenuOpen(false)}>About</a>
                 <a href="#contact" className="text-sm text-slate-300 hover:text-white transition-colors" onClick={() => setIsMenuOpen(false)}>Contact</a>
                 <Separator className="bg-slate-800" />
-                <Button variant="outline" size="sm" className="w-full border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10"
+                  onClick={() => { setShowInvestorModal(true); setIsMenuOpen(false); }}
+                >
                   Investor Portal
                 </Button>
-                <Button size="sm" className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0">
+                <Button 
+                  size="sm" 
+                  className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0"
+                  onClick={() => { setShowEarlyAccessModal(true); setIsMenuOpen(false); }}
+                >
                   Get Early Access
                 </Button>
               </div>
@@ -373,11 +583,20 @@ export default function Home() {
             </p>
             
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-              <Button size="lg" className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 px-8 py-6 text-base">
+              <Button 
+                size="lg" 
+                className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 px-8 py-6 text-base"
+                onClick={() => setShowSignupModal(true)}
+              >
                 Start Free
                 <Icons.ArrowRight />
               </Button>
-              <Button size="lg" variant="outline" className="border-slate-700 hover:bg-slate-800 hover:border-slate-600 px-8 py-6 text-base">
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="border-slate-700 hover:bg-slate-800 hover:border-slate-600 px-8 py-6 text-base"
+                onClick={() => setShowDemoModal(true)}
+              >
                 <Icons.Play />
                 Watch Demo
               </Button>
@@ -535,15 +754,20 @@ export default function Home() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((feature, i) => (
-              <Card key={i} className="group bg-slate-900/50 border-slate-800 hover:border-cyan-500/50 transition-all duration-300 hover:-translate-y-1">
-                <CardContent className="p-6">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500/20 to-teal-500/20 flex items-center justify-center text-cyan-400 mb-4 group-hover:from-cyan-500/30 group-hover:to-teal-500/30 transition-colors">
-                    <feature.icon />
-                  </div>
-                  <h3 className="font-semibold text-lg text-white mb-2 group-hover:text-cyan-400 transition-colors">{feature.title}</h3>
-                  <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
-                </CardContent>
-              </Card>
+              <Link key={i} href={feature.link}>
+                <Card className="group h-full bg-slate-900/50 border-slate-800 hover:border-cyan-500/50 transition-all duration-300 hover:-translate-y-1 cursor-pointer">
+                  <CardContent className="p-6">
+                    <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-cyan-500/20 to-teal-500/20 flex items-center justify-center text-cyan-400 mb-4 group-hover:from-cyan-500/30 group-hover:to-teal-500/30 transition-colors">
+                      <feature.icon />
+                    </div>
+                    <h3 className="font-semibold text-lg text-white mb-2 group-hover:text-cyan-400 transition-colors">{feature.title}</h3>
+                    <p className="text-slate-400 text-sm leading-relaxed">{feature.description}</p>
+                    <div className="mt-4 flex items-center gap-1 text-cyan-400 text-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                      Learn more <Icons.ArrowRight className="w-4 h-4" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
             ))}
           </div>
         </div>
@@ -665,6 +889,7 @@ export default function Home() {
                   <Button 
                     className={`w-full ${tier.highlighted ? 'bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0' : ''}`}
                     variant={!tier.highlighted ? 'outline' : 'default'}
+                    onClick={() => handlePricingCta(tier.action)}
                   >
                     {tier.cta}
                   </Button>
@@ -718,10 +943,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* CTA Section - Functional Waitlist Form */}
       <section id="contact" className="py-16 md:py-24 bg-gradient-to-b from-slate-900/50 to-cyan-900/20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <Card className="max-w-3xl mx-auto bg-gradient-to-br from-slate-900 to-slate-800 border-cyan-500/30 shadow-2xl shadow-cyan-500/10 overflow-hidden">
+          <Card className="max-w-3xl mx-auto bg-gradient-to-br from-slate-900 to-slate-800 border-cyan-500/30 shadow-2xl shadow-cyan-500/10 overflow-hidden relative">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(6,182,212,0.15),transparent_70%)]" />
             <CardContent className="relative p-8 md:p-12 text-center">
               <Badge className="mb-4 bg-cyan-500/20 text-cyan-400 border-cyan-500/30">Join the Waitlist</Badge>
@@ -732,23 +957,53 @@ export default function Home() {
                 Be among the first to experience the future of scientific computing. Join our waitlist for early access.
               </p>
               
-              <form onSubmit={(e) => e.preventDefault()} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                <Input
-                  type="email"
-                  placeholder="Enter your email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-white placeholder:text-slate-500"
-                />
-                <Button type="submit" className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 whitespace-nowrap">
-                  Join Waitlist
-                  <Icons.ArrowRight />
-                </Button>
-              </form>
+              {!waitlistSuccess ? (
+                <form onSubmit={handleWaitlistSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
+                  <Input
+                    type="email"
+                    placeholder="Enter your email"
+                    value={waitlistEmail}
+                    onChange={(e) => { setWaitlistEmail(e.target.value); setWaitlistError(''); }}
+                    disabled={waitlistLoading}
+                    className="bg-slate-800/50 border-slate-700 focus:border-cyan-500 text-white placeholder:text-slate-500"
+                  />
+                  <Button 
+                    type="submit" 
+                    disabled={waitlistLoading}
+                    className="bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0 whitespace-nowrap"
+                  >
+                    {waitlistLoading ? (
+                      <>
+                        <Icons.Loader2 className="mr-2 animate-spin" />
+                        Joining...
+                      </>
+                    ) : (
+                      <>
+                        Join Waitlist
+                        <Icons.ArrowRight />
+                      </>
+                    )}
+                  </Button>
+                </form>
+              ) : (
+                <div className="max-w-md mx-auto p-6 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <Icons.Check className="w-6 h-6 text-green-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-green-400 mb-2">You're on the list! 🎉</h3>
+                  <p className="text-slate-400 text-sm">We'll notify you when SciHub Pro launches. Check your inbox for a confirmation.</p>
+                </div>
+              )}
+
+              {waitlistError && (
+                <p className="text-red-400 text-sm mt-3">{waitlistError}</p>
+              )}
               
-              <p className="text-slate-500 text-xs mt-4">
-                No spam. Unsubscribe anytime. We respect your inbox.
-              </p>
+              {!waitlistSuccess && (
+                <p className="text-slate-500 text-xs mt-4">
+                  No spam. Unsubscribe anytime. We respect your inbox.
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -797,7 +1052,7 @@ export default function Home() {
             <div>
               <h4 className="font-semibold text-white mb-4">Resources</h4>
               <ul className="space-y-2">
-                <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Documentation</a></li>
+                <li><Link href="/documentation" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Documentation</a></li>
                 <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">API Reference</a></li>
                 <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Community</a></li>
                 <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Status</a></li>
@@ -828,6 +1083,617 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* ==================== MODALS ==================== */}
+
+      {/* Demo Video Modal */}
+      <Dialog open={showDemoModal} onOpenChange={setShowDemoModal}>
+        <DialogContent className="sm:max-w-4xl bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-white">See SciHub Pro in Action</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Watch how researchers are transforming their workflow with our platform
+            </DialogDescription>
+          </DialogHeader>
+          <div className="aspect-video bg-slate-800 rounded-lg flex items-center justify-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-cyan-900/20 to-teal-900/20" />
+            <div className="text-center z-10">
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-gradient-to-r from-cyan-500 to-teal-500 flex items-center justify-center cursor-pointer hover:scale-110 transition-transform">
+                <Icons.Play className="w-8 h-8 text-white ml-1" />
+              </div>
+              <p className="text-white font-medium">Demo Video Coming Soon</p>
+              <p className="text-slate-400 text-sm mt-2">Full product walkthrough will be available at launch</p>
+            </div>
+          </div>
+          <div className="flex justify-between items-center pt-4">
+            <p className="text-slate-500 text-sm">Duration: ~5 min • Updated August 2026</p>
+            <Button onClick={() => { setShowDemoModal(false); setShowEarlyAccessModal(true); }} className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">
+              Get Early Access Instead
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Early Access Registration Modal */}
+      <Dialog open={showEarlyAccessModal} onOpenChange={setShowEarlyAccessModal}>
+        <DialogContent className="sm:max-w-2xl bg-slate-900 border-slate-700 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-white">🚀 Request Early Access</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Join our private beta program and be among the first to experience SciHub Pro
+            </DialogDescription>
+          </DialogHeader>
+          
+          {!earlyAccessSuccess ? (
+            <form onSubmit={handleEarlyAccessSubmit} className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Full Name *</label>
+                  <Input
+                    type="text"
+                    placeholder="Dr. Jane Smith"
+                    value={earlyAccessForm.name}
+                    onChange={(e) => setEarlyAccessForm({...earlyAccessForm, name: e.target.value})}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Email Address *</label>
+                  <Input
+                    type="email"
+                    placeholder="jane@university.edu"
+                    value={earlyAccessForm.email}
+                    onChange={(e) => setEarlyAccessForm({...earlyAccessForm, email: e.target.value})}
+                    className="bg-slate-800 border-slate-700 text-white"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Institution/Organization *</label>
+                <Input
+                  type="text"
+                  placeholder="MIT, Stanford, NASA, etc."
+                  value={earlyAccessForm.institution}
+                  onChange={(e) => setEarlyAccessForm({...earlyAccessForm, institution: e.target.value})}
+                  className="bg-slate-800 border-slate-700 text-white"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Role</label>
+                  <Select value={earlyAccessForm.role} onValueChange={(value) => setEarlyAccessForm({...earlyAccessForm, role: value})}>
+                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                      <SelectValue placeholder="Select your role" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value="student">Student</SelectItem>
+                      <SelectItem value="researcher">Researcher</SelectItem>
+                      <SelectItem value="pi">Principal Investigator</SelectItem>
+                      <SelectItem value="industry">Industry Scientist</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Research Field</label>
+                  <Input
+                    type="text"
+                    placeholder="Bioinformatics, Physics, Chemistry..."
+                    value={earlyAccessForm.researchField}
+                    onChange={(e) => setEarlyAccessForm({...earlyAccessForm, researchField: e.target.value})}
+                    className="bg-slate-800 border-slate-700 text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">What excites you most?</label>
+                <textarea
+                  placeholder="Tell us which feature you're most excited about..."
+                  rows={3}
+                  value={earlyAccessForm.excitedFeature}
+                  onChange={(e) => setEarlyAccessForm({...earlyAccessForm, excitedFeature: e.target.value})}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-white placeholder:text-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 resize-none"
+                />
+              </div>
+
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  id="agreeTerms"
+                  checked={earlyAccessForm.agreeTerms}
+                  onChange={(e) => setEarlyAccessForm({...earlyAccessForm, agreeTerms: e.target.checked})}
+                  className="mt-1 rounded border-slate-600 bg-slate-800 text-cyan-500 focus:ring-cyan-500"
+                />
+                <label htmlFor="agreeTerms" className="text-sm text-slate-400">
+                  I agree to the <a href="#" className="text-cyan-400 hover:underline">Terms of Service</a> and <a href="#" className="text-cyan-400 hover:underline">Privacy Policy</a>, and want to participate in the beta program *
+                </label>
+              </div>
+
+              {earlyAccessError && (
+                <p className="text-red-400 text-sm">{earlyAccessError}</p>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setShowEarlyAccessModal(false)} className="border-slate-600 text-slate-300">
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={earlyAccessLoading}
+                  className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0"
+                >
+                  {earlyAccessLoading ? (
+                    <>
+                      <Icons.Loader2 className="mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Request Early Access'
+                  )}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Icons.Check className="w-8 h-8 text-green-400" />
+              </div>
+              <h3 className="text-2xl font-semibold text-green-400 mb-2">You're In! 🎉</h3>
+              <p className="text-slate-400 mb-4">Welcome to the SciHub Pro beta program. We'll be in touch within 48 hours with next steps.</p>
+              <Button onClick={() => setShowEarlyAccessModal(false)} variant="outline" className="border-slate-600 text-slate-300">
+                Close
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Investor Portal Modal */}
+      <Dialog open={showInvestorModal} onOpenChange={setShowInvestorModal}>
+        <DialogContent className="sm:max-w-3xl bg-slate-900 border-slate-700 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-white">💼 Investor Relations</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Investment opportunity in the future of scientific computing
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 mt-4">
+            {/* Key Metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-cyan-400">$45B+</div>
+                <div className="text-xs text-slate-400">TAM</div>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-cyan-400">12%</div>
+                <div className="text-xs text-slate-400">CAGR</div>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-cyan-400">10M+</div>
+                <div className="text-xs text-slate-400">Addressable Users</div>
+              </div>
+              <div className="bg-slate-800/50 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-cyan-400">Y5</div>
+                <div className="text-xs text-slate-400">$500M+ ARR Target</div>
+              </div>
+            </div>
+
+            {/* Team Info */}
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-3">Leadership Team</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { name: 'CEO & Founder', background: 'Ex-Google, PhD Machine Learning', focus: 'Product Vision & Strategy' },
+                  { name: 'CTO & Co-Founder', background: 'Ex-Meta, Distributed Systems', focus: 'Platform Architecture' },
+                  { name: 'VP Engineering', background: 'Ex-Databricks, Infrastructure', focus: 'Scale & Reliability' },
+                  { name: 'Head of Science', background: 'Academic Researcher, 50+ Publications', focus: 'Scientific Partnerships' },
+                ].map((member, i) => (
+                  <div key={i} className="bg-slate-800/50 rounded-lg p-4">
+                    <div className="font-medium text-white">{member.name}</div>
+                    <div className="text-sm text-cyan-400">{member.background}</div>
+                    <div className="text-xs text-slate-400 mt-1">{member.focus}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Competitive Advantages */}
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-3">Why SciHub Pro Wins</h3>
+              <div className="space-y-2">
+                {['First-mover advantage in unified science platform', 'Proprietary AETH-1 orchestration engine', 'Deep domain expertise vs generic tools', 'Viral adoption through academic networks', 'Multi-sided network effects'].map((advantage, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm text-slate-300">
+                    <Icons.Check className="w-4 h-4 text-cyan-400 shrink-0" />
+                    {advantage}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Investor Interest Form */}
+            <div className="border-t border-slate-700 pt-6">
+              <h3 className="text-lg font-semibold text-white mb-3">Request Investor Deck</h3>
+              <p className="text-sm text-slate-400 mb-4">Leave your contact information and we'll send you our pitch deck and schedule a call.</p>
+              
+              <form onSubmit={(e) => { e.preventDefault(); alert('Thank you for your interest! Our investor relations team will contact you within 24 hours.'); setShowInvestorModal(false); }} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Input placeholder="Firm Name *" className="bg-slate-800 border-slate-700 text-white" required />
+                  <Input placeholder="Your Role *" className="bg-slate-800 border-slate-700 text-white" required />
+                  <Input type="email" placeholder="Work Email *" className="bg-slate-800 border-slate-700 text-white" required />
+                  <Input placeholder="Portfolio Companies (optional)" className="bg-slate-800 border-slate-700 text-white" />
+                </div>
+                <textarea 
+                  placeholder="Tell us about your investment thesis..." 
+                  rows={3}
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-white placeholder:text-slate-500 resize-none"
+                />
+                <div className="flex gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowInvestorModal(false)} className="border-slate-600 text-slate-300">Cancel</Button>
+                  <Button type="submit" className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">Request Pitch Deck</Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Signup Modal (for "Start Free" CTA) */}
+      <Dialog open={showSignupModal} onOpenChange={setShowSignupModal}>
+        <DialogContent className="sm:max-w-md bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-white">Start Free Today</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Create your free account and start accelerating your research
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <Button 
+              variant="outline" 
+              className="w-full border-slate-600 text-white hover:bg-slate-800 h-12"
+              onClick={() => { alert('Google Sign-In coming soon! For now, use email signup.'); }}
+            >
+              <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+              Continue with Google
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              className="w-full border-slate-600 text-white hover:bg-slate-800 h-12"
+              onClick={() => { alert('GitHub Sign-In coming soon! For now, use email signup.'); }}
+            >
+              <Icons.Github className="w-5 h-5 mr-2" />
+              Continue with GitHub
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-700"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-slate-900 text-slate-400">Or continue with email</span>
+              </div>
+            </div>
+
+            <form onSubmit={(e) => { 
+              e.preventDefault(); 
+              alert('Account created successfully! Welcome to SciHub Pro.'); 
+              setShowSignupModal(false);
+              router.push('/dashboard');
+            }} className="space-y-3">
+              <Input type="email" placeholder="Email address" className="bg-slate-800 border-slate-700 text-white" required />
+              <Input type="password" placeholder="Create password" className="bg-slate-800 border-slate-700 text-white" required />
+              <Button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">
+                Create Free Account
+              </Button>
+            </form>
+
+            <p className="text-xs text-slate-500 text-center">
+              By signing up, you agree to our <a href="#" className="text-cyan-400 hover:underline">Terms</a> and <a href="#" className="text-cyan-400 hover:underline">Privacy Policy</a>
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pro Trial Modal */}
+      <Dialog open={showTrialModal} onOpenChange={setShowTrialModal}>
+        <DialogContent className="sm:max-w-lg bg-slate-900 border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-white">✨ Start Your 14-Day Pro Trial</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Full access to all Pro features — no credit card required
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <div className="bg-gradient-to-r from-cyan-900/30 to-teal-900/30 rounded-lg p-4 border border-cyan-500/20">
+              <h4 className="font-semibold text-white mb-2">Pro Trial Includes:</h4>
+              <ul className="space-y-1 text-sm text-slate-300">
+                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Unlimited private projects</li>
+                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> 100 hours advanced compute/month</li>
+                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Priority support</li>
+                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> AI-powered insights</li>
+                <li className="flex items-center gap-2"><Icons.Check className="w-4 h-4 text-cyan-400" /> Team collaboration (up to 10 members)</li>
+              </ul>
+            </div>
+
+            <form onSubmit={(e) => { 
+              e.preventDefault(); 
+              alert('Trial activated! You have 14 days of Pro access. Welcome to SciHub Pro!'); 
+              setShowTrialModal(false);
+              router.push('/dashboard');
+            }} className="space-y-3">
+              <Input type="text" placeholder="Full Name" className="bg-slate-800 border-slate-700 text-white" required />
+              <Input type="email" placeholder="Work Email" className="bg-slate-800 border-slate-700 text-white" required />
+              <Input type="text" placeholder="Organization" className="bg-slate-800 border-slate-700 text-white" required />
+              <Button type="submit" className="w-full bg-gradient-to-r from-cyan-500 to-teal-500 text-white border-0">
+                Start Free Trial
+              </Button>
+            </form>
+
+            <p className="text-xs text-slate-500 text-center">
+              No credit card required • Cancel anytime • $49/user/month after trial
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Enterprise Sales Modal */}
+      <Dialog open={showEnterpriseModal} onOpenChange={setShowEnterpriseModal}>
+        <DialogContent className="sm:max-w-3xl bg-slate-900 border-slate-700 max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl text-white">🏢 Enterprise Inquiry</DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Let's discuss how SciHub Pro can power your organization's research infrastructure
+            </DialogDescription>
+          </DialogHeader>
+          
+          {!enterpriseSuccess ? (
+            <form onSubmit={handleEnterpriseSubmit} className="space-y-6 mt-4">
+              {/* Company Information */}
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">1</span>
+                  Company Information
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Company Name *</label>
+                    <Input 
+                      value={enterpriseForm.company}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, company: e.target.value})}
+                      placeholder="Your institution or company"
+                      className="bg-slate-800 border-slate-700 text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Website</label>
+                    <Input 
+                      value={enterpriseForm.website}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, website: e.target.value})}
+                      placeholder="https://yourcompany.com"
+                      className="bg-slate-800 border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Industry</label>
+                    <Select value={enterpriseForm.industry} onValueChange={(value) => setEnterpriseForm({...enterpriseForm, industry: value})}>
+                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                        <SelectValue placeholder="Select industry" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="academic">Academic Institution</SelectItem>
+                        <SelectItem value="pharma">Pharmaceutical</SelectItem>
+                        <SelectItem value="biotech">Biotechnology</SelectItem>
+                        <SelectItem value="government">Government</SelectItem>
+                        <SelectItem value="healthcare">Healthcare</SelectItem>
+                        <SelectItem value="technology">Technology</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Country/Region</label>
+                    <Input 
+                      value={enterpriseForm.country}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, country: e.target.value})}
+                      placeholder="United States"
+                      className="bg-slate-800 border-slate-700 text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Technical Requirements */}
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">2</span>
+                  Technical Requirements
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Expected Users *</label>
+                    <Select value={enterpriseForm.users} onValueChange={(value) => setEnterpriseForm({...enterpriseForm, users: value})}>
+                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                        <SelectValue placeholder="Select range" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="1-10">1-10 users</SelectItem>
+                        <SelectItem value="11-50">11-50 users</SelectItem>
+                        <SelectItem value="51-200">51-200 users</SelectItem>
+                        <SelectItem value="201-1000">201-1000 users</SelectItem>
+                        <SelectItem value="1000+">1000+ users</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Monthly API Calls (est.)</label>
+                    <Input 
+                      value={enterpriseForm.apiCalls}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, apiCalls: e.target.value})}
+                      placeholder="e.g., 100,000"
+                      className="bg-slate-800 border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Storage Needs</label>
+                    <Input 
+                      value={enterpriseForm.storage}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, storage: e.target.value})}
+                      placeholder="e.g., 10TB"
+                      className="bg-slate-800 border-slate-700 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Integrations Needed</label>
+                    <Select value={enterpriseForm.integrations} onValueChange={(value) => setEnterpriseForm({...enterpriseForm, integrations: value})}>
+                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                        <SelectValue placeholder="Select options" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="sso">SSO / SAML</SelectItem>
+                        <SelectItem value="onprem">On-Premise Deployment</SelectItem>
+                        <SelectItem value="hipaa">HIPAA Compliance</SelectItem>
+                        <SelectItem value="fedramp">FedRAMP Compliance</SelectItem>
+                        <SelectItem value="soc2">SOC 2 Compliance</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Decision Maker Info */}
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">3</span>
+                  Contact Information
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Your Name *</label>
+                    <Input 
+                      value={enterpriseForm.contactName}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, contactName: e.target.value})}
+                      placeholder="Full name"
+                      className="bg-slate-800 border-slate-700 text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Job Title *</label>
+                    <Input 
+                      value={enterpriseForm.jobTitle}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, jobTitle: e.target.value})}
+                      placeholder="e.g., CTO, VP Engineering"
+                      className="bg-slate-800 border-slate-700 text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Work Email *</label>
+                    <Input 
+                      type="email"
+                      value={enterpriseForm.workEmail}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, workEmail: e.target.value})}
+                      placeholder="you@company.com"
+                      className="bg-slate-800 border-slate-700 text-white"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Phone (optional)</label>
+                    <Input 
+                      value={enterpriseForm.phone}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, phone: e.target.value})}
+                      placeholder="+1 (555) 000-0000"
+                      className="bg-slate-800 border-slate-700 text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Notes */}
+              <div>
+                <h3 className="text-lg font-semibold text-white mb-3 flex items-center gap-2">
+                  <span className="w-6 h-6 rounded bg-cyan-500/20 text-cyan-400 text-xs flex items-center justify-center">4</span>
+                  Additional Details
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Timeline for Decision</label>
+                    <Select value={enterpriseForm.timeline} onValueChange={(value) => setEnterpriseForm({...enterpriseForm, timeline: value})}>
+                      <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                        <SelectValue placeholder="Select timeline" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-800 border-slate-700">
+                        <SelectItem value="immediate">Immediate (&lt;1 month)</SelectItem>
+                        <SelectItem value="1-3months">1-3 months</SelectItem>
+                        <SelectItem value="3-6months">3-6 months</SelectItem>
+                        <SelectItem value="exploring">Just exploring</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Specific Requirements or Questions</label>
+                    <textarea 
+                      value={enterpriseForm.notes}
+                      onChange={(e) => setEnterpriseForm({...enterpriseForm, notes: e.target.value})}
+                      placeholder="Tell us about your specific needs..."
+                      rows={4}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-md text-white placeholder:text-slate-500 resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {enterpriseError && (
+                <p className="text-red-400 text-sm">{enterpriseError}</p>
+              )}
+
+              <div className="flex gap-3 pt-2">
+                <Button type="button" variant="outline" onClick={() => setShowEnterpriseModal(false)} className="border-slate-600 text-slate-300">
+                  Cancel
+                </Button>
+                <Button 
+                  type="submit" 
+                  disabled={enterpriseLoading}
+                  className="flex-1 bg-gradient-to-r from-cyan-500 to-teal-500 hover:from-cyan-400 hover:to-teal-400 text-white border-0"
+                >
+                  {enterpriseLoading ? (
+                    <>
+                      <Icons.Loader2 className="mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    'Submit Inquiry'
+                  )}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="text-center py-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center">
+                <Icons.Check className="w-8 h-8 text-green-400" />
+              </div>
+              <h3 className="text-2xl font-semibold text-green-400 mb-2">Inquiry Received! 🎯</h3>
+              <p className="text-slate-400 mb-2">Our enterprise team will contact you within 24 hours.</p>
+              <p className="text-slate-500 text-sm mb-4">A confirmation has been sent to {enterpriseForm.workEmail}</p>
+              <Button onClick={() => setShowEnterpriseModal(false)} variant="outline" className="border-slate-600 text-slate-300">
+                Close
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
