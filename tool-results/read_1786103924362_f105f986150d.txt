@@ -1,0 +1,1335 @@
+     1→     1→'use client';
+     2→     2→
+     3→     3→/**
+     4→     4→ * SciHub Pro - Workspace Page
+     5→     5→ * 
+     6→     6→ * Interactive code editor and execution environment with:
+     7→     7→ * - Multi-file workspace (Python, SQL, R, Markdown)
+     8→     8→ * - Code execution simulation with results
+     9→     9→ * - File persistence to store
+    10→    10→ * - Auto-save functionality
+    11→    11→ * - Template library for quick start
+    12→    12→ * - Never let user hit a wall - always show next steps
+    13→    13→ */
+    14→    14→
+    15→    15→import { useState, useEffect, useCallback } from 'react';
+    16→    16→import { useTranslation } from '@/i18n/useTranslation';
+    17→    17→import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+    18→    18→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+    19→    19→import { Badge } from '@/components/ui/badge';
+    20→    20→import { Button } from '@/components/ui/button';
+    21→    21→import { Input } from '@/components/ui/input';
+    22→    22→import { Textarea } from '@/components/ui/textarea';
+    23→    23→import { Progress } from '@/components/ui/progress';
+    24→    24→import {
+    25→    25→  Select,
+    26→    26→  SelectContent,
+    27→    27→  SelectItem,
+    28→    28→  SelectTrigger,
+    29→    29→  SelectValue,
+    30→    30→} from '@/components/ui/select';
+    31→    31→import {
+    32→    32→  Tabs,
+    33→    33→  TabsContent,
+    34→    34→  TabsList,
+    35→    35→  TabsTrigger,
+    36→    36→} from '@/components/ui/tabs';
+    37→    37→import {
+    38→    38→  Dialog,
+    39→    39→  DialogContent,
+    40→    40→  DialogHeader,
+    41→    41→  DialogTitle,
+    42→    42→  DialogTrigger,
+    43→    43→} from '@/components/ui/dialog';
+    44→    44→
+    45→    45→// ============ TYPES ============
+    46→    46→
+    47→    47→interface CodeTemplate {
+    48→    48→  id: string;
+    49→    49→  name: string;
+    50→    50→  description: string;
+    51→    51→  language: 'python' | 'sql' | 'r' | 'markdown' | 'javascript';
+    52→    52→  code: string;
+    53→    53→  category: 'analysis' | 'visualization' | 'ml' | 'data-import' | 'template';
+    54→    54→}
+    55→    55→
+    56→    56→// ============ CODE TEMPLATES (Pre-seeded for Zero Friction) ============
+    57→    57→
+    58→    58→const CODE_TEMPLATES: CodeTemplate[] = [
+    59→    59→  {
+    60→    60→    id: 'tpl-py-analysis',
+    61→    61→    name: 'Data Analysis Pipeline',
+    62→    62→    description: 'Complete data analysis workflow with loading, processing, and visualization',
+    63→    63→    language: 'python',
+    64→    64→    category: 'analysis',
+    65→    65→    code: `# Data Analysis Pipeline Template
+    66→    66→# SciHub Pro Workspace
+    67→    67→
+    68→    68→import pandas as pd
+    69→    69→import numpy as np
+    70→    70→import matplotlib.pyplot as plt
+    71→    71→from scipy import stats
+    72→    72→from sklearn.preprocessing import StandardScaler
+    73→    73→
+    74→    74→# ============================================
+    75→    75→# 1. LOAD DATA
+    76→    76→# ============================================
+    77→    77→# Replace with your dataset ID or file path
+    78→    78→dataset_id = "ds-001"  # TCGA Pan-Cancer Atlas
+    79→    79→
+    80→    80→print("Loading dataset:", dataset_id)
+    81→    81→
+    82→    82→# Sample data structure (replace with real data loading)
+    83→    83→data = pd.DataFrame({
+    84→    84→    'gene_id': [f'GENE_{i}' for i in range(100)],
+    85→    85→    'expression': np.random.normal(10, 2, 100),
+    86→    86→    'p_value': np.random.uniform(0, 0.1, 100),
+    87→    87→    'log2_fold_change': np.random.normal(0, 1.5, 100),
+    88→    88→    'pathway': np.random.choice(['Cell Cycle', 'Apoptosis', 'DNA Repair', 'Signaling'], 100),
+    89→    89→})
+    90→    90→
+    91→    91→print(f"Loaded {len(data)} genes with columns: {list(data.columns)}")
+    92→    92→
+    93→    93→# ============================================
+    94→    94→# 2. DATA QUALITY CHECKS
+    95→    95→# ============================================
+    96→    96→print("\\n--- Data Quality Report ---")
+    97→    97→print(f"Missing values:\\n{data.isnull().sum()}")
+    98→    98→print(f"\\nData types:\\n{data.dtypes}")
+    99→    99→
+   100→   100→# Check for outliers using IQR method
+   101→   101→Q1 = data['expression'].quantile(0.25)
+   102→   102→Q3 = data['expression'].quantile(0.75)
+   103→   103→IQR = Q3 - Q1
+   104→   104→outliers = data[(data['expression'] < Q1 - 1.5*IQR) | (data['expression'] > Q3 + 1.5*IQR)]
+   105→   105→print(f"\\nOutliers detected: {len(outliers)} ({len(outliers)/len(data)*100:.1f}%)")
+   106→   106→
+   107→   107→# ============================================
+   108→   108→# 3. STATISTICAL ANALYSIS
+   109→   109→# ============================================
+   110→   110→print("\\n--- Statistical Summary ---")
+   111→   111→print(data.describe())
+   112→   112→
+   113→   113→# Identify significant genes (p < 0.05, |log2FC| > 1)
+   114→   114→significant = data[
+   115→   115→    (data['p_value'] < 0.05) & 
+   116→   116→    (abs(data['log2_fold_change']) > 1)
+   117→   117→].copy()
+   118→   118→
+   119→   119→print(f"\\nSignificant genes found: {len(significant)} ({len(significant)/len(data)*100:.1f}%)")
+   120→   120→
+   121→   121→# Pathway enrichment (simplified)
+   122→   122→if len(significant) > 0:
+   123→   123→    pathway_counts = significant['pathway'].value_counts()
+   124→   124→    print(f"\\nPathway distribution of significant genes:")
+   125→   125→    print(pathway_counts)
+   126→   126→
+   127→   127→# ============================================
+   128→   128→# 4. VISUALIZATION
+   129→   129→# ============================================
+   130→   130→fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+   131→   131→
+   132→   132→# Volcano plot
+   133→   133→axes[0].scatter(
+   134→   134→    data['log2_fold_change'], 
+   135→   135→    -np.log10(data['p_value']),
+   136→   136→    alpha=0.5,
+   137→   137→    c=['red' if (p < 0.05 and abs(lfc) > 1) else 'gray' 
+   138→   138→       for p, lfc in zip(data['p_value'], data['log2_fold_change'])]
+   139→   139→)
+   140→   140→axes[0].axhline(-np.log10(0.05), color='blue', linestyle='--', alpha=0.5)
+   141→   141→axes[0].axvline(-1, color='green', linestyle='--', alpha=0.5)
+   142→   142→axes[0].axvline(1, color='green', linestyle='--', alpha=0.5)
+   143→   143→axes[0].set_xlabel('Log2 Fold Change')
+   144→   144→axes[0].set_ylabel('-Log10 P-value')
+   145→   145→axes[0].set_title('Volcano Plot')
+   146→   146→
+   147→   147→# Expression distribution
+   148→   148→axes[1].hist(data['expression'], bins=30, edgecolor='black', alpha=0.7)
+   149→   149→axes[1].axvline(data['expression'].mean(), color='red', linestyle='--', label=f'Mean: {data["expression"].mean():.2f}')
+   150→   150→axes[1].set_xlabel('Expression Level')
+   151→   151→axes[1].set_ylabel('Count')
+   152→   152→axes[1].set_title('Expression Distribution')
+   153→   153→axes[1].legend()
+   154→   154→
+   155→   155→# Pathway bar chart
+   156→   156→if len(significant) > 0:
+   157→   157→    pathway_counts.plot(kind='bar', ax=axes[2], color='steelblue')
+   158→   158→    axes[2].set_xlabel('Pathway')
+   159→   159→    axes[2].set_ylabel('Gene Count')
+   160→   160→    axes[2].set_title('Significant Genes by Pathway')
+   161→   161→    axes[2].tick_params(axis='x', rotation=45)
+   162→   162→
+   163→   163→plt.tight_layout()
+   164→   164→plt.savefig('analysis_results.png', dpi=150, bbox_inches='tight')
+   165→   165→print("\\n✅ Visualization saved to 'analysis_results.png'")
+   166→   166→
+   167→   167→# ============================================
+   168→   168→# 5. EXPORT RESULTS
+   169→   169→# ============================================
+   170→   170→significant.to_csv('significant_genes.csv', index=False)
+   171→   171→print("✅ Results exported to 'significant_genes.csv'")
+   172→   172→print("\\n🎉 Analysis complete!")
+   173→   173→`,
+   174→   174→  },
+   175→   175→  {
+   176→   176→    id: 'tpl-sql-query',
+   177→   177→    name: 'SQL Query Builder',
+   178→   178→    description: 'SQL template for querying datasets with joins and aggregations',
+   179→   179→    language: 'sql',
+   180→   180→    category: 'analysis',
+   181→   181→    code: `-- SciHub Pro SQL Query Template
+   182→   182→-- Use this template to query your datasets
+   183→   183→
+   184→   184→-- ============================================
+   185→   185→-- BASIC QUERIES
+   186→   186→-- ============================================
+   187→   187→
+   188→   188→-- Get dataset overview
+   189→   189→SELECT 
+   190→   190→    COUNT(*) AS total_records,
+   191→   191→    COUNT(DISTINCT gene_name) AS unique_genes,
+   192→   192→    AVG(expression) AS avg_expression,
+   193→   193→    STDDEV(expression) AS std_expression,
+   194→   194→    MIN(expression) AS min_expression,
+   195→   195→    MAX(expression) AS max_expression
+   196→   196→FROM gene_expression_dataset;
+   197→   197→
+   198→   198→-- Filter by conditions
+   199→   199→SELECT 
+   200→   200→    gene_id,
+   201→   201→    gene_name,
+   202→   202→    expression,
+   203→   203→    p_value,
+   204→   204→    log2_fold_change
+   205→   205→FROM gene_expression_dataset
+   206→   206→WHERE p_value < 0.05
+   207→   207→    AND ABS(log2_fold_change) > 1
+   208→   208→ORDER BY p_value ASC
+   209→   209→LIMIT 100;
+   210→   210→
+   211→   211→-- ============================================
+   212→   212→-- AGGREGATION & GROUPING
+   213→   213→-- ============================================
+   214→   214→
+   215→   215→-- Group by pathway/category
+   216→   216→SELECT 
+   217→   217→    pathway,
+   218→   218→    COUNT(*) AS gene_count,
+   219→   219→    AVG(expression) AS mean_expression,
+   220→   220→    MEDIAN(expression) AS median_expression,
+   221→   221→    -- Count significant genes in each pathway
+   222→   222→    SUM(CASE WHEN p_value < 0.05 THEN 1 ELSE 0 END) AS sig_count
+   223→   223→FROM gene_expression_dataset
+   224→   224→GROUP BY pathway
+   225→   225→HAVING COUNT(*) >= 10  -- Only pathways with 10+ genes
+   226→   226→ORDER BY sig_count DESC;
+   227→   227→
+   228→   228→-- Time series analysis (if applicable)
+   229→   229→SELECT 
+   230→   230→    DATE(timepoint) AS date,
+   231→   231→    COUNT(*) AS measurements,
+   232→   232→    AVG(value) AS daily_avg,
+   233→   233→    MIN(value) AS daily_min,
+   234→   234→    MAX(value) AS daily_max
+   235→   235→FROM time_series_data
+   236→   236→GROUP BY DATE(timepoint)
+   237→   237→ORDER BY date;
+   238→   238→
+   239→   239→-- ============================================
+   240→   240→-- JOINS ACROSS DATASETS
+   241→   241→-- ============================================
+   242→   242→
+   243→   243→-- Join expression data with protein annotations
+   244→   244→SELECT 
+   245→   245→    g.gene_id,
+   246→   246→    g.gene_name,
+   247→   247→    g.expression,
+   248→   248→    g.p_value,
+   249→   249→    p.protein_name,
+   250→   250→    p.function_description,
+   251→   251→    p.cellular_location,
+   252→   252→    c.compound_name,
+   253→   253→    c.binding_affinity
+   254→   254→FROM gene_expression g
+   255→   255→JOIN protein_annotations p ON g.gene_id = p.gene_id
+   256→   256→LEFT JOIN compound_bindings c ON p.protein_id = c.target_protein
+   257→   257→WHERE g.tumor_type = 'BRCA'
+   258→   258→    AND c.binding_affinity < 1000  -- High affinity compounds
+   259→   259→ORDER BY c.binding_affinity ASC;
+   260→   260→
+   261→   261→-- Complex multi-table join for network analysis
+   262→   262→SELECT DISTINCT
+   263→   263→    n1.node_id AS source_gene,
+   264→   264→    n1.name AS source_name,
+   265→   265→    e.interaction_type,
+   266→   266→    e.confidence_score,
+   267→   267→    n2.node_id AS target_gene,
+   268→   268→    n2.name AS target_name
+   269→   269→FROM network_nodes n1
+   270→   270→JOIN network_edges e ON n1.node_id = e.source_id
+   271→   271→JOIN network_nodes n2 ON e.target_id = n2.node_id
+   272→   272→WHERE n1.pathway = 'Cell Cycle'
+   273→   273→    AND e.confidence_score > 0.7
+   274→   274→ORDER BY e.confidence_score DESC;
+   275→   275→
+   276→   276→-- ============================================
+   277→   277→-- WINDOW FUNCTIONS
+   278→   278→-- ============================================
+   279→   279→
+   280→   280→-- Rank genes by expression within each sample
+   281→   281→SELECT 
+   282→   282→    *,
+   283→   283→    RANK() OVER (PARTITION BY sample_id ORDER BY expression DESC) AS expr_rank,
+   284→   284→    NTILE(4) OVER (PARTITION BY sample_id ORDER BY expression) AS expression_quartile,
+   285→   285→    LAG(expression, 1) OVER (PARTITION BY gene_id ORDER BY timepoint) AS prev_expression
+   286→   286→FROM longitudinal_data
+   287→   287→WHERE sample_id IN ('sample_001', 'sample_002');
+   288→   288→
+   289→   289→-- Calculate running statistics
+   290→   290→SELECT 
+   291→   291→    timepoint,
+   292→   292→    value,
+   293→   293→    AVG(value) OVER (
+   294→   294→        ORDER BY timepoint 
+   295→   295→        ROWS BETWEEN 5 PRECEDING AND CURRENT ROW
+   296→   296→    ) AS moving_avg_6,
+   297→   297→    SUM(value) OVER (
+   298→   298→        ORDER BY timepoint 
+   299→   299→        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+   300→   300→    ) AS cumulative_sum
+   301→   301→FROM time_series_data
+   302→   302→ORDER BY timepoint;
+   303→   303→
+   304→   304→-- ============================================
+   305→   305→-- SUBQUERIES & CTEs
+   306→   306→-- ============================================
+   307→   307→
+   308→   308→-- Find genes with outlier expression using CTE
+   309→   309→WITH gene_stats AS (
+   310→   310→    SELECT 
+   311→   311→        gene_id,
+   312→   312→        AVG(expression) AS mean_expr,
+   313→   313→        STDDEV(expression) AS std_expr
+   314→   314→    FROM gene_expression
+   315→   315→    GROUP BY gene_id
+   316→   316→),
+   317→   317→normalized AS (
+   318→   318→    SELECT 
+   319→   319→        g.*,
+   320→   320→        (g.expression - gs.mean_expr) / NULLIF(gs.std_expr, 0) AS z_score
+   321→   321→    FROM gene_expression g
+   322→   322→    JOIN gene_stats gs ON g.gene_id = gs.gene_id
+   323→   323→)
+   324→   324→SELECT *
+   325→   325→FROM normalized
+   326→   326→WHERE ABS(z_score) > 2  -- Outliers beyond 2 std devs
+   327→   327→ORDER BY z_score DESC;
+   328→   328→`,
+   329→   329→  },
+   330→   330→  {
+   331→   331→    id: 'tpl-r-stats',
+   332→   332→    name: 'Statistical Analysis (R)',
+   333→   333→    description: 'R template for statistical tests and visualization',
+   334→   334→    language: 'r',
+   335→   335→    category: 'analysis',
+   336→   336→    code: `# Statistical Analysis Template (R)
+   337→   337→# SciHub Pro Workspace
+   338→   338→
+   339→   339→# Load required libraries
+   340→   340→library(tidyverse)
+   341→   341→library(ggplot2)
+   342→   342→library(stats)
+   343→   343→library(pheatmap)
+   344→   344→library(corrplot)
+   345→   345→
+   346→   346→# ============================================
+   347→   347→# 1. LOAD AND PREPARE DATA
+   348→   348→# ============================================
+   349→   349→
+   350→   350→# Create sample dataset (replace with your data)
+   351→   351→set.seed(42)
+   352→   352→n_samples <- 100
+   353→   353→
+   354→   354→data <- tibble(
+   355→   355→  sample_id = paste0("sample_", sprintf("%03d", 1:n_samples)),
+   356→   356→  group = rep(c("Control", "Treatment"), each = n_samples/2),
+   357→   357→  gene_A = rnorm(n_samples, mean = 10, sd = 2),
+   358→   358→  gene_B = rnorm(n_samples, mean = ifelse(rep(c("Control", "Treatment"), each = n_samples/2) == "Treatment", 12, 10), sd = 2),
+   359→   359→  gene_C = rnorm(n_samples, mean = 5, sd = 1.5),
+   360→   360→  batch = rep(c("B1", "B2", "B3", "B4", "B5"), each = 20)
+   361→   361→)
+   362→   362→
+   363→   363→cat("Dataset loaded:", nrow(data), "samples x", ncol(data)-1, "features\\n")
+   364→   364→
+   365→   365→# ============================================
+   366→   366→# 2. EXPLORATORY DATA ANALYSIS
+   367→   367→# ============================================
+   368→   368→
+   369→   369→cat("\\n=== Data Summary ===\\n")
+   370→   370→summary(data[, c("gene_A", "gene_B", "gene_C")])
+   371→   371→
+   372→   372→# Check for missing values
+   373→   373→cat("\\nMissing values:\\n")
+   374→   374→colSums(is.na(data))
+   375→   375→
+   376→   376→# Distribution plots
+   377→   377→p1 <- ggplot(data, aes(x = gene_A, fill = group)) +
+   378→   378→  geom_histogram(alpha = 0.7, position = "identity", bins = 30) +
+   379→   379→  labs(title = "Gene A Distribution by Group", x = "Expression", y = "Count") +
+   380→   380→  theme_minimal()
+   381→   381→print(p1)
+   382→   382→
+   383→   383→# Boxplot comparison
+   384→   384→p2 <- data %>%
+   385→   385→  pivot_longer(cols = starts_with("gene_"), names_to = "gene", values_to = "expression") %>%
+   386→   386→  ggplot(aes(x = gene, y = expression, fill = group)) +
+   387→   387→  geom_boxplot(alpha = 0.7) +
+   388→   388→  labs(title = "Expression Comparison Across Genes", x = "Gene", y = "Expression") +
+   389→   389→  theme_minimal() +
+   390→   390→  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+   391→   391→print(p2)
+   392→   392→
+   393→   393→# ============================================
+   394→   394→# 3. STATISTICAL TESTS
+   395→   395→# ============================================
+   396→   396→
+   397→   397→cat("\\n=== Statistical Tests ===\\n")
+   398→   398→
+   399→   399→# T-test for Gene B (Treatment effect)
+   400→   400→t_result <- t.test(gene_B ~ group, data = data)
+   401→   401→cat("T-test (Gene B):\\n")
+   402→   402→print(t_result)
+   403→   403→
+   404→   404→# Effect size (Cohen's d)
+   405→   405→cohens_d <- function(x, y) {
+   406→   406→  (mean(x) - mean(y)) / sqrt((var(x) + var(y)) / 2)
+   407→   407→}
+   408→   408→d <- cohens_d(data$gene_B[data$group == "Treatment"], 
+   409→   409→              data$gene_B[data$group == "Control"])
+   410→   410→cat(sprintf("\\nCohen's d: %.3f\\n", d))
+   411→   411→
+   412→   412→# ANOVA for multiple groups
+   413→   413→anova_result <- aov(gene_A ~ batch, data = data)
+   414→   414→cat("\\nANOVA (Gene A by Batch):\\n")
+   415→   415→print(summary(anova_result))
+   416→   416→
+   417→   417→# Correlation matrix
+   418→   418→cor_matrix <- cor(data[, c("gene_A", "gene_B", "gene_C")])
+   419→   419→cat("\\nCorrelation Matrix:\\n")
+   420→   420→print(round(cor_matrix, 3))
+   421→   421→
+   422→   422→# Visualize correlations
+   423→   423→corrplot(cor_matrix, method = "color", type = "upper",
+   424→   424→         addCoef.col = "black", tl.cex = 0.8)
+   425→   425→
+   426→   426→# ============================================
+   427→   427→# 4. MULTIVARIATE ANALYSIS
+   428→   428→# ============================================
+   429→   429→
+   430→   430→# PCA
+   431→   431→pca_data <- data[, c("gene_A", "gene_B", "gene_C")]
+   432→   432→pca_result <- prcomp(pca_data, scale. = TRUE)
+   433→   433→
+   434→   434→cat("\\n=== PCA Results ===\\n")
+   435→   435→cat("Variance explained:\\n")
+   436→   436→print(summary(pca_result)$importance)
+   437→   437→
+   438→   438→# PCA plot
+   439→   439→pca_df <- data.frame(
+   440→   440→  PC1 = pca_result$x[, 1],
+   441→   441→  PC2 = pca_result$x[, 2],
+   442→   442→  group = data$group
+   443→   443→)
+   444→   444→
+   445→   445→p3 <- ggplot(pca_df, aes(x = PC1, y = PC2, color = group)) +
+   446→   446→  geom_point(size = 3, alpha = 0.7) +
+   447→   447→  stat_ellipse(level = 0.95) +
+   448→   448→  labs(title = "PCA of Gene Expression", 
+   449→   449→       x = paste0("PC1 (", round(summary(pca_result)$importance[2,1]*1, 1), "%)"),
+   450→   450→       y = paste0("PC2 (", round(summary(pca_result)$importance[2,2]*1, 1), "%)")) +
+   451→   451→  theme_minimal()
+   452→   452→print(p3)
+   453→   453→
+   454→   454→# ============================================
+   455→   455→# 5. SAVE RESULTS
+   456→   456→# ============================================
+   457→   457→
+   458→   458→results <- list(
+   459→   459→  t_test = t_result,
+   460→   460→  anova = summary(anova_result),
+   461→   461→  correlations = cor_matrix,
+   462→   462→  pca = list(
+   463→   463→    scores = pca_result$x,
+   464→   464→    variance_explained = summary(pca_result)$importance
+   465→   465→  )
+   466→   466→)
+   467→   467→
+   468→   468→saveRDS(results, "statistical_results.rds")
+   469→   469→cat("\\n✅ Results saved to 'statistical_results.rds'\\n")
+   470→   470→cat("🎉 Analysis complete!\\n")
+   471→   471→`,
+   472→   472→  },
+   473→   473→  {
+   474→   474→    id: 'tpl-md-report',
+   475→   475→    name: 'Research Report Template',
+   476→   476→    description: 'Markdown template for documenting research findings',
+   477→   477→    language: 'markdown',
+   478→   478→    category: 'template',
+   479→   479→    code: `# Research Report Template
+   480→   480→
+   481→   481→**Project:** [Project Name]  
+   482→   482→**Author:** [Your Name]  
+   483→   483→**Date:** ${new Date().toLocaleDateString()}  
+   484→   484→**Status:** In Progress
+   485→   485→
+   486→   486→---
+   487→   487→
+   488→   488→## Executive Summary
+   489→   489→
+   490→   490→> Provide a brief overview (2-3 sentences) of the research question, approach, and key findings.
+   491→   491→
+   492→   492→---
+   493→   493→
+   494→   494→## 1. Introduction
+   495→   495→
+   496→   496→### 1.1 Background
+   497→   497→
+   498→   498→[Describe the scientific context and motivation for this work]
+   499→   499→
+   500→   500→### 1.2 Research Questions
+   501→   501→
+   502→   502→- **Primary Question:** [What is the main question you're trying to answer?]
+   503→   503→- **Secondary Questions:**
+   504→   504→  - [Question 2]
+   505→   505→  - [Question 3]
+   506→   506→
+   507→   507→### 1.3 Hypothesis
+   508→   508→
+   509→   509→[H1]: [Your primary hypothesis]
+   510→   510→
+   511→   511→---
+   512→   512→
+   513→   513→## 2. Methods
+   514→   514→
+   515→   515→### 2.1 Data Sources
+   516→   516→
+   517→   517→| Dataset | Source | Size | Type |
+   518→   518→|---------|--------|------|------|
+   519→   519→| [Name] | [Source] | [Size] | [Type] |
+   520→   520→
+   521→   521→### 2.2 Analysis Pipeline
+   522→   522→
+   523→   523→\`\`\`mermaid
+   524→   524→graph LR
+   525→   525→    A[Raw Data] --> B[Quality Control]
+   526→   526→    B --> C[Normalization]
+   527→   527→    C --> D[Statistical Analysis]
+   528→   528→    D --> E[Visualization]
+   529→   529→    E --> F[Interpretation]
+   530→   530→\`\`\`
+   531→   531→
+   532→   532→### 2.3 Software/Tools
+   533→   533→
+   534→   534→- **Programming Language:** Python 3.11 / R 4.3
+   535→   535→- **Key Packages:** pandas, scikit-learn, ggplot2
+   536→   536→- **Environment:** SciHub Pro Workspace
+   537→   537→
+   538→   538→---
+   539→   539→
+   540→   540→## 3. Results
+   541→   541→
+   542→   542→### 3.1 Data Overview
+   543→   543→
+   544→   544→- Total samples: [N]
+   545→   545→- Features: [N]
+   546→   546→- Missing data: [X%]
+   547→   547→
+   548→   548→### 3.2 Key Findings
+   549→   549→
+   550→   550→#### Finding 1: [Title]
+   551→   551→
+   552→   552→**Observation:** [What did you find?]  
+   553→   553→**Statistical Evidence:** [p-value, effect size]  
+   554→   554→**Visualization:** [Reference figure]
+   555→   555→
+   556→   556→#### Finding 2: [Title]
+   557→   557→
+   558→   558→**Observation:** [What did you find?]
+   559→   559→
+   560→   560→---
+   561→   561→
+   562→   562→## 4. Discussion
+   563→   563→
+   564→   564→### 4.1 Interpretation
+   565→   565→
+   566→   566→[How do your results answer the research questions?]
+   567→   567→
+   568→   568→### 4.2 Limitations
+   569→   569→
+   570→   570→- [Limitation 1]
+   571→   571→- [Limitation 2]
+   572→   572→
+   573→   573→### 4.3 Future Directions
+   574→   574→
+   575→   575→- [Next step 1]
+   576→   576→- [Next step 2]
+   577→   577→
+   578→   578→---
+   579→   579→
+   580→   580→## 5. Conclusions
+   581→   581→
+   582→   582→[Summarize the main takeaways and their implications]
+   583→   583→
+   584→   584→---
+   585→   585→
+   586→   586→## References
+   587→   587→
+   588→   588→1. [Author et al. (Year). Title. Journal. DOI:...]
+   589→   589→2. [Add more references...]
+   590→   590→
+   591→   591→---
+   592→   592→
+   593→   593→## Appendix
+   594→   594→
+   595→   595→### A. Supplementary Figures
+   596→   596→
+   597→   597→[Additional figures and tables]
+   598→   598→
+   599→   599→### B. Code Availability
+   600→   600→
+   601→   601→[Link to analysis scripts / repository]
+   602→   602→
+   603→   603→### C. Raw Data
+   604→   604→
+   605→   605→[Data availability statement]
+   606→   606→
+   607→   607→---
+   608→   608→
+   609→   609→*Report generated using SciHub Pro Workspace*
+   610→   610→`,
+   611→   611→  },
+   612→   612→  {
+   613→   613→    id: 'tpl-js-viz',
+   614→   614→    name: 'Interactive Visualization',
+   615→   615→    description: 'JavaScript template for creating interactive charts',
+   616→   616→    language: 'javascript',
+   617→   617→    category: 'visualization',
+   618→   618→    code: `// Interactive Visualization Template
+   619→   619→// SciHub Pro Workspace
+   620→   620→
+   621→   621→// This template creates interactive D3.js-style visualizations
+   622→   622→// For use in notebook environments or web export
+   623→   623→
+   624→   624→const data = {
+   625→   625→  // Sample gene expression data
+   626→   626→  genes: Array.from({ length: 50 }, (_, i) => ({
+   627→   627→    id: \`GENE_\${i+1}\`,
+   628→   628→    expression: Math.random() * 20 + 5,
+   629→   629→    pValue: Math.random() * 0.1,
+   630→   630→    foldChange: (Math.random() - 0.5) * 6,
+   631→   631→    pathway: ['Cell Cycle', 'Apoptosis', 'DNA Repair', 'Signaling'][Math.floor(Math.random() * 4)],
+   632→   632→    significant: Math.random() > 0.8
+   633→   633→  }))
+   634→   634→};
+   635→   635→
+   636→   636→// ============================================
+   637→   637→// VOLCANO PLOT
+   638→   638→// ============================================
+   639→   639→
+   640→   640→function createVolcanoPlot(containerId) {
+   641→   641→  const container = document.getElementById(containerId);
+   642→   642→  
+   643→   643→  // Setup SVG
+   644→   644→  const width = 800;
+   645→   645→  const height = 500;
+   646→   646→  const margin = { top: 40, right: 40, bottom: 60, left: 70 };
+   647→   647→  
+   648→   648→  // Scales
+   649→   649→  const xScale = d3.scaleLinear()
+   650→   650→    .domain(d3.extent(data.genes, d => d.foldChange))
+   651→   651→    .range([margin.left, width - margin.right]);
+   652→   652→    
+   653→   653→  const yScale = d3.scaleLinear()
+   654→   654→    .domain([0, -Math.log10(d3.min(data.genes, d => d.pValue)) * 1.1])
+   655→   655→    .range([height - margin.bottom, margin.top]);
+   656→   656→  
+   657→   657→  // Draw points
+   658→   658→  const svg = d3.select(container).append('svg')
+   659→   659→    .attr('width', width)
+   660→   660→    .attr('height', height);
+   661→   661→    
+   662→   662→  svg.selectAll('circle')
+   663→   663→    .data(data.genes)
+   664→   664→    .enter()
+   665→   665→    .append('circle')
+   666→   666→    .attr('cx', d => xScale(d.foldChange))
+   667→   667→    .attr('cy', d => yScale(-Math.log10(d.pValue)))
+   668→   668→    .attr('r', d => d.significant ? 6 : 4)
+   669→   669→    .attr('fill', d => {
+   670→   670→      if (d.significant && d.foldChange > 0) return '#e41a1c'; // Red up
+   671→   671→      if (d.significant && d.foldChange < 0) return '#377eb8'; // Blue down
+   672→   672→      return '#999999'; // Gray not significant
+   673→   673→    })
+   674→   674→    .attr('opacity', 0.7)
+   675→   675→    .on('mouseover', showTooltip)
+   676→   676→    .on('mouseout', hideTooltip);
+   677→   677→    
+   678→   678→  // Threshold lines
+   679→   679→  svg.append('line')
+   680→   680→    .attr('x1', xScale(-1))
+   681→   681→    .attr('y1', margin.top)
+   682→   682→    .attr('x2', xScale(-1))
+   683→   683→    .attr('y2', height - margin.bottom)
+   684→   684→    .attr('stroke', 'green')
+   685→   685→    .attr('stroke-dasharray', '5,5');
+   686→   686→    
+   687→   687→  svg.append('line')
+   688→   688→    .attr('x1', xScale(1))
+   689→   689→    .attr('y1', margin.top)
+   690→   690→    .attr('x2', xScale(1))
+   691→   691→    .attr('y2', height - margin.bottom)
+   692→   692→    .attr('stroke', 'green')
+   693→   693→    .attr('stroke-dasharray', '5,5');
+   694→   694→    
+   695→   695→  svg.append('line')
+   696→   696→    .attr('x1', margin.left)
+   697→   697→    .attr('y1', yScale(-Math.log10(0.05)))
+   698→   698→    .attr('x2', width - margin.right)
+   699→   699→    .attr('y2', yScale(-Math.log10(0.05)))
+   700→   700→    .attr('stroke', 'blue')
+   701→   701→    .attr('stroke-dasharray', '5,5');
+   702→   702→    
+   703→   703→  // Axes
+   704→   704→  svg.append('g')
+   705→   705→    .attr('transform', \`translate(0, \${height - margin.bottom})\`)
+   706→   706→    .call(d3.axisBottom(xScale));
+   707→   707→    
+   708→   708→  svg.append('g')
+   709→   709→    .attr('transform', \`translate(\${margin.left}, 0)\`)
+   710→   710→    .call(d3.axisLeft(yScale));
+   711→   711→    
+   712→   712→  // Labels
+   713→   713→  svg.append('text')
+   714→   714→    .attr('x', width / 2)
+   715→   715→    .attr('y', height - 10)
+   716→   716→    .attr('text-anchor', 'middle')
+   717→   717→    .text('Log2 Fold Change');
+   718→   718→    
+   719→   719→  svg.append('text')
+   720→   720→    .attr('transform', 'rotate(-90)')
+   721→   721→    .attr('x', -(height / 2))
+   722→   722→    .attr('y', 20)
+   723→   723→    .attr('text-anchor', 'middle')
+   724→   724→    .text('-Log10(P-value)');
+   725→   725→}
+   726→   726→
+   727→   727→// ============================================
+   728→   728→// HEATMAP
+   729→   729→// ============================================
+   730→   730→
+   731→   731→function createHeatmap(containerId) {
+   732→   732→  // Sample matrix data
+   733→   733→  const matrix = [];
+   734→   734→  const genes = data.genes.slice(0, 10);
+   735→   735→  const samples = ['Sample_1', 'Sample_2', 'Sample_3', 'Sample_4', 'Sample_5'];
+   736→   736→  
+   737→   737→  genes.forEach(gene => {
+   738→   738→    samples.forEach(sample => {
+   739→   739→      matrix.push({
+   740→   740→        gene: gene.id,
+   741→   741→        sample: sample,
+   742→   742→        value: gene.expression + (Math.random() - 0.5) * 5
+   743→   743→      });
+   744→   744→    });
+   745→   745→  });
+   746→   746→  
+   747→   747→  // Color scale
+   748→   748→  const colorScale = d3.scaleSequential(d3.interpolateRdBu)
+   749→   749→    .domain(d3.extent(matrix, d => d.value));
+   750→   750→    
+   751→   751→  // Render heatmap cells...
+   752→   752→}
+   753→   753→
+   754→   754→// ============================================
+   755→   755→// USAGE
+   756→   756→// ============================================
+   757→   757→
+   758→   758→// Initialize when DOM is ready
+   759→   759→document.addEventListener('DOMContentLoaded', () => {
+   760→   760→  createVolcanoPlot('volcano-container');
+   761→   761→  createHeatmap('heatmap-container');
+   762→   762→});
+   763→   763→
+   764→   764→console.log('Visualization templates loaded successfully!');
+   765→   765→console.log(\`Ready to visualize \${data.genes.length} genes\`);
+   766→   766→`,
+   767→   767→  },
+   768→   768→];
+   769→   769→
+   770→   770→// ============ WORKSPACE PAGE COMPONENT ============
+   771→   771→
+   772→   772→export default function WorkspacePage() {
+   773→   773→  const { t } = useTranslation();
+   774→   774→  const store = useSciHubStore();
+   775→   775→  
+   776→   776→  // Store state
+   777→   777→  const {
+   778→   778→    workspaceFiles,
+   779→   779→    activeFileId,
+   780→   780→    addWorkspaceFile,
+   781→   781→    updateFileContent,
+   782→   782→    setActiveFile,
+   783→   783→    deleteWorkspaceFile,
+   784→   784→    executeCode,
+   785→   785→    activities,
+   786→   786→    addActivity,
+   787→   787→    preferences,
+   788→   788→    guidanceSuggestions,
+   789→   789→    getRelevantGuidance,
+   790→   790→    dismissGuidance,
+   791→   791→  } = store;
+   792→   792→
+   793→   793→  // Local UI state
+   794→   794→  const [showNewFileDialog, setShowNewFileDialog] = useState(false);
+   795→   795→  const [newFileName, setNewFileName] = useState('');
+   796→   796→  const [newFileLanguage, setNewFileLanguage] = useState<WorkspaceFile['language']>('python');
+   797→   797→  const [showTemplates, setShowTemplates] = useState(false);
+   798→   798→  const [isExecuting, setIsExecuting] = useState(false);
+   799→   799→  const [executionResult, setExecutionResult] = useState<string | null>(null);
+   800→   800→  const [executionError, setExecutionError] = useState<string | null>(null);
+   801→   801→  const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
+   802→   802→
+   803→   803→  // Get active file
+   804→   804→  const activeFile = workspaceFiles.find((f) => f.id === activeFileId);
+   805→   805→
+   806→   806→  // Guidance for this context
+   807→   807→  const relevantGuidance = getRelevantGuidance('workspace');
+   808→   808→
+   809→   809→  // Auto-save effect
+   810→   810→  useEffect(() => {
+   811→   811→    if (!activeFile || !activeFile.isModified.value) return;
+   812→   812→    
+   813→   813→    const timer = setTimeout(() => {
+   814→   814→      setAutoSaveStatus('saving');
+   815→   815→      // Simulate auto-save
+   816→   816→      setTimeout(() => {
+   817→   817→        setAutoSaveStatus('saved');
+   818→   818→      }, 500);
+   819→   819→    }, preferences.autoSaveInterval * 1000);
+   820→   820→
+   821→   821→    return () => clearTimeout(timer);
+   822→   822→  }, [activeFile?.content.value, preferences.autoSaveInterval]);
+   823→   823→
+   824→   824→  // ============ HANDLERS ============
+   825→   825→
+   826→   826→  const handleCreateFile = () => {
+   827→   827→    if (!newFileName.trim()) return;
+   828→   828→
+   829→   829→    addWorkspaceFile({
+   830→   830→      name: createDynamicField(newFileName.endsWith(`.${newFileLanguage}`) ? newFileName : `${newFileName}.${newFileLanguage}`),
+   831→   831→      content: createDynamicField(getDefaultContent(newFileLanguage)),
+   832→   832→      language: newFileLanguage,
+   833→   833→      isModified: createDynamicField(false),
+   834→   834→    });
+   835→   835→
+   836→   836→    addActivity({
+   837→   837→      type: 'create',
+   838→   838→      message: createDynamicField(`Created file: ${newFileName}`),
+   839→   839→      icon: '📄',
+   840→   840→    });
+   841→   841→
+   842→   842→    setShowNewFileDialog(false);
+   843→   843→    setNewFileName('');
+   844→   844→  };
+   845→   845→
+   846→   846→  const handleContentChange = (content: string) => {
+   847→   847→    if (!activeFileId) return;
+   848→   848→    updateFileContent(activeFileId, content);
+   849→   849→    setAutoSaveStatus('unsaved');
+   850→   850→  };
+   851→   851→
+   852→   852→  const handleExecute = async () => {
+   853→   853→    if (!activeFileId) return;
+   854→   854→    
+   855→   855→    setIsExecuting(true);
+   856→   856→    setExecutionResult(null);
+   857→   857→    setExecutionError(null);
+   858→   858→
+   859→   859→    try {
+   860→   860→      const result = await executeCode(activeFileId);
+   861→   861→      
+   862→   862→      if (result.status === 'success') {
+   863→   863→        setExecutionResult(result.output);
+   864→   864→        addActivity({
+   865→   865→          type: 'compute',
+   866→   866→          message: createDynamicField(`Executed ${activeFile?.name.value}: Success`),
+   867→   867→          icon: '✅',
+   868→   868→        });
+   869→   869→      } else {
+   870→   870→        setExecutionError(result.error || 'Unknown error occurred');
+   871→   871→        addActivity({
+   872→   872→          type: 'error_recovery',
+   873→   873→          message: createDynamicField(`Execution error in ${activeFile?.name.value}`),
+   874→   874→          icon: '⚠️',
+   875→   875→          metadata: { error: result.error },
+   876→   876→        });
+   877→   877→      }
+   878→   878→    } catch (error) {
+   879→   879→      setExecutionError('Failed to execute code');
+   880→   880→    } finally {
+   881→   881→      setIsExecuting(false);
+   882→   882→    }
+   883→   883→  };
+   884→   884→
+   885→   885→  const handleUseTemplate = (template: CodeTemplate) => {
+   886→   886→    addWorkspaceFile({
+   887→   887→      name: createDynamicField(`${template.name.toLowerCase().replace(/\s+/g, '_')}.${template.language === 'r' ? 'r' : template.language}`),
+   888→   888→      content: createDynamicField(template.code),
+   889→   889→      language: template.language,
+   890→   890→      isModified: createDynamicField(true),
+   891→   891→    });
+   892→   892→
+   893→   893→    addActivity({
+   894→   894→      type: 'create',
+   895→   895→      message: createDynamicField(`Created file from template: ${template.name}`),
+   896→   896→      icon: '📋',
+   897→   897→    });
+   898→   898→
+   899→   899→    setShowTemplates(false);
+   900→   900→  };
+   901→   901→
+   902→   902→  const handleDeleteFile = (id: string) => {
+   903→   903→    const file = workspaceFiles.find((f) => f.id === id);
+   904→   904→    if (!file) return;
+   905→   905→
+   906→   906→    deleteWorkspaceFile(id);
+   907→   907→    addActivity({
+   908→   908→      type: 'delete',
+   909→   909→      message: createDynamicField(`Deleted file: ${file.name.value}`),
+   910→   910→      icon: '🗑️',
+   911→   911→    });
+   912→   912→  };
+   913→   913→
+   914→   914→  // ============ HELPERS ============
+   915→   915→
+   916→   916→  const getDefaultContent = (lang: WorkspaceFile['language']): string => {
+   917→   917→    const defaults: Record<string, string> = {
+   918→   918→      python: '# New Python script\n# Start coding here...\n\nprint("Hello, Science!")\n',
+   919→   919→      sql: '-- New SQL query\n-- Write your query here\n\nSELECT * FROM dataset LIMIT 10;\n',
+   920→   920→      r: '# New R script\n# Start coding here\n\ncat("Hello, Science!\\n")\n',
+   921→   921→      markdown: '# New Document\n\nStart writing here...\n',
+   922→   922→      javascript: '// New JavaScript file\n// Start coding here\n\nconsole.log("Hello, Science!");\n',
+   923→   923→      bash: '#!/bin/bash\n# New shell script\n\necho "Hello, Science!"\n',
+   924→   924→      java: '// New Java file\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, Science!");\n    }\n}\n',
+   925→   925→      cpp: '// New C++ file\n#include <iostream>\n\nint main() {\n    std::cout << "Hello, Science!" << std::endl;\n    return 0;\n}\n',
+   926→   926→      typescript: '// New TypeScript file\nconsole.log("Hello, Science!");\n',
+   927→   927→    };
+   928→   928→    return defaults[lang] || '';
+   929→   929→  };
+   930→   930→
+   931→   931→  const getLanguageIcon = (lang: WorkspaceFile['language']): string => {
+   932→   932→    const icons: Record<string, string> = {
+   933→   933→      python: '🐍',
+   934→   934→      sql: '🗃️',
+   935→   935→      r: '📊',
+   936→   936→      markdown: '📝',
+   937→   937→      javascript: '⚡',
+   938→   938→      bash: '💻',
+   939→   939→      java: '☕',
+   940→   940→      cpp: '⚙️',
+   941→   941→      typescript: '💎',
+   942→   942→    };
+   943→   943→    return icons[lang] || '📄';
+   944→   944→  };
+   945→   945→
+   946→   946→  const getLanguageColor = (lang: WorkspaceFile['language']): string => {
+   947→   947→    const colors: Record<string, string> = {
+   948→   948→      python: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+   949→   949→      sql: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+   950→   950→      r: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+   951→   951→      markdown: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+   952→   952→      javascript: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+   953→   953→      bash: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+   954→   954→      java: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+   955→   955→      cpp: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
+   956→   956→      typescript: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+   957→   957→    };
+   958→   958→    return colors[lang] || 'bg-gray-100 text-gray-800';
+   959→   959→  };
+   960→   960→
+   961→   961→  return (
+   962→   962→    <div className="min-h-screen bg-background">
+   963→   963→      {/* Header */}
+   964→   964→      <div className="p-6 pb-0">
+   965→   965→        <div className="flex items-start justify-between">
+   966→   966→          <div>
+   967→   967→            <h1 className="text-3xl font-bold text-foreground">
+   968→   968→              {t('workspace.title') || 'Workspace'}
+   969→   969→            </h1>
+   970→   970→            <p className="text-muted-foreground mt-1">
+   971→   971→              {t('workspace.subtitle') || 'Write, execute, and analyze code interactively'}
+   972→   972→            </p>
+   973→   973→          </div>
+   974→   974→
+   975→   975→          {/* Status Indicators */}
+   976→   976→          <div className="flex items-center gap-4">
+   977→   977→            {/* Auto-save Status */}
+   978→   978→            <div className="flex items-center gap-2 text-sm">
+   979→   979→              {autoSaveStatus === 'saved' && <span className="text-green-500">● Saved</span>}
+   980→   980→              {autoSaveStatus === 'saving' && <span className="text-yellow-500 animate-pulse">● Saving...</span>}
+   981→   981→              {autoSaveStatus === 'unsaved' && <span className="text-orange-500">● Unsaved</span>}
+   982→   982→            </div>
+   983→   983→
+   984→   984→            {/* File Count */}
+   985→   985→            <Badge variant="secondary">
+   986→   986→              {workspaceFiles.length} files
+   987→   987→            </Badge>
+   988→   988→          </div>
+   989→   989→        </div>
+   990→   990→      </div>
+   991→   991→
+   992→   992→      {/* Main Layout */}
+   993→   993→      <div className="flex h-[calc(100vh-120px)] mt-6">
+   994→   994→        {/* Sidebar - File List */}
+   995→   995→        <div className="w-72 border-r bg-muted/30 flex flex-col">
+   996→   996→          {/* File Actions */}
+   997→   997→          <div className="p-4 border-b space-y-2">
+   998→   998→            <Dialog open={showNewFileDialog} onOpenChange={setShowNewFileDialog}>
+   999→   999→              <DialogTrigger asChild>
+  1000→  1000→                <Button className="w-full justify-start gap-2">
+  1001→  1001→                  📄 New File
+  1002→  1002→                </Button>
+  1003→  1003→              </DialogTrigger>
+  1004→  1004→              <DialogContent>
+  1005→  1005→                <DialogHeader>
+  1006→  1006→                  <DialogTitle>Create New File</DialogTitle>
+  1007→  1007→                </DialogHeader>
+  1008→  1008→                <div className="space-y-4 pt-4">
+  1009→  1009→                  <div>
+  1010→  1010→                    <label className="text-sm font-medium">File Name</label>
+  1011→  1011→                    <Input
+  1012→  1012→                      placeholder="my_analysis.py"
+  1013→  1013→                      value={newFileName}
+  1014→  1014→                      onChange={(e) => setNewFileName(e.target.value)}
+  1015→  1015→                      className="mt-1"
+  1016→  1016→                      onKeyDown={(e) => e.key === 'Enter' && handleCreateFile()}
+  1017→  1017→                    />
+  1018→  1018→                  </div>
+  1019→  1019→                  
+  1020→  1020→                  <div>
+  1021→  1021→                    <label className="text-sm font-medium">Language</label>
+  1022→  1022→                    <Select value={newFileLanguage} onValueChange={(v) => setNewFileLanguage(v as WorkspaceFile['language'])}>
+  1023→  1023→                      <SelectTrigger className="mt-1">
+  1024→  1024→                        <SelectValue />
+  1025→  1025→                      </SelectTrigger>
+  1026→  1026→                      <SelectContent>
+  1027→  1027→                        <SelectItem value="python">🐍 Python</SelectItem>
+  1028→  1028→                        <SelectItem value="sql">🗃️ SQL</SelectItem>
+  1029→  1029→                        <SelectItem value="r">📊 R</SelectItem>
+  1030→  1030→                        <SelectItem value="markdown">📝 Markdown</SelectItem>
+  1031→  1031→                        <SelectItem value="javascript">⚡ JavaScript</SelectItem>
+  1032→  1032→                        <SelectItem value="bash">💻 Bash</SelectItem>
+  1033→  1033→                        <SelectItem value="java">☕ Java</SelectItem>
+  1034→  1034→                        <SelectItem value="cpp">⚙️ C++</SelectItem>
+  1035→  1035→                        <SelectItem value="typescript">💎 TypeScript</SelectItem>
+  1036→  1036→                      </SelectContent>
+  1037→  1037→                    </Select>
+  1038→  1038→                  </div>
+  1039→  1039→
+  1040→  1040→                  <div className="flex gap-2 justify-end">
+  1041→  1041→                    <Button variant="outline" onClick={() => setShowNewFileDialog(false)}>
+  1042→  1042→                      Cancel
+  1043→  1043→                    </Button>
+  1044→  1044→                    <Button onClick={handleCreateFile} disabled={!newFileName.trim()}>
+  1045→  1045→                      Create
+  1046→  1046→                    </Button>
+  1047→  1047→                  </div>
+  1048→  1048→                </div>
+  1049→  1049→              </DialogContent>
+  1050→  1050→            </Dialog>
+  1051→  1051→
+  1052→  1052→            <Button variant="outline" className="w-full justify-start gap-2" onClick={() => setShowTemplates(!showTemplates)}>
+  1053→  1053→              📋 Templates
+  1054→  1054→            </Button>
+  1055→  1055→          </div>
+  1056→  1056→
+  1057→  1057→          {/* Template Panel */}
+  1058→  1058→          {showTemplates && (
+  1059→  1059→            <div className="p-4 border-b bg-background max-h-64 overflow-auto">
+  1060→  1060→              <h4 className="font-medium mb-3 text-sm">Quick Start Templates</h4>
+  1061→  1061→              <div className="space-y-2">
+  1062→  1062→                {CODE_TEMPLATES.map((template) => (
+  1063→  1063→                  <button
+  1064→  1064→                    key={template.id}
+  1065→  1065→                    className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors"
+  1066→  1066→                    onClick={() => handleUseTemplate(template)}
+  1067→  1067→                  >
+  1068→  1068→                    <div className="flex items-center gap-2">
+  1069→  1069→                      <span>{getLanguageIcon(template.language)}</span>
+  1070→  1070→                      <span className="text-sm font-medium">{template.name}</span>
+  1071→  1071→                    </div>
+  1072→  1072→                    <p className="text-xs text-muted-foreground ml-6 mt-1 line-clamp-1">
+  1073→  1073→                      {template.description}
+  1074→  1074→                    </p>
+  1075→  1075→                  </button>
+  1076→  1076→                ))}
+  1077→  1077→              </div>
+  1078→  1078→            </div>
+  1079→  1079→          )}
+  1080→  1080→
+  1081→  1081→          {/* File List */}
+  1082→  1082→          <div className="flex-1 overflow-auto p-2 space-y-1">
+  1083→  1083→            {workspaceFiles.map((file) => (
+  1084→  1084→              <div
+  1085→  1085→                key={file.id}
+  1086→  1086→                role="button"
+  1087→  1087→                tabIndex={0}
+  1088→  1088→                className={`w-full text-left p-3 rounded-lg transition-colors group cursor-pointer ${
+  1089→  1089→                  activeFileId === file.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted'
+  1090→  1090→                }`}
+  1091→  1091→                onClick={() => setActiveFile(file.id)}
+  1092→  1092→                onKeyDown={(e) => e.key === 'Enter' && setActiveFile(file.id)}
+  1093→  1093→              >
+  1094→  1094→                <div className="flex items-center justify-between">
+  1095→  1095→                  <div className="flex items-center gap-2 min-w-0 flex-1">
+  1096→  1096→                    <span>{getLanguageIcon(file.language)}</span>
+  1097→  1097→                    <span className={`text-sm truncate ${file.isModified.value ? 'font-medium' : ''}`}>
+  1098→  1098→                      {file.name.value}
+  1099→  1099→                    </span>
+  1100→  1100→                  </div>
+  1101→  1101→                  
+  1102→  1102→                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+  1103→  1103→                    {file.isModified.value && (
+  1104→  1104→                      <span className="w-2 h-2 rounded-full bg-orange-400" />
+  1105→  1105→                    )}
+  1106→  1106→                    <button
+  1107→  1107→                      onClick={(e) => {
+  1108→  1108→                        e.stopPropagation();
+  1109→  1109→                        handleDeleteFile(file.id);
+  1110→  1110→                      }}
+  1111→  1111→                      className="p-1 hover:text-destructive"
+  1112→  1112→                      aria-label={`Delete ${file.name.value}`}
+  1113→  1113→                    >
+  1114→  1114→                      ✕
+  1115→  1115→                    </button>
+  1116→  1116→                  </div>
+  1117→  1117→                </div>
+  1118→  1118→                
+  1119→  1119→                <div className="flex items-center gap-2 mt-1 ml-6">
+  1120→  1120→                  <Badge variant="outline" className={`text-xs px-1.5 py-0 ${getLanguageColor(file.language)}`}>
+  1121→  1121→                    {file.language}
+  1122→  1122→                  </Badge>
+  1123→  1123→                  <span className="text-xs text-muted-foreground">
+  1124→  1124→                    {new Date(file.lastModified).toLocaleDateString()}
+  1125→  1125→                  </span>
+  1126→  1126→                </div>
+  1127→  1127→              </div>
+  1128→  1128→            ))}
+  1129→  1129→
+  1130→  1130→            {workspaceFiles.length === 0 && (
+  1131→  1131→              <div className="text-center py-8 text-muted-foreground">
+  1132→  1132→                <span className="text-2xl block mb-2">📂</span>
+  1133→  1133→                <p className="text-sm">No files yet</p>
+  1134→  1134→                <p className="text-xs mt-1">Create a new file or use a template</p>
+  1135→  1135→              </div>
+  1136→  1136→            )}
+  1137→  1137→          </div>
+  1138→  1138→        </div>
+  1139→  1139→
+  1140→  1140→        {/* Main Editor Area */}
+  1141→  1141→        <div className="flex-1 flex flex-col">
+  1142→  1142→          {activeFile ? (
+  1143→  1143→            <>
+  1144→  1144→              {/* Editor Header */}
+  1145→  1145→              <div className="flex items-center justify-between px-6 py-3 border-b bg-muted/30">
+  1146→  1146→                <div className="flex items-center gap-3">
+  1147→  1147→                  <span>{getLanguageIcon(activeFile.language)}</span>
+  1148→  1148→                  <span className="font-medium">{activeFile.name.value}</span>
+  1149→  1149→                  {activeFile.isModified.value && (
+  1150→  1150→                    <Badge variant="secondary" className="text-xs">Modified</Badge>
+  1151→  1151→                  )}
+  1152→  1152→                </div>
+  1153→  1153→
+  1154→  1154→                <div className="flex items-center gap-2">
+  1155→  1155→                  <Button
+  1156→  1156→                    size="sm"
+  1157→  1157→                    onClick={handleExecute}
+  1158→  1158→                    disabled={isExecuting || activeFile.language === 'markdown'}
+  1159→  1159→                  >
+  1160→  1160→                    {isExecuting ? (
+  1161→  1161→                      <>⏳ Running...</>
+  1162→  1162→                    ) : (
+  1163→  1163→                      <>▶️ Run (Ctrl+Enter)</>
+  1164→  1164→                    )}
+  1165→  1165→                  </Button>
+  1166→  1166→                  
+  1167→  1167→                  <Button
+  1168→  1168→                    size="sm"
+  1169→  1169→                    variant="outline"
+  1170→  1170→                    onClick={() => {
+  1171→  1171→                      const content = activeFile.content.value;
+  1172→  1172→                      const blob = new Blob([content], { type: 'text/plain' });
+  1173→  1173→                      const url = URL.createObjectURL(blob);
+  1174→  1174→                      const a = document.createElement('a');
+  1175→  1175→                      a.href = url;
+  1176→  1176→                      a.download = activeFile.name.value;
+  1177→  1177→                      a.click();
+  1178→  1178→                      URL.revokeObjectURL(url);
+  1179→  1179→                      
+  1180→  1180→                      addActivity({
+  1181→  1181→                        type: 'export',
+  1182→  1182→                        message: createDynamicField(`Downloaded: ${activeFile.name.value}`),
+  1183→  1183→                        icon: '📥',
+  1184→  1184→                      });
+  1185→  1185→                    }}
+  1186→  1186→                  >
+  1187→  1187→                    ⬇️ Download
+  1188→  1188→                  </Button>
+  1189→  1189→                </div>
+  1190→  1190→              </div>
+  1191→  1191→
+  1192→  1192→              {/* Editor + Output Split View */}
+  1193→  1193→              <div className="flex-1 flex overflow-hidden">
+  1194→  1194→                {/* Code Editor */}
+  1195→  1195→                <div className="flex-1 flex flex-col">
+  1196→  1196→                  <Textarea
+  1197→  1197→                    value={activeFile.content.value}
+  1198→  1198→                    onChange={(e) => handleContentChange(e.target.value)}
+  1199→  1199→                    className="flex-1 resize-none font-mono text-sm p-4 border-0 focus-visible:ring-0 bg-background"
+  1200→  1200→                    style={{
+  1201→  1201→                      fontFamily: "'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace",
+  1202→  1202→                      fontSize: '14px',
+  1203→  1203→                      lineHeight: '1.6',
+  1204→  1204→                      tabSize: 4,
+  1205→  1205→                    }}
+  1206→  1206→                    spellCheck={false}
+  1207→  1207→                    onKeyDown={(e) => {
+  1208→  1208→                      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+  1209→  1209→                        e.preventDefault();
+  1210→  1210→                        handleExecute();
+  1211→  1211→                      }
+  1212→  1212→                      // Handle Tab for indentation
+  1213→  1213→                      if (e.key === 'Tab') {
+  1214→  1214→                        e.preventDefault();
+  1215→  1215→                        const start = e.currentTarget.selectionStart;
+  1216→  1216→                        const end = e.currentTarget.selectionEnd;
+  1217→  1217→                        const value = e.currentTarget.value;
+  1218→  1218→                        e.currentTarget.value =
+  1219→  1219→                          value.substring(0, start) + '    ' + value.substring(end);
+  1220→  1220→                        e.currentTarget.selectionStart = e.currentTarget.selectionEnd = start + 4;
+  1221→  1221→                        handleContentChange(e.currentTarget.value);
+  1222→  1222→                      }
+  1223→  1223→                    }}
+  1224→  1224→                  />
+  1225→  1225→                </div>
+  1226→  1226→
+  1227→  1227→                {/* Output Panel */}
+  1228→  1228→                {(executionResult || executionError || isExecuting) && (
+  1229→  1229→                  <div className="w-[480px] border-l flex flex-col bg-muted/20">
+  1230→  1230→                    <div className="px-4 py-2 border-b bg-muted/50 flex items-center justify-between">
+  1231→  1231→                      <span className="font-medium text-sm">Output</span>
+  1232→  1232→                      {(executionResult || executionError) && (
+  1233→  1233→                        <Button
+  1234→  1234→                          size="sm"
+  1235→  1235→                          variant="ghost"
+  1236→  1236→                          className="h-6 w-6 p-0"
+  1237→  1237→                          onClick={() => {
+  1238→  1238→                            setExecutionResult(null);
+  1239→  1239→                            setExecutionError(null);
+  1240→  1240→                          }}
+  1241→  1241→                        >
+  1242→  1242→                          ✕
+  1243→  1243→                        </Button>
+  1244→  1244→                      )}
+  1245→  1245→                    </div>
+  1246→  1246→                    
+  1247→  1247→                    <div className="flex-1 overflow-auto p-4">
+  1248→  1248→                      {isExecuting && (
+  1249→  1249→                        <div className="flex items-center gap-2 text-muted-foreground">
+  1250→  1250→                          <span className="animate-spin">⏳</span>
+  1251→  1251→                          <span>Executing code...</span>
+  1252→  1252→                        </div>
+  1253→  1253→                      )}
+  1254→  1254→
+  1255→  1255→                      {executionResult && (
+  1256→  1256→                        <pre className="text-sm whitespace-pre-wrap font-mono bg-background p-3 rounded-lg border">
+  1257→  1257→                          {executionResult}
+  1258→  1258→                        </pre>
+  1259→  1259→                      )}
+  1260→  1260→
+  1261→  1261→                      {executionError && (
+  1262→  1262→                        <pre className="text-sm whitespace-pre-wrap font-mono bg-destructive/10 text-destructive p-3 rounded-lg border border-destructive/20">
+  1263→  1263→                          ❌ Error:\n{executionError}
+  1264→  1264→                        </pre>
+  1265→  1265→                      )}
+  1266→  1266→                    </div>
+  1267→  1267→                  </div>
+  1268→  1268→                )}
+  1269→  1269→              </div>
+  1270→  1270→            </>
+  1271→  1271→          ) : (
+  1272→  1272→            /* Empty State */
+  1273→  1273→            <div className="flex-1 flex items-center justify-center">
+  1274→  1274→              <div className="text-center max-w-md">
+  1275→  1275→                <span className="text-6xl block mb-4">💻</span>
+  1276→  1276→                <h3 className="text-xl font-semibold mb-2">Welcome to Your Workspace</h3>
+  1277→  1277→                <p className="text-muted-foreground mb-6">
+  1278→  1278→                  Create a new file or choose a template to start analyzing your data.
+  1279→  1279→                  Write Python, R, SQL, or JavaScript code and see results instantly.
+  1280→  1280→                </p>
+  1281→  1281→
+  1282→  1282→                <div className="grid grid-cols-2 gap-3">
+  1283→  1283→                  <Button onClick={() => setShowNewFileDialog(true)} className="gap-2">
+  1284→  1284→                    📄 New File
+  1285→  1285→                  </Button>
+  1286→  1286→                  <Button variant="outline" onClick={() => setShowTemplates(true)} className="gap-2">
+  1287→  1287→                    📋 Use Template
+  1288→  1288→                  </Button>
+  1289→  1289→                </div>
+  1290→  1290→
+  1291→  1291→                {/* Quick Tips */}
+  1292→  1292→                <div className="mt-8 p-4 bg-muted/50 rounded-lg text-left">
+  1293→  1293→                  <h4 className="font-medium mb-2">💡 Quick Tips</h4>
+  1294→  1294→                  <ul className="text-sm text-muted-foreground space-y-1">
+  1295→  1295→                    <li>• Press Ctrl+Enter to run code</li>
+  1296→  1296→                    <li>• Files auto-save every {preferences.autoSaveInterval}s</li>
+  1297→  1297→                    <li>• Use templates for common analysis tasks</li>
+  1298→  1298→                    <li>• Connect datasets from the Data Lake</li>
+  1299→  1299→                  </ul>
+  1300→  1300→                </div>
+  1301→  1301→              </div>
+  1302→  1302→            </div>
+  1303→  1303→          )}
+  1304→  1304→        </div>
+  1305→  1305→      </div>
+  1306→  1306→
+  1307→  1307→      {/* Guidance Panel */}
+  1308→  1308→      {relevantGuidance.length > 0 && !showTemplates && (
+  1309→  1309→        <Card className="m-6 border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30">
+  1310→  1310→          <CardContent className="p-4">
+  1311→  1311→            <div className="flex items-start gap-3">
+  1312→  1312→              <span className="text-2xl">{relevantGuidance[0].icon}</span>
+  1313→  1313→              <div className="flex-1">
+  1314→  1314→                <h4 className="font-medium text-blue-900 dark:text-blue-100">
+  1315→  1315→                  {relevantGuidance[0].title}
+  1316→  1316→                </h4>
+  1317→  1317→                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
+  1318→  1318→                  {relevantGuidance[0].message}
+  1319→  1319→                </p>
+  1320→  1320→              </div>
+  1321→  1321→              <Button
+  1322→  1322→                size="sm"
+  1323→  1323→                variant="ghost"
+  1324→  1324→                onClick={() => dismissGuidance(relevantGuidance[0].id)}
+  1325→  1325→              >
+  1326→  1326→                ✕
+  1327→  1327→              </Button>
+  1328→  1328→            </div>
+  1329→  1329→          </CardContent>
+  1330→  1330→        </Card>
+  1331→  1331→      )}
+  1332→  1332→    </div>
+  1333→  1333→  );
+  1334→  1334→}
+  1335→  1335→
