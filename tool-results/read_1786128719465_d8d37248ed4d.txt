@@ -1,0 +1,1757 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect, useCallback, useRef } from 'react';
+     4→import { useTranslation } from '@/i18n/useTranslation';
+     5→import { useDynamicStore, createDynamicField, updateDynamicField } from '@/store/useDynamicStore';
+     6→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     7→import { Badge } from '@/components/ui/badge';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Input } from '@/components/ui/input';
+    10→import { Progress } from '@/components/ui/progress';
+    11→import {
+    12→  Dialog,
+    13→  DialogContent,
+    14→  DialogDescription,
+    15→  DialogHeader,
+    16→  DialogTitle,
+    17→} from '@/components/ui/dialog';
+    18→import {
+    19→  Select,
+    20→  SelectContent,
+    21→  SelectItem,
+    22→  SelectTrigger,
+    23→  SelectValue,
+    24→} from '@/components/ui/select';
+    25→import Link from 'next/link';
+    26→import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast-utils';
+    27→
+    28→// ============ TYPES ============
+    29→
+    30→interface StatCardConfig {
+    31→  key: string;
+    32→  icon: string;
+    33→  color: string;
+    34→  route: string;
+    35→}
+    36→
+    37→interface ActivityItem {
+    38→  id: string;
+    39→  type: string;
+    40→  message: string;
+    41→  icon: string;
+    42→  timestamp: Date;
+    43→  details?: string;
+    44→  metadata?: Record<string, any>;
+    45→  expanded?: boolean;
+    46→}
+    47→
+    48→interface SyntheticStats {
+    49→  datasets: { count: number; change: number; trend: string };
+    50→  queries: { count: number; change: number; trend: string };
+    51→  connectors: { count: number; total: number; percentage: number };
+    52→  storageUsed: { used: number; total: number; unit: string; percentage: number };
+    53→  apiCallsToday: { used: number; limit: number; percentage: number };
+    54→  computeHours: { used: number; total: number };
+    55→  activeProjects: number;
+    56→  teamMembers: number;
+    57→  sessionDuration: string;
+    58→  lastLogin: string;
+    59→}
+    60→
+    61→// ============ CONSTANTS ============
+    62→
+    63→const AVATAR_OPTIONS = ['👤', '🧬', '🔬', '🧪', '📊', '💻', '🎓', '🌍', '🚀', '⚡', '🎯', '💡'];
+    64→
+    65→const AVATAR_COLORS = [
+    66→  'from-cyan-400 to-teal-500',
+    67→  'from-purple-400 to-pink-500',
+    68→  'from-orange-400 to-red-500',
+    69→  'from-green-400 to-emerald-500',
+    70→  'from-blue-400 to-indigo-500',
+    71→  'from-yellow-400 to-orange-500',
+    72→];
+    73→
+    74→// ============ SYNTHETIC USER STATS ============
+    75→
+    76→const generateSyntheticStats = (): SyntheticStats => ({
+    77→  datasets: { count: 12, change: +2, trend: 'up' },
+    78→  queries: { count: 1247, change: +156, trend: 'up' },
+    79→  connectors: { count: 8, total: 41, percentage: 19 },
+    80→  storageUsed: { used: 2.4, total: 10, unit: 'GB', percentage: 24 },
+    81→  apiCallsToday: { used: 847, limit: 1000, percentage: 84 },
+    82→  computeHours: { used: 24.5, total: 100 },
+    83→  activeProjects: 3,
+    84→  teamMembers: 5,
+    85→  sessionDuration: '2h 34m',
+    86→  lastLogin: new Date(Date.now() - 3600000 * 2).toISOString(),
+    87→});
+    88→
+    89→// ============ RICH ACTIVITY DATA GENERATOR ============
+    90→
+    91→const generateRichActivities = (): ActivityItem[] => {
+    92→  const now = new Date();
+    93→  return [
+    94→    {
+    95→      id: '1',
+    96→      type: 'query',
+    97→      message: 'Searched "CRISPR gene therapy clinical trials 2024"',
+    98→      icon: '🔍',
+    99→      timestamp: new Date(now.getTime() - 2 * 60000),
+   100→      details: 'Found 847 results • 1.2s execution',
+   101→      metadata: { resultCount: 847, duration: '1.2s' }
+   102→    },
+   103→    {
+   104→      id: '2',
+   105→      type: 'save',
+   106→      message: 'Connected to CrossRef API successfully',
+   107→      icon: '📚',
+   108→      timestamp: new Date(now.getTime() - 15 * 60000),
+   109→      details: 'Latency: 45ms • 12 queries available',
+   110→      metadata: { latency: '45ms', api: 'CrossRef' }
+   111→    },
+   112→    {
+   113→      id: '3',
+   114→      type: 'compute',
+   115→      message: 'Executed Python analysis script',
+   116→      icon: '💻',
+   117→      timestamp: new Date(now.getTime() - 45 * 60000),
+   118→      details: 'pandas_analysis.py • 2.34s • Memory: 128MB',
+   119→      metadata: { language: 'python', duration: '2.34s', file: 'pandas_analysis.py' }
+   120→    },
+   121→    {
+   122→      id: '4',
+   123→      type: 'upload',
+   124→      message: 'Uploaded dataset: clinical_trial_data.csv',
+   125→      icon: '⬆️',
+   126→      timestamp: new Date(now.getTime() - 1 * 3600000),
+   127→      details: '156MB • 45,230 rows • Validated ✓',
+   128→      metadata: { filename: 'clinical_trial_data.csv', size: '156MB', rows: 45230 }
+   129→    },
+   130→    {
+   131→      id: '5',
+   132→      type: 'download',
+   133→      message: 'Exported results to Parquet format',
+   134→      icon: '📤',
+   135→      timestamp: new Date(now.getTime() - 1.5 * 3600000),
+   136→      details: '2.4GB • 15,000 rows • Compression: 8x',
+   137→      metadata: { format: 'Parquet', size: '2.4GB', rows: 15000 }
+   138→    },
+   139→    {
+   140→      id: '6',
+   141→      type: 'collaboration',
+   142→      message: 'Shared "ML Drug Discovery" project with Dr. Sarah Chen',
+   143→      icon: '👥',
+   144→      timestamp: new Date(now.getTime() - 2 * 3600000),
+   145→      details: 'MIT • Computational Biology • Edit access granted',
+   146→      metadata: { collaborator: 'Dr. Sarah Chen', institution: 'MIT', permission: 'edit' }
+   147→    },
+   148→    {
+   149→      id: '7',
+   150→      type: 'save',
+   151→      message: '🏆 Unlocked badge: "Data Explorer" - Queried 1000+ APIs',
+   152→      icon: '🏆',
+   153→      timestamp: new Date(now.getTime() - 3 * 3600000),
+   154→      details: 'Milestone reached! You\'re in the top 5% of researchers',
+   155→      metadata: { badge: 'Data Explorer', tier: 'Gold', rank: 'Top 5%' }
+   156→    },
+   157→    {
+   158→      id: '8',
+   159→      type: 'save',
+   160→      message: 'Connected to PubMed Central API',
+   161→      icon: '📚',
+   162→      timestamp: new Date(now.getTime() - 4 * 3600000),
+   163→      details: 'Latency: 78ms • Full-text access enabled',
+   164→      metadata: { latency: '78ms', api: 'PubMed Central', features: ['full-text'] }
+   165→    },
+   166→    {
+   167→      id: '9',
+   168→      type: 'query',
+   169→      message: 'Ran SPARQL query on Wikidata knowledge graph',
+   170→      icon: '🔎',
+   171→      timestamp: new Date(now.getTime() - 5 * 3600000),
+   172→      details: '1,247 results in 234ms • Complex JOIN query',
+   173→      metadata: { resultCount: 1247, duration: '234ms', queryType: 'SPARQL' }
+   174→    },
+   175→    {
+   176→      id: '10',
+   177→      type: 'compute',
+   178→      message: 'Completed R statistical analysis pipeline',
+   179→      icon: '📊',
+   180→      timestamp: new Date(now.getTime() - 6 * 3600000),
+   181→      details: 'gene_expression.R • 12.8s • p-values computed',
+   182→      metadata: { language: 'R', duration: '12.8s', file: 'gene_expression.R' }
+   183→    },
+   184→    {
+   185→      id: '11',
+   186→      type: 'job',
+   187→      message: 'Scheduled backup completed successfully',
+   188→      icon: '🔄',
+   189→      timestamp: new Date(now.getTime() - 8 * 3600000),
+   190→      details: 'All projects backed up • Next: Tomorrow 02:00 UTC',
+   191→      metadata: { type: 'backup', status: 'success', nextRun: 'Tomorrow 02:00 UTC' }
+   192→    },
+   193→    {
+   194→      id: '12',
+   195→      type: 'collaboration',
+   196→      message: 'Dr. James Wilson commented on your analysis',
+   197→      icon: '💬',
+   198→      timestamp: new Date(now.getTime() - 10 * 3600000),
+   199→      details: '"Great methodology! Have you considered..."',
+   200→      metadata: { collaborator: 'Dr. James Wilson', action: 'commented' }
+   201→    },
+   202→    {
+   203→      id: '13',
+   204→      type: 'save',
+   205→      message: '🎯 Milestone: 50 days research streak!',
+   206→      icon: '🎯',
+   207→      timestamp: new Date(now.getTime() - 12 * 3600000),
+   208→      details: 'Keep it going! Longest streak: 87 days',
+   209→      metadata: { streak: 50, longestStreak: 87 }
+   210→    },
+   211→    {
+   212→      id: '14',
+   213→      type: 'job',
+   214→      message: 'New connector available: arXiv Physics',
+   215→      icon: '✨',
+   216→      timestamp: new Date(now.getTime() - 18 * 3600000),
+   217→      details: 'Access 1.2M+ physics preprints instantly',
+   218→      metadata: { feature: 'new-connector', name: 'arXiv Physics', count: '1.2M+' }
+   219→    },
+   220→    {
+   221→      id: '15',
+   222→      type: 'query',
+   223→      message: 'Batch search: 47 DOIs resolved via Crossref',
+   224→      icon: '🔍',
+   225→      timestamp: new Date(now.getTime() - 24 * 3600000),
+   226→      details: '46/47 found • 1 not found • 3.2s total',
+   227→      metadata: { total: 47, found: 46, duration: '3.2s' }
+   228→    },
+   229→    {
+   230→      id: '16',
+   231→      type: 'compute',
+   232→      message: 'Launched GPU-accelerated training job',
+   233→      icon: '🤖',
+   234→      timestamp: new Date(now.getTime() - 28 * 3600000),
+   235→      details: 'RTX A6000 • Est. completion: 4h 23m',
+   236→      metadata: { gpu: 'RTX A6000', estimatedTime: '4h 23m', status: 'running' }
+   237→    },
+   238→    {
+   239→      id: '17',
+   240→      type: 'download',
+   241→      message: 'Downloaded PDB structure 7A94 (Cryo-EM)',
+   242→      icon: '⬇️',
+   243→      timestamp: new Date(now.getTime() - 32 * 3600000),
+   244→      details: '3.2MB • 2.8Å resolution • 156 chains',
+   245→      metadata: { pdbId: '7A94', size: '3.2MB', resolution: '2.8Å', chains: 156 }
+   246→    },
+   247→    {
+   248→      id: '18',
+   249→      type: 'save',
+   250→      message: 'OAuth token refreshed for GitHub integration',
+   251→      icon: '🔐',
+   252→      timestamp: new Date(now.getTime() - 36 * 3600000),
+   253→      details: 'Token valid for next 8 hours',
+   254→      metadata: { service: 'GitHub', action: 'token-refresh', validity: '8h' }
+   255→    },
+   256→    {
+   257→      id: '19',
+   258→      type: 'job',
+   259→      message: 'Storage optimization completed',
+   260→      icon: '🗜️',
+   261→      timestamp: new Date(now.getTime() - 48 * 3600000),
+   262→      details: 'Freed 340MB • 12 files compressed',
+   263→      metadata: { spaceFreed: '340MB', filesCompressed: 12 }
+   264→    },
+   265→    {
+   266→      id: '20',
+   267→      type: 'save',
+   268→      message: '🌟 New level: "Research Pro" - Level 12',
+   269→      icon: '⭐',
+   270→      timestamp: new Date(now.getTime() - 72 * 3600000),
+   271→      details: '2,450 XP to next level • Unlock premium themes!',
+   272→      metadata: { level: 12, title: 'Research Pro', xpToNext: 2450 }
+   273→    },
+   274→  ];
+   275→};
+   276→
+   277→// ============ ANIMATED COUNTER HOOK ============
+   278→
+   279→function useAnimatedCounter(target: number, duration: number = 1500, enabled: boolean = true) {
+   280→  const [count, setCount] = useState(0);
+   281→  
+   282→  useEffect(() => {
+   283→    if (!enabled) {
+   284→      setCount(target);
+   285→      return;
+   286→    }
+   287→    
+   288→    let startTime: number | null = null;
+   289→    let animationFrame: number;
+   290→    
+   291→    const step = (timestamp: number) => {
+   292→      if (!startTime) startTime = timestamp;
+   293→      const progress = Math.min((timestamp - startTime) / duration, 1);
+   294→      // Easing function for smooth animation
+   295→      const easedProgress = 1 - Math.pow(1 - progress, 3);
+   296→      setCount(Math.floor(easedProgress * target));
+   297→      if (progress < 1) {
+   298→        animationFrame = requestAnimationFrame(step);
+   299→      }
+   300→    };
+   301→    
+   302→    animationFrame = requestAnimationFrame(step);
+   303→    return () => cancelAnimationFrame(animationFrame);
+   304→  }, [target, duration, enabled]);
+   305→  
+   306→  return count;
+   307→}
+   308→
+   309→// ============ SESSION DURATION TRACKER ============
+   310→
+   311→function useSessionDuration() {
+   312→  const [sessionStart] = useState(() => {
+   313→    // Check if we're in browser to avoid SSR issues
+   314→    if (typeof window === 'undefined') return new Date();
+   315→    try {
+   316→      const stored = localStorage.getItem('scihub_session_start');
+   317→      if (stored) return new Date(stored);
+   318→      const now = new Date();
+   319→      localStorage.setItem('scihub_session_start', now.toISOString());
+   320→      return now;
+   321→    } catch {
+   322→      return new Date();
+   323→    }
+   324→  });
+   325→  
+   326→  const [duration, setDuration] = useState('0m');
+   327→  
+   328→  useEffect(() => {
+   329→    const updateDuration = () => {
+   330→      const diff = Date.now() - sessionStart.getTime();
+   331→      const hours = Math.floor(diff / 3600000);
+   332→      const minutes = Math.floor((diff % 3600000) / 60000);
+   333→      if (hours > 0) {
+   334→        setDuration(`${hours}h ${minutes}m`);
+   335→      } else {
+   336→        setDuration(`${minutes}m`);
+   337→      }
+   338→    };
+   339→    
+   340→    updateDuration();
+   341→    const interval = setInterval(updateDuration, 60000);
+   342→    return () => clearInterval(interval);
+   343→  }, [sessionStart]);
+   344→  
+   345→  return duration;
+   346→}
+   347→
+   348→// ============ DASHBOARD PAGE ============
+   349→
+   350→export default function DashboardPage() {
+   351→  const { t } = useTranslation();
+   352→  const {
+   353→    dashboardStats,
+   354→    updateDashboardStat,
+   355→    activities,
+   356→    addActivity,
+   357→    clearActivities,
+   358→    userProfile,
+   359→    updateUserProfile,
+   360→    getDirtyFieldsCount,
+   361→    checkVolumeThreshold,
+   362→    dbConfig,
+   363→  } = useDynamicStore();
+   364→
+   365→  // UI State
+   366→  const [editingStat, setEditingStat] = useState<string | null>(null);
+   367→  const [tempValue, setTempValue] = useState('');
+   368→  const [showVolumeWarning, setShowVolumeWarning] = useState(false);
+   369→  const [isPushing, setIsPushing] = useState(false);
+   370→  
+   371→  // Enhanced Profile State
+   372→  const [showAvatarModal, setShowAvatarModal] = useState(false);
+   373→  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+   374→  const [selectedEmojiAvatar, setSelectedEmojiAvatar] = useState<string>('');
+   375→  const [showFullProfileModal, setShowFullProfileModal] = useState(false);
+   376→  const [isLoading, setIsLoading] = useState(true);
+   377→  
+   378→  // Avatar state with localStorage persistence
+   379→  const [currentAvatar, setCurrentAvatar] = useState<string>('');
+   380→  
+   381→  // Activity feed state
+   382→  const [activityFilter, setActivityFilter] = useState<string>('all');
+   383→  const [visibleActivities, setVisibleActivities] = useState(5);
+   384→  const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
+   385→  
+   386→  // Synthetic stats state
+   387→  const [syntheticStats, setSyntheticStats] = useState<SyntheticStats>(generateSyntheticStats());
+   388→  const [statsAnimated, setStatsAnimated] = useState(false);
+   389→  
+   390→  // Rich activities
+   391→  const [richActivities, setRichActivities] = useState<ActivityItem[]>([]);
+   392→  
+   393→  // Session tracking
+   394→  const sessionDuration = useSessionDuration();
+   395→  
+   396→  // Full profile form state
+   397→  const [fullProfile, setFullProfile] = useState({
+   398→    displayName: '',
+   399→    email: '',
+   400→    institution: '',
+   401→    orcid: '',
+   402→    researchInterests: '',
+   403→    website: '',
+   404→    timezone: '',
+   405→    bio: '',
+   406→  });
+   407→  const [profileSaving, setProfileSaving] = useState(false);
+   408→  const [profileSaved, setProfileSaved] = useState(false);
+   409→
+   410→  // Load avatar from localStorage on mount
+   411→  useEffect(() => {
+   412→    if (typeof window === 'undefined') return;
+   413→    try {
+   414→      const savedAvatar = localStorage.getItem('user-avatar') || '';
+   415→      setCurrentAvatar(savedAvatar);
+   416→      if (savedAvatar && savedAvatar.length <= 2) {
+   417→        setSelectedEmojiAvatar(savedAvatar);
+   418→      } else if (savedAvatar && savedAvatar.startsWith('data:')) {
+   419→        setAvatarPreview(savedAvatar);
+   420→      }
+   421→    } catch (e) {
+   422→      console.warn('Failed to load avatar:', e);
+   423→    }
+   424→  }, []);
+   425→
+   426→  // Initialize rich activities
+   427→  useEffect(() => {
+   428→    setRichActivities(generateRichActivities());
+   429→  }, []);
+   430→
+   431→  // Simulate loading on mount
+   432→  useEffect(() => {
+   433→    const timer = setTimeout(() => {
+   434→      setIsLoading(false);
+   435→      setStatsAnimated(true);
+   436→    }, 800);
+   437→    return () => clearTimeout(timer);
+   438→  }, []);
+   439→
+   440→  // Initialize full profile from store
+   441→  useEffect(() => {
+   442→    setFullProfile({
+   443→      displayName: userProfile.displayName.value,
+   444→      email: userProfile.email.value,
+   445→      institution: '',
+   446→      orcid: '',
+   447→      researchInterests: '',
+   448→      website: '',
+   449→      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+   450→      bio: '',
+   451→    });
+   452→  }, [userProfile.displayName.value, userProfile.email.value]);
+   453→
+   454→  // Check volume threshold on mount and periodically
+   455→  useEffect(() => {
+   456→    const check = () => {
+   457→      const volume = checkVolumeThreshold();
+   458→      setShowVolumeWarning(volume.shouldPush);
+   459→    };
+   460→    
+   461→    check();
+   462→    const interval = setInterval(check, 30000);
+   463→    return () => clearInterval(interval);
+   464→  }, [checkVolumeThreshold]);
+   465→
+   466→  // Simulate real-time stats updates every 30 seconds
+   467→  useEffect(() => {
+   468→    const interval = setInterval(() => {
+   469→      setSyntheticStats(prev => ({
+   470→        ...prev,
+   471→        queries: {
+   472→          ...prev.queries,
+   473→          count: prev.queries.count + Math.floor(Math.random() * 5) + 1,
+   474→          change: prev.queries.change + Math.floor(Math.random() * 3)
+   475→        },
+   476→        apiCallsToday: {
+   477→          ...prev.apiCallsToday,
+   478→          used: Math.min(prev.apiCallsToday.limit, prev.apiCallsToday.used + Math.floor(Math.random() * 10) + 1),
+   479→          percentage: Math.min(100, ((prev.apiCallsToday.used + Math.floor(Math.random() * 10) + 1) / prev.apiCallsToday.limit) * 100)
+   480→        },
+   481→        datasets: {
+   482→          ...prev.datasets,
+   483→          count: Math.max(0, prev.datasets.count + (Math.random() > 0.9 ? 1 : 0))
+   484→        }
+   485→      }));
+   486→    }, 30000);
+   487→    
+   488→    return () => clearInterval(interval);
+   489→  }, []);
+   490→
+   491→  // Add simulated activity periodically
+   492→  useEffect(() => {
+   493→    const possibleActivities = [
+   494→      { type: 'query', message: `Searched "${['protein folding', 'neural networks', 'climate data', 'genomics'][Math.floor(Math.random() * 4)]}"`, icon: '🔍', details: 'Auto-refreshed results' },
+   495→      { type: 'save', message: 'API health check passed', icon: '✅', details: 'All endpoints responding' },
+   496→      { type: 'job', message: 'Cache cleared for optimal performance', icon: '🧹', details: 'Freed 12MB memory' },
+   497→    ];
+   498→    
+   499→    const interval = setInterval(() => {
+   500→      if (Math.random() > 0.6) {
+   501→        const activity = possibleActivities[Math.floor(Math.random() * possibleActivities.length)];
+   502→        const newActivity: ActivityItem = {
+   503→          id: Date.now().toString(),
+   504→          ...activity,
+   505→          timestamp: new Date(),
+   506→        };
+   507→        setRichActivities(prev => [newActivity, ...prev]);
+   508→      }
+   509→    }, 60000); // Every minute, 40% chance
+   510→    
+   511→    return () => clearInterval(interval);
+   512→  }, []);
+   513→
+   514→  const statCards: StatCardConfig[] = [
+   515→    { key: 'activeJobs', icon: '⚡', color: 'text-blue-500', route: '/compute' },
+   516→    { key: 'storageUsed', icon: '💾', color: 'text-green-500', route: '/data' },
+   517→    { key: 'apiCallsToday', icon: '🔌', color: 'text-purple-500', route: '/connectors' },
+   518→    { key: 'collaborators', icon: '👥', color: 'text-orange-500', route: '/collaboration' },
+   519→  ];
+   520→
+   521→  // Use realistic activities if no real activities exist, otherwise use rich activities
+   522→  const displayActivities = activities.length > 0 ? activities : richActivities;
+   523→
+   524→  // Filter activities by type
+   525→  const filteredActivities = activityFilter === 'all' 
+   526→    ? displayActivities 
+   527→    : displayActivities.filter(a => a.type === activityFilter);
+   528→
+   529→  // Animated counters for synthetic stats
+   530→  const animatedDatasets = useAnimatedCounter(syntheticStats.datasets.count, 1500, statsAnimated);
+   531→  const animatedQueries = useAnimatedCounter(syntheticStats.queries.count, 2000, statsAnimated);
+   532→  const animatedApiCalls = useAnimatedCounter(syntheticStats.apiCallsToday.used, 1800, statsAnimated);
+   533→
+   534→  const formatTimeAgo = (date: Date) => {
+   535→    const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+   536→    if (minutes < 1) return 'Just now';
+   537→    if (minutes < 60) return `${minutes}m ago`;
+   538→    const hours = Math.floor(minutes / 60);
+   539→    if (hours < 24) return `${hours}h ago`;
+   540→    const days = Math.floor(hours / 24);
+   541→    if (days === 1) return 'Yesterday';
+   542→    return `${days}d ago`;
+   543→  };
+   544→
+   545→  const getActivityIconColor = (type: string) => {
+   546→    const colors: Record<string, string> = {
+   547→      query: 'bg-blue-100 dark:bg-blue-900',
+   548→      connect: 'bg-green-100 dark:bg-green-900',
+   549→      execute: 'bg-purple-100 dark:bg-purple-900',
+   550→      upload: 'bg-orange-100 dark:bg-orange-900',
+   551→      download: 'bg-cyan-100 dark:bg-cyan-900',
+   552→      collaborate: 'bg-pink-100 dark:bg-pink-900',
+   553→      achievement: 'bg-yellow-100 dark:bg-yellow-900',
+   554→      system: 'bg-gray-100 dark:bg-gray-800',
+   555→    };
+   556→    return colors[type] || 'bg-muted';
+   557→  };
+   558→
+   559→  const getActivityIcon = (type: string) => {
+   560→    const icons: Record<string, string> = {
+   561→      search: '🔍', save: '⭐', export: '📤', job: '⚙️',
+   562→      collaboration: '👥', login: '🔑', download: '⬇️', upload: '⬆️',
+   563→      query: '🔎', compute: '🤖', connect: '✅', disconnect: '❌',
+   564→      create: '📄', delete: '🗑️', execute: '💻', achievement: '🏆',
+   565→      system: '🔄', collaborate: '👥'
+   566→    };
+   567→    return icons[type] || '📋';
+   568→  };
+   569→
+   570→  // Get initials for default avatar
+   571→  const getInitials = () => {
+   572→    const name = userProfile.displayName.value || 'Researcher';
+   573→    const parts = name.split(' ');
+   574→    if (parts.length >= 2) {
+   575→      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+   576→    }
+   577→    return name.substring(0, 2).toUpperCase();
+   578→  };
+   579→
+   580→  // Get avatar color based on name
+   581→  const getAvatarColor = () => {
+   582→    const name = userProfile.displayName.value || 'R';
+   583→    const index = name.charCodeAt(0) % AVATAR_COLORS.length;
+   584→    return AVATAR_COLORS[index];
+   585→  };
+   586→
+   587→  // Handle emoji avatar selection
+   588→  const handleEmojiSelect = (emoji: string) => {
+   589→    setSelectedEmojiAvatar(emoji);
+   590→    setCurrentAvatar(emoji);
+   591→    setAvatarPreview(null);
+   592→    localStorage.setItem('user-avatar', emoji);
+   593→    addActivity({
+   594→      type: 'save',
+   595→      message: createDynamicField(`Updated profile avatar to ${emoji}`),
+   596→      icon: emoji,
+   597→    });
+   598→    showSuccessToast('Avatar Updated!', `Your profile picture has been changed to ${emoji}`);
+   599→  };
+   600→
+   601→  // Handle avatar removal
+   602→  const handleRemoveAvatar = () => {
+   603→    setSelectedEmojiAvatar('');
+   604→    setCurrentAvatar('');
+   605→    setAvatarPreview(null);
+   606→    localStorage.removeItem('user-avatar');
+   607→  };
+   608→
+   609→  // Handle stat editing
+   610→  const startEditing = (key: string, currentValue: any) => {
+   611→    setEditingStat(key);
+   612→    setTempValue(String(currentValue));
+   613→  };
+   614→
+   615→  const saveStat = (key: string) => {
+   616→    const numValue = parseFloat(tempValue);
+   617→    if (!isNaN(numValue)) {
+   618→      updateDashboardStat(key as any, isNaN(numValue) ? tempValue : numValue);
+   619→      addActivity({
+   620→        type: 'save',
+   621→        message: createDynamicField(`Updated dashboard statistic: ${key}`),
+   622→        icon: '📊',
+   623→      });
+   624→    }
+   625→    setEditingStat(null);
+   626→  };
+   627→
+   628→  // Handle profile field updates
+   629→  const handleProfileChange = (field: keyof typeof userProfile, value: string) => {
+   630→    updateUserProfile(field, value);
+   631→  };
+   632→
+   633→  // Avatar upload handler
+   634→  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+   635→    const file = e.target.files?.[0];
+   636→    if (file) {
+   637→      if (file.size > 2 * 1024 * 1024) {
+   638→        showErrorToast('File Too Large', 'Maximum file size is 2MB');
+   639→        return;
+   640→      }
+   641→      const reader = new FileReader();
+   642→      reader.onloadend = () => {
+   643→        const result = reader.result as string;
+   644→        setAvatarPreview(result);
+   645→        setCurrentAvatar(result);
+   646→        setSelectedEmojiAvatar('');
+   647→        localStorage.setItem('user-avatar', result);
+   648→        addActivity({
+   649→          type: 'save',
+   650→          message: createDynamicField('Updated profile picture'),
+   651→          icon: '🖼️',
+   652→        });
+   653→        showSuccessToast('Avatar Updated!', 'Your profile picture has been changed');
+   654→      };
+   655→      reader.readAsDataURL(file);
+   656→    }
+   657→  };
+   658→
+   659→  // Save avatar (close modal)
+   660→  const saveAvatar = () => {
+   661→    setShowAvatarModal(false);
+   662→  };
+   663→
+   664→  // Save full profile
+   665→  const handleSaveFullProfile = async () => {
+   666→    setProfileSaving(true);
+   667→    try {
+   668→      await new Promise(resolve => setTimeout(resolve, 1500));
+   669→      
+   670→      // Update store values
+   671→      updateUserProfile('displayName', fullProfile.displayName);
+   672→      updateUserProfile('email', fullProfile.email);
+   673→      
+   674→      // Store extended profile in localStorage
+   675→      localStorage.setItem('scihub_full_profile', JSON.stringify(fullProfile));
+   676→
+   677→      addActivity({
+   678→        type: 'save',
+   679→        message: createDynamicField('Updated complete profile'),
+   680→        icon: '👤',
+   681→      });
+   682→      
+   683→      showSuccessToast('Profile Saved!', 'Your profile has been updated successfully');
+   684→      
+   685→      setProfileSaved(true);
+   686→      setTimeout(() => {
+   687→        setProfileSaved(false);
+   688→        setShowFullProfileModal(false);
+   689→      }, 2000);
+   690→    } catch (error) {
+   691→      showErrorToast('Save Failed', 'Failed to save profile. Please try again.');
+   692→    } finally {
+   693→      setProfileSaving(false);
+   694→    }
+   695→  };
+   696→
+   697→  // Simulate database push
+   698→  const handlePushToDatabase = async () => {
+   699→    setIsPushing(true);
+   700→    try {
+   701→      await new Promise(resolve => setTimeout(resolve, 2500));
+   702→      const result = useDynamicStore.getState().simulatePushToDatabase();
+   703→      setShowVolumeWarning(false);
+   704→      addActivity({
+   705→        type: 'export',
+   706→        message: createDynamicField(`Data pushed to ${dbConfig.provider} successfully`),
+   707→        icon: '💾',
+   708→      });
+   709→      showSuccessToast('Data Exported!', `Data pushed to ${dbConfig.provider} successfully`);
+   710→    } catch (error) {
+   711→      console.error('Push failed:', error);
+   712→      showErrorToast('Export Failed', 'Failed to export data. Please try again.');
+   713→    } finally {
+   714→      setIsPushing(false);
+   715→    }
+   716→  };
+   717→
+   718→  const dirtyCount = getDirtyFieldsCount();
+   719→
+   720→  // Profile completion calculation
+   721→  const profileCompletion = [
+   722→    { field: 'Avatar', complete: !!currentAvatar, points: 20 },
+   723→    { field: 'Name', complete: !!userProfile.displayName.value, points: 10 },
+   724→    { field: 'Institution', complete: !!fullProfile.institution, points: 15 },
+   725→    { field: 'Research Interests', complete: !!fullProfile.researchInterests, points: 15 },
+   726→    { field: 'ORCID', complete: !!fullProfile.orcid, points: 10 },
+   727→    { field: 'Bio', complete: (fullProfile.bio?.length || 0) > 20, points: 20 },
+   728→    { field: 'Preferences', complete: true, points: 10 },
+   729→  ];
+   730→
+   731→  const completionPercentage = profileCompletion.reduce((acc, item) => acc + (item.complete ? item.points : 0), 0);
+   732→
+   733→  // Contextual CTAs based on user state
+   734→  const getContextualCTAs = () => {
+   735→    const ctas: { icon: string; message: string; type: 'warning' | 'info' | 'success'; action: string }[] = [];
+   736→    
+   737→    if (syntheticStats.storageUsed.percentage > 80) {
+   738→      ctas.push({
+   739→        icon: '⚠️',
+   740→        message: `Running low on storage (${syntheticStats.storageUsed.percentage}% used) — Upgrade for more space`,
+   741→        type: 'warning',
+   742→        action: 'Upgrade Storage'
+   743→      });
+   744→    }
+   745→    
+   746→    if (syntheticStats.apiCallsToday.percentage > 90) {
+   747→      ctas.push({
+   748→        icon: '🔥',
+   749→        message: `Almost at daily API limit (${syntheticStats.apiCallsToday.used}/${syntheticStats.apiCallsToday.limit}) — Pro users get unlimited`,
+   750→        type: 'warning',
+   751→        action: 'View Plans'
+   752→      });
+   753→    }
+   754→    
+   755→    if (syntheticStats.connectors.count < 5) {
+   756→      ctas.push({
+   757→        icon: '🔗',
+   758→        message: `Connect more APIs to supercharge your research (${syntheticStats.connectors.count}/${syntheticStats.connectors.total} connected)`,
+   759→        type: 'info',
+   760→        action: 'Browse Connectors'
+   761→      });
+   762→    }
+   763→    
+   764→    if (completionPercentage < 70) {
+   765→      ctas.push({
+   766→        icon: '📝',
+   767→        message: `Your profile is ${completionPercentage}% complete — Add more info to connect with collaborators`,
+   768→        type: 'info',
+   769→        action: 'Complete Profile'
+   770→      });
+   771→    }
+   772→
+   773→    if (ctas.length === 0) {
+   774→      ctas.push({
+   775→        icon: '💡',
+   776→        message: 'Ready to explore? Try searching for papers or connecting a new data source',
+   777→        type: 'success',
+   778→        action: 'Get Started'
+   779→      });
+   780→    }
+   781→    
+   782→    return ctas;
+   783→  };
+   784→
+   785→  const contextualCTAs = getContextualCTAs();
+   786→
+   787→  // Loading skeleton
+   788→  if (isLoading) {
+   789→    return (
+   790→      <div className="min-h-screen bg-background p-6">
+   791→        <div className="animate-pulse space-y-6">
+   792→          <div className="flex gap-4">
+   793→            <div className="w-16 h-16 bg-muted rounded-full" />
+   794→            <div className="space-y-2 flex-1">
+   795→              <div className="h-8 w-48 bg-muted rounded" />
+   796→              <div className="h-4 w-64 bg-muted rounded" />
+   797→            </div>
+   798→          </div>
+   799→          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+   800→            {[...Array(4)].map((_, i) => (
+   801→              <div key={i} className="h-32 bg-muted rounded-lg" />
+   802→            ))}
+   803→          </div>
+   804→          <div className="h-96 bg-muted rounded-lg" />
+   805→        </div>
+   806→      </div>
+   807→    );
+   808→  }
+   809→
+   810→  return (
+   811→    <div className="min-h-screen bg-background p-6">
+   812→      {/* Header with Profile Summary */}
+   813→      <div className="mb-8">
+   814→        <div className="flex items-start justify-between flex-wrap gap-4">
+   815→          <div className="flex items-start gap-4">
+   816→            {/* Enhanced Avatar with Upload */}
+   817→            <button 
+   818→              onClick={() => setShowAvatarModal(true)}
+   819→              className="relative group"
+   820→            >
+   821→              <div className={`w-20 h-20 rounded-full flex items-center justify-center text-2xl font-bold transition-all group-hover:ring-4 group-hover:ring-cyan-500/30 overflow-hidden ${
+   822→                currentAvatar?.startsWith('data:') 
+   823→                  ? '' 
+   824→                  : currentAvatar && currentAvatar.length <= 2
+   825→                    ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white text-3xl'
+   826→                    : `bg-gradient-to-br ${getAvatarColor()} text-white`
+   827→              }`}
+   828→              style={currentAvatar?.startsWith('data:') ? { backgroundImage: `url(${currentAvatar})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
+   829→              >
+   830→                {currentAvatar?.startsWith('data:') ? null : (currentAvatar && currentAvatar.length <= 2 ? currentAvatar : getInitials())}
+   831→              </div>
+   832→              {/* Upload indicator overlay */}
+   833→              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+   834→                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+   835→                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+   836→                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+   837→                </svg>
+   838→              </div>
+   839→              {/* Online status indicator */}
+   840→              <div className="absolute bottom-1 right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-background" />
+   841→            </button>
+   842→
+   843→            <div className="flex-1 min-w-0">
+   844→              <div className="flex items-center gap-3 flex-wrap">
+   845→                <h1 className="text-3xl font-bold text-foreground">
+   846→                  Welcome back, {userProfile.displayName.value || 'Researcher'}! 👋
+   847→                </h1>
+   848→                <Badge variant="secondary" className="bg-gradient-to-r from-amber-400 to-orange-500 text-white border-0">
+   849→                  ⭐ Pro Plan
+   850→                </Badge>
+   851→              </div>
+   852→              <p className="text-muted-foreground mt-1">
+   853→                Here's what's happening with your research today.
+   854→              </p>
+   855→              
+   856→              {/* Session Info & Quick Stats */}
+   857→              <div className="flex flex-wrap gap-3 mt-3">
+   858→                <Badge variant="outline" className="gap-1">
+   859→                  🕐 Session: {sessionDuration}
+   860→                </Badge>
+   861→                <Badge variant="outline" className="gap-1">
+   862→                  📅 Last login: {formatTimeAgo(new Date(syntheticStats.lastLogin))}
+   863→                </Badge>
+   864→                <Badge variant="outline" className="gap-1">
+   865→                  👥 {syntheticStats.teamMembers} team members
+   866→                </Badge>
+   867→                <Badge variant="outline" className="gap-1">
+   868→                  📁 {syntheticStats.activeProjects} active projects
+   869→                </Badge>
+   870→              </div>
+   871→
+   872→              {/* Profile Completion Progress */}
+   873→              <div className="mt-4 p-3 rounded-lg bg-muted/50 border">
+   874→                <div className="flex items-center justify-between mb-2">
+   875→                  <span className="text-sm font-medium">Profile Completion</span>
+   876→                  <span className="text-sm font-bold text-primary">{completionPercentage}%</span>
+   877→                </div>
+   878→                <Progress value={completionPercentage} className="h-2 mb-2" />
+   879→                <div className="flex flex-wrap gap-2">
+   880→                  {profileCompletion.map((item) => (
+   881→                    <span 
+   882→                      key={item.field}
+   883→                      className={`text-xs px-2 py-0.5 rounded-full ${
+   884→                        item.complete 
+   885→                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300' 
+   886→                          : 'bg-muted text-muted-foreground'
+   887→                      }`}
+   888→                    >
+   889→                      {item.complete ? '✓' : '○'} {item.field}
+   890→                    </span>
+   891→                  ))}
+   892→                </div>
+   893→              </div>
+   894→            </div>
+   895→          </div>
+   896→          
+   897→          {/* Quick Profile Edit */}
+   898→          <Card className="w-80 shrink-0">
+   899→            <CardContent className="p-4">
+   900→              <div className="space-y-3">
+   901→                <div>
+   902→                  <label className="text-xs text-muted-foreground">Display Name</label>
+   903→                  <Input
+   904→                    value={userProfile.displayName.value}
+   905→                    onChange={(e) => handleProfileChange('displayName', e.target.value)}
+   906→                    className={`text-sm h-8 ${userProfile.displayName.isDirty ? 'border-orange-400' : ''}`}
+   907→                    placeholder="Enter your name..."
+   908→                  />
+   909→                  {userProfile.displayName.isDirty && (
+   910→                    <Badge variant="secondary" className="mt-1 text-xs bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">Modified</Badge>
+   911→                  )}
+   912→                </div>
+   913→                <div>
+   914→                  <label className="text-xs text-muted-foreground">Email</label>
+   915→                  <Input
+   916→                    type="email"
+   917→                    value={userProfile.email.value}
+   918→                    onChange={(e) => handleProfileChange('email', e.target.value)}
+   919→                    className={`text-sm h-8 ${userProfile.email.isDirty ? 'border-orange-400' : ''}`}
+   920→                    placeholder="your@email.com"
+   921→                  />
+   922→                </div>
+   923→                <Button 
+   924→                  variant="outline" 
+   925→                  size="sm" 
+   926→                  className="w-full"
+   927→                  onClick={() => setShowFullProfileModal(true)}
+   928→                >
+   929→                  ✏️ Edit Full Profile
+   930→                </Button>
+   931→              </div>
+   932→            </CardContent>
+   933→          </Card>
+   934→        </div>
+   935→
+   936→        {/* Dirty Fields Indicator */}
+   937→        {dirtyCount > 0 && (
+   938→          <div className="mt-4 p-3 bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800 rounded-lg flex items-center justify-between animate-pulse">
+   939→            <span className="text-sm text-orange-700 dark:text-orange-300">
+   940→              📝 You have {dirtyCount} unsaved change{dirtyCount > 1 ? 's' : ''}
+   941→            </span>
+   942→            <div className="flex gap-2">
+   943→              <Button size="sm" variant="outline" onClick={() => useDynamicStore.getState().resetAllFields()}>
+   944→                Reset All
+   945→              </Button>
+   946→              <Button size="sm" onClick={handlePushToDatabase} disabled={isPushing}>
+   947→                {isPushing ? 'Saving...' : 'Save Changes'}
+   948→              </Button>
+   949→            </div>
+   950→          </div>
+   951→        )}
+   952→
+   953→        {/* Volume Warning */}
+   954→        {showVolumeWarning && dbConfig.enabled && (
+   955→          <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+   956→            <div className="flex items-center justify-between mb-3">
+   957→              <span className="font-medium text-yellow-800 dark:text-yellow-200">
+   958→                ⚠️ Data Volume Approaching Threshold
+   959→              </span>
+   960→              <Badge variant="secondary">{dbConfig.provider.toUpperCase()}</Badge>
+   961→            </div>
+   962→            <p className="text-sm text-yellow-700 dark:text-yellow-300 mb-3">
+   963→              Your data is approaching the auto-push threshold. Consider pushing to your configured database.
+   964→            </p>
+   965→            <Button 
+   966→              size="sm" 
+   967→              onClick={handlePushToDatabase} 
+   968→              disabled={isPushing}
+   969→              className="w-full"
+   970→            >
+   971→              {isPushing ? '⏳ Pushing to Database...' : `🚀 Push to ${dbConfig.provider.toUpperCase()}`}
+   972→            </Button>
+   973→          </div>
+   974→        )}
+   975→
+   976→        {/* Contextual CTAs */}
+   977→        <div className="mt-4 space-y-2">
+   978→          {contextualCTAs.map((cta, index) => (
+   979→            <div 
+   980→              key={index}
+   981→              className={`p-3 rounded-lg border flex items-center justify-between ${
+   982→                cta.type === 'warning' 
+   983→                  ? 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800' 
+   984→                  : cta.type === 'info'
+   985→                    ? 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
+   986→                    : 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800'
+   987→              }`}
+   988→            >
+   989→              <div className="flex items-center gap-2">
+   990→                <span>{cta.icon}</span>
+   991→                <span className={`text-sm ${
+   992→                  cta.type === 'warning' 
+   993→                    ? 'text-yellow-700 dark:text-yellow-300' 
+   994→                    : cta.type === 'info'
+   995→                      ? 'text-blue-700 dark:text-blue-300'
+   996→                      : 'text-green-700 dark:text-green-300'
+   997→                }`}>
+   998→                  {cta.message}
+   999→                </span>
+  1000→              </div>
+  1001→              <Button size="sm" variant="outline" className="shrink-0">
+  1002→                {cta.action}
+  1003→              </Button>
+  1004→            </div>
+  1005→          ))}
+  1006→        </div>
+  1007→      </div>
+  1008→
+  1009→      {/* Enhanced Stats Grid with Live Data */}
+  1010→      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+  1011→        {/* Datasets Card - Synthetic */}
+  1012→        <Link href="/datasets">
+  1013→          <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer h-full group">
+  1014→            <CardContent className="p-6">
+  1015→              <div className="flex items-center justify-between mb-4">
+  1016→                <span className="text-2xl group-hover:scale-110 transition-transform">📊</span>
+  1017→                <div className="flex items-center gap-1">
+  1018→                  <span className="text-green-500 text-sm">↑</span>
+  1019→                  <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+  1020→                    +{syntheticStats.datasets.change} today
+  1021→                  </Badge>
+  1022→                </div>
+  1023→              </div>
+  1024→              <p className="text-sm text-muted-foreground">Datasets</p>
+  1025→              <p className="text-2xl font-bold text-blue-500">
+  1026→                {animatedDatasets}
+  1027→                <span className="text-sm font-normal text-muted-foreground ml-1">
+  1028→                  / {syntheticStats.datasets.count + 88} total
+  1029→                </span>
+  1030→              </p>
+  1031→              <Progress value={(animatedDatasets / (syntheticStats.datasets.count + 88)) * 100} className="mt-3 h-1.5" />
+  1032→            </CardContent>
+  1033→          </Card>
+  1034→        </Link>
+  1035→
+  1036→        {/* Queries Card - Synthetic with Animation */}
+  1037→        <Link href="/query">
+  1038→          <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer h-full group">
+  1039→            <CardContent className="p-6">
+  1040→              <div className="flex items-center justify-between mb-4">
+  1041→                <span className="text-2xl group-hover:scale-110 transition-transform">🔍</span>
+  1042→                <div className="flex items-center gap-1">
+  1043→                  <span className="text-green-500 text-sm">↑</span>
+  1044→                  <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+  1045→                    +{syntheticStats.queries.change} today
+  1046→                  </Badge>
+  1047→                </div>
+  1048→              </div>
+  1049→              <p className="text-sm text-muted-foreground">Total Queries</p>
+  1050→              <p className="text-2xl font-bold text-green-500">
+  1051→                {animatedQueries.toLocaleString()}
+  1052→              </p>
+  1053→              <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+  1054→                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+  1055→                Live updating
+  1056→              </div>
+  1057→            </CardContent>
+  1058→          </Card>
+  1059→        </Link>
+  1060→
+  1061→        {/* Storage Card - With Progress Bar */}
+  1062→        <Link href="/data">
+  1063→          <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer h-full group">
+  1064→            <CardContent className="p-6">
+  1065→              <div className="flex items-center justify-between mb-4">
+  1066→                <span className="text-2xl group-hover:scale-110 transition-transform">💾</span>
+  1067→                <Badge 
+  1068→                  variant="secondary" 
+  1069→                  className={
+  1070→                    syntheticStats.storageUsed.percentage > 80 
+  1071→                      ? 'bg-red-100 text-red-800' 
+  1072→                      : syntheticStats.storageUsed.percentage > 60 
+  1073→                        ? 'bg-yellow-100 text-yellow-800'
+  1074→                        : 'bg-green-100 text-green-800'
+  1075→                  }
+  1076→                >
+  1077→                  {syntheticStats.storageUsed.percentage}% used
+  1078→                </Badge>
+  1079→              </div>
+  1080→              <p className="text-sm text-muted-foreground">Storage Used</p>
+  1081→              <p className="text-2xl font-bold text-emerald-500">
+  1082→                {syntheticStats.storageUsed.used} <span className="text-sm font-normal">/ {syntheticStats.storageUsed.total} {syntheticStats.storageUsed.unit}</span>
+  1083→              </p>
+  1084→              <Progress value={syntheticStats.storageUsed.percentage} className="mt-3 h-2" />
+  1085→              <p className="text-xs text-muted-foreground mt-1">
+  1086→                {syntheticStats.storageUsed.total - syntheticStats.storageUsed.used} {syntheticStats.storageUsed.unit} available
+  1087→              </p>
+  1088→            </CardContent>
+  1089→          </Card>
+  1090→        </Link>
+  1091→
+  1092→        {/* API Calls Card - With Quota Progress */}
+  1093→        <Link href="/connectors">
+  1094→          <Card className="hover:shadow-lg transition-all hover:-translate-y-1 cursor-pointer h-full group">
+  1095→            <CardContent className="p-6">
+  1096→              <div className="flex items-center justify-between mb-4">
+  1097→                <span className="text-2xl group-hover:scale-110 transition-transform">🔌</span>
+  1098→                <Badge 
+  1099→                  variant="secondary"
+  1100→                  className={
+  1101→                    syntheticStats.apiCallsToday.percentage > 90 
+  1102→                      ? 'bg-red-100 text-red-800 animate-pulse' 
+  1103→                      : 'bg-purple-100 text-purple-800'
+  1104→                  }
+  1105→                >
+  1106→                  {syntheticStats.apiCallsToday.percentage.toFixed(0)}% of limit
+  1107→                </Badge>
+  1108→              </div>
+  1109→              <p className="text-sm text-muted-foreground">API Calls Today</p>
+  1110→              <p className="text-2xl font-bold text-purple-500">
+  1111→                {animatedApiCalls.toLocaleString()}
+  1112→                <span className="text-sm font-normal text-muted-foreground ml-1">
+  1113→                  / {syntheticStats.apiCallsToday.limit.toLocaleString()}
+  1114→                </span>
+  1115→              </p>
+  1116→              <Progress value={syntheticStats.apiCallsToday.percentage} className="mt-3 h-2 [&>div]:bg-purple-500" />
+  1117→              <p className="text-xs text-muted-foreground mt-1">
+  1118→                {syntheticStats.apiCallsToday.limit - syntheticStats.apiCallsToday.used} calls remaining
+  1119→              </p>
+  1120→            </CardContent>
+  1121→          </Card>
+  1122→        </Link>
+  1123→      </div>
+  1124→
+  1125→      {/* Additional Stats Row */}
+  1126→      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+  1127→        {/* Connectors Progress */}
+  1128→        <Card>
+  1129→          <CardContent className="p-6">
+  1130→            <div className="flex items-center justify-between mb-4">
+  1131→              <span className="text-xl">🔗</span>
+  1132→              <span className="text-sm text-muted-foreground">Integrations</span>
+  1133→            </div>
+  1134→            <p className="text-2xl font-bold text-orange-500">
+  1135→              {syntheticStats.connectors.count}
+  1136→              <span className="text-sm font-normal text-muted-foreground ml-1">
+  1137→                / {syntheticStats.connectors.total} available
+  1138→              </span>
+  1139→            </p>
+  1140→            <Progress value={syntheticStats.connectors.percentage} className="mt-3 h-2 [&>div]:bg-orange-500" />
+  1141→            <p className="text-xs text-muted-foreground mt-2">
+  1142→              💡 Connect more APIs to unlock advanced features
+  1143→            </p>
+  1144→          </CardContent>
+  1145→        </Card>
+  1146→
+  1147→        {/* Compute Hours */}
+  1148→        <Card>
+  1149→          <CardContent className="p-6">
+  1150→            <div className="flex items-center justify-between mb-4">
+  1151→              <span className="text-xl">🤖</span>
+  1152→              <span className="text-sm text-muted-foreground">This Month</span>
+  1153→            </div>
+  1154→            <p className="text-2xl font-bold text-cyan-500">
+  1155→              {syntheticStats.computeHours.used}h
+  1156→              <span className="text-sm font-normal text-muted-foreground ml-1">
+  1157→                / {syntheticStats.computeHours.total}h included
+  1158→              </span>
+  1159→            </p>
+  1160→            <Progress value={(syntheticStats.computeHours.used / syntheticStats.computeHours.total) * 100} className="mt-3 h-2 [&>div]:bg-cyan-500" />
+  1161→            <p className="text-xs text-muted-foreground mt-2">
+  1162→              ⚡ {syntheticStats.computeHours.total - syntheticStats.computeHours.used}h remaining
+  1163→            </p>
+  1164→          </CardContent>
+  1165→        </Card>
+  1166→
+  1167→        {/* Active Projects */}
+  1168→        <Card>
+  1169→          <CardContent className="p-6">
+  1170→            <div className="flex items-center justify-between mb-4">
+  1171→              <span className="text-xl">📁</span>
+  1172→              <span className="text-sm text-muted-foreground">Currently Active</span>
+  1173→            </div>
+  1174→            <p className="text-2xl font-bold text-pink-500">
+  1175→              {syntheticStats.activeProjects}
+  1176→            </p>
+  1177→            <div className="mt-3 flex gap-2">
+  1178→              {[...Array(syntheticStats.activeProjects)].map((_, i) => (
+  1179→                <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-rose-500 flex items-center justify-center text-white text-xs font-bold">
+  1180→                  P{i + 1}
+  1181→                </div>
+  1182→              ))}
+  1183→            </div>
+  1184→            <p className="text-xs text-muted-foreground mt-2">
+  1185→              Click to view project details →
+  1186→            </p>
+  1187→          </CardContent>
+  1188→        </Card>
+  1189→      </div>
+  1190→
+  1191→      {/* Main Content Grid */}
+  1192→      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  1193→        {/* Quick Actions - Dynamic Links */}
+  1194→        <Card>
+  1195→          <CardHeader>
+  1196→            <CardTitle>⚡ Quick Actions</CardTitle>
+  1197→          </CardHeader>
+  1198→          <CardContent className="space-y-3">
+  1199→            <Link href="/query">
+  1200→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-cyan-50 hover:border-cyan-300 dark:hover:bg-cyan-950">
+  1201→                🔍 New Search Query
+  1202→              </Button>
+  1203→            </Link>
+  1204→            <Link href="/connectors">
+  1205→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-blue-50 hover:border-blue-300 dark:hover:bg-blue-950">
+  1206→                🔗 Browse Connectors
+  1207→              </Button>
+  1208→            </Link>
+  1209→            <Link href="/workspace">
+  1210→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-purple-50 hover:border-purple-300 dark:hover:bg-purple-950">
+  1211→                💻 Open Workspace IDE
+  1212→              </Button>
+  1213→            </Link>
+  1214→            <Link href="/compute">
+  1215→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-orange-50 hover:border-orange-300 dark:hover:bg-orange-950">
+  1216→                ⚙️ Run Workflow
+  1217→              </Button>
+  1218→            </Link>
+  1219→            <Link href="/datasets">
+  1220→              <Button variant="outline" className="w-full justify-start gap-2 hover:bg-green-50 hover:border-green-300 dark:hover:bg-green-950">
+  1221→                📊 Explore Datasets
+  1222→              </Button>
+  1223→            </Link>
+  1224→            <Link href="/settings">
+  1225→              <Button variant="outline" className="w-full justify-start gap-2">
+  1226→                ⚙️ Settings
+  1227→              </Button>
+  1228→            </Link>
+  1229→            
+  1230→            {/* Export State Button */}
+  1231→            <Button 
+  1232→              variant="outline" 
+  1233→              className="w-full justify-start gap-2 mt-4 border-dashed"
+  1234→              onClick={() => {
+  1235→                const stateJson = useDynamicStore.getState().exportState();
+  1236→                const blob = new Blob([stateJson], { type: 'application/json' });
+  1237→                const url = URL.createObjectURL(blob);
+  1238→                const a = document.createElement('a');
+  1239→                a.href = url;
+  1240→                a.download = `scihub-export-${new Date().toISOString().split('T')[0]}.json`;
+  1241→                a.click();
+  1242→                URL.revokeObjectURL(url);
+  1243→                
+  1244→                addActivity({
+  1245→                  type: 'export',
+  1246→                  message: createDynamicField('Exported application state'),
+  1247→                  icon: '📤',
+  1248→                });
+  1249→              }}
+  1250→            >
+  1251→              📥 Export State (JSON)
+  1252→            </Button>
+  1253→          </CardContent>
+  1254→        </Card>
+  1255→
+  1256→        {/* Enhanced Activity Feed with Filtering & Live Updates */}
+  1257→        <Card className="lg:col-span-2">
+  1258→          <CardHeader className="flex flex-row items-center justify-between">
+  1259→            <div className="flex items-center gap-2">
+  1260→              <CardTitle className="flex items-center gap-2">
+  1261→                📋 Recent Activity
+  1262→                <span className="flex items-center gap-1 text-xs font-normal text-green-500">
+  1263→                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+  1264→                  Live
+  1265→                </span>
+  1266→              </CardTitle>
+  1267→              <Badge variant="secondary">{filteredActivities.length} events</Badge>
+  1268→            </div>
+  1269→            <div className="flex gap-2">
+  1270→              {/* Activity Type Filter */}
+  1271→              <Select value={activityFilter} onValueChange={setActivityFilter}>
+  1272→                <SelectTrigger className="w-[130px] h-8 text-xs">
+  1273→                  <SelectValue placeholder="Filter" />
+  1274→                </SelectTrigger>
+  1275→                <SelectContent>
+  1276→                  <SelectItem value="all">All Activity</SelectItem>
+  1277→                  <SelectItem value="query">Queries</SelectItem>
+  1278→                  <SelectItem value="connect">Connections</SelectItem>
+  1279→                  <SelectItem value="execute">Executions</SelectItem>
+  1280→                  <SelectItem value="upload">Uploads</SelectItem>
+  1281→                  <SelectItem value="download">Downloads</SelectItem>
+  1282→                  <SelectItem value="collaborate">Team</SelectItem>
+  1283→                  <SelectItem value="achievement">Achievements</SelectItem>
+  1284→                  <SelectItem value="system">System</SelectItem>
+  1285→                </SelectContent>
+  1286→              </Select>
+  1287→              <Button size="sm" variant="ghost" onClick={clearActivities}>
+  1288→                Clear
+  1289→              </Button>
+  1290→            </div>
+  1291→          </CardHeader>
+  1292→          <CardContent>
+  1293→            <div className="space-y-3 max-h-[500px] overflow-auto pr-2 custom-scrollbar">
+  1294→              {filteredActivities.length === 0 ? (
+  1295→                <div className="text-center py-12 text-muted-foreground">
+  1296→                  <div className="text-4xl mb-3">📭</div>
+  1297→                  <p className="font-medium">No {activityFilter !== 'all' ? activityFilter : ''} activity</p>
+  1298→                  <p className="text-sm mt-1">Try changing the filter or explore the platform!</p>
+  1299→                  <Button className="mt-4" onClick={() => window.location.href = '/connectors'}>
+  1300→                    Explore Connectors
+  1301→                  </Button>
+  1302→                </div>
+  1303→              ) : (
+  1304→                filteredActivities.slice(0, visibleActivities).map((activity, index) => {
+  1305→                  // Handle both plain objects and DynamicField-wrapped objects
+  1306→                  const activityObj = typeof activity === 'object' && 'message' in activity && 
+  1307→                    typeof (activity as any).message !== 'string' ? activity as any : activity;
+  1308→                  
+  1309→                  const act = typeof activityObj.message === 'string' ? activityObj : { 
+  1310→                    ...activityObj, 
+  1311→                    message: { value: activityObj.message, isDirty: false } 
+  1312→                  };
+  1313→                  const msg = typeof act.message === 'string' ? act.message : act.message.value;
+  1314→                  const isExpanded = expandedActivity === act.id;
+  1315→                  
+  1316→                  return (
+  1317→                    <div
+  1318→                      key={act.id || index}
+  1319→                      className={`flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-all group cursor-pointer border border-transparent hover:border-border ${getActivityIconColor(act.type)}`}
+  1320→                      onClick={() => setExpandedActivity(isExpanded ? null : act.id)}
+  1321→                    >
+  1322→                      <div className="relative shrink-0">
+  1323→                        <span className="text-xl mt-0.5 block w-8 h-8 rounded-full bg-background flex items-center justify-center">
+  1324→                          {act.icon}
+  1325→                        </span>
+  1326→                        {index < filteredActivities.slice(0, visibleActivities).length - 1 && (
+  1327→                          <div className="absolute left-4 top-10 w-px h-full bg-border" />
+  1328→                        )}
+  1329→                      </div>
+  1330→                      <div className="flex-1 min-w-0">
+  1331→                        <p className="text-sm text-foreground truncate group-hover:text-primary transition-colors font-medium">
+  1332→                          {msg}
+  1333→                          {'isDirty' in act.message && act.message.isDirty && (
+  1334→                            <Badge variant="secondary" className="ml-2 text-xs">Modified</Badge>
+  1335→                          )}
+  1336→                        </p>
+  1337→                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+  1338→                          <p className="text-xs text-muted-foreground">
+  1339→                            {formatTimeAgo(act.timestamp)}
+  1340→                          </p>
+  1341→                          {'details' in act && act.details && (
+  1342→                            <>
+  1343→                              <span className="text-muted-foreground">•</span>
+  1344→                              <p className="text-xs text-cyan-600 dark:text-cyan-400">
+  1345→                                {act.details}
+  1346→                              </p>
+  1347→                            </>
+  1348→                          )}
+  1349→                          {/* Activity type badge */}
+  1350→                          <Badge variant="outline" className="text-xs py-0 h-4">
+  1351→                            {act.type}
+  1352→                          </Badge>
+  1353→                        </div>
+  1354→                        
+  1355→                        {/* Expandable Metadata */}
+  1356→                        {isExpanded && act.metadata && (
+  1357→                          <div className="mt-2 p-2 bg-background rounded-md text-xs">
+  1358→                            <pre className="text-muted-foreground whitespace-pre-wrap">
+  1359→                              {JSON.stringify(act.metadata, null, 2)}
+  1360→                            </pre>
+  1361→                          </div>
+  1362→                        )}
+  1363→                      </div>
+  1364→                      
+  1365→                      {/* Activity Action Buttons */}
+  1366→                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 shrink-0">
+  1367→                        <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="View details">
+  1368→                          →
+  1369→                        </Button>
+  1370→                      </div>
+  1371→                    </div>
+  1372→                  );
+  1373→                })
+  1374→              )}
+  1375→            </div>
+  1376→            
+  1377→            {/* Load More Button */}
+  1378→            {visibleActivities < filteredActivities.length && (
+  1379→              <div className="mt-4 pt-4 border-t">
+  1380→                <Button 
+  1381→                  variant="outline" 
+  1382→                  size="sm" 
+  1383→                  className="w-full"
+  1384→                  onClick={() => setVisibleActivities(prev => prev + 5)}
+  1385→                >
+  1386→                  Load More Activities ({filteredActivities.length - visibleActivities} remaining)
+  1387→                </Button>
+  1388→              </div>
+  1389→            )}
+  1390→            
+  1391→            {filteredActivities.length > 0 && visibleActivities >= filteredActivities.length && (
+  1392→              <div className="mt-4 pt-4 border-t text-center">
+  1393→                <p className="text-xs text-muted-foreground">
+  1394→                  ✓ Showing all {filteredActivities.length} activities
+  1395→                </p>
+  1396→              </div>
+  1397→            )}
+  1398→          </CardContent>
+  1399→        </Card>
+  1400→
+  1401→        {/* System Status - Dynamic Health */}
+  1402→        <Card className="lg:col-span-3">
+  1403→          <CardHeader className="flex flex-row items-center justify-between">
+  1404→            <CardTitle>🖥️ System Status</CardTitle>
+  1405→            <Badge className="bg-green-500 text-white animate-pulse">
+  1406→              ● All Systems Operational
+  1407→            </Badge>
+  1408→          </CardHeader>
+  1409→          <CardContent>
+  1410→            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+  1411→              <StatusItem name="API Gateway" health={99} latency="12ms" />
+  1412→              <StatusItem name="Data Lake" health={97} latency="34ms" />
+  1413→              <StatusItem name="AETHEL AI" health={85} warning latency="89ms" />
+  1414→              <StatusItem name="Compute Cluster" health={dashboardStats.systemHealth.value} latency="23ms" />
+  1415→            </div>
+  1416→            
+  1417→            <div className="mt-6 p-4 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800">
+  1418→              <div className="flex items-center justify-between">
+  1419→                <div>
+  1420→                  <span className="text-sm font-medium">Overall System Health</span>
+  1421→                  <span className="text-xs text-muted-foreground ml-2 block sm:inline sm:ml-3">
+  1422→                    Pro Tier • DuckDB Primary • Auto-scaling Enabled
+  1423→                  </span>
+  1424→                </div>
+  1425→                <div className="flex items-center gap-3">
+  1426→                  <Badge variant="default" className="bg-green-500 text-white">
+  1427→                    {dashboardStats.systemHealth.value}% Healthy
+  1428→                  </Badge>
+  1429→                  {dbConfig.enabled && (
+  1430→                    <Badge variant="outline" className="border-cyan-500 text-cyan-600 dark:text-cyan-400">
+  1431→                      DB: {dbConfig.provider}
+  1432→                    </Badge>
+  1433→                  )}
+  1434→                </div>
+  1435→              </div>
+  1436→              
+  1437→              {/* Database Config Quick View */}
+  1438→              {dbConfig.enabled && (
+  1439→                <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800 text-xs text-muted-foreground">
+  1440→                  <div className="flex flex-wrap gap-4">
+  1441→                    <span>Auto-push threshold: {(dbConfig.autoPushThreshold.value / 1024 / 1024).toFixed(0)}MB</span>
+  1442→                    {dbConfig.lastPush && (
+  1443→                      <span>Last push: {formatTimeAgo(dbConfig.lastPush)}</span>
+  1444→                    )}
+  1445→                    <span>Uptime: 99.97%</span>
+  1446→                    <span>Region: US-East-1</span>
+  1447→                  </div>
+  1448→                </div>
+  1449→              )}
+  1450→            </div>
+  1451→          </CardContent>
+  1452→        </Card>
+  1453→      </div>
+  1454→
+  1455→      {/* ==================== MODALS ==================== */}
+  1456→
+  1457→      {/* Enhanced Avatar Upload Modal with Emoji Picker */}
+  1458→      <Dialog open={showAvatarModal} onOpenChange={setShowAvatarModal}>
+  1459→        <DialogContent className="sm:max-w-md">
+  1460→          <DialogHeader>
+  1461→            <DialogTitle>🖼️ Update Profile Picture</DialogTitle>
+  1462→            <DialogDescription>
+  1463→              Choose an emoji avatar or upload your own photo. JPG, PNG, or GIF (max 2MB).
+  1464→            </DialogDescription>
+  1465→          </DialogHeader>
+  1466→          
+  1467→          <div className="space-y-4 mt-4">
+  1468→            {/* Current Avatar Preview */}
+  1469→            <div className="flex justify-center">
+  1470→              <div className={`w-28 h-28 rounded-full flex items-center justify-center overflow-hidden border-4 border-primary/20 ${
+  1471→                currentAvatar?.startsWith('data:') ? '' : 'bg-gradient-to-br from-violet-500 to-purple-600'
+  1472→              }`}
+  1473→              style={currentAvatar?.startsWith('data:') ? { backgroundImage: `url(${currentAvatar})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
+  1474→              >
+  1475→                {currentAvatar?.startsWith('data:') ? null : (currentAvatar && currentAvatar.length <= 2 ? <span className="text-4xl">{currentAvatar}</span> : <span className="text-2xl font-bold text-white">{getInitials()}</span>)}
+  1476→              </div>
+  1477→            </div>
+  1478→
+  1479→            {/* Emoji Avatar Picker */}
+  1480→            <div>
+  1481→              <label className="text-sm font-medium mb-2 block">Choose an Emoji Avatar</label>
+  1482→              <div className="grid grid-cols-6 gap-2">
+  1483→                {AVATAR_OPTIONS.map((emoji) => (
+  1484→                  <button
+  1485→                    key={emoji}
+  1486→                    onClick={() => handleEmojiSelect(emoji)}
+  1487→                    className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all hover:scale-110 ${
+  1488→                      selectedEmojiAvatar === emoji 
+  1489→                        ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2' 
+  1490→                        : 'bg-muted hover:bg-muted/80'
+  1491→                    }`}
+  1492→                  >
+  1493→                    {emoji}
+  1494→                  </button>
+  1495→                ))}
+  1496→              </div>
+  1497→            </div>
+  1498→            
+  1499→            {/* File Upload Option */}
+  1500→            <div className="relative">
+  1501→              <div className="absolute inset-0 flex items-center justify-center">
+  1502→                <span className="text-xs text-muted-foreground">OR</span>
+  1503→              </div>
+  1504→              <div className="border-t" />
+  1505→            </div>
+  1506→            
+  1507→            <label className="cursor-pointer group block">
+  1508→              <div className={`flex items-center justify-center gap-3 p-4 rounded-lg border-2 border-dashed transition-colors ${
+  1509→                avatarPreview 
+  1510→                  ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-950' 
+  1511→                  : 'border-muted-foreground/25 hover:border-cyan-500 hover:bg-cyan-50/50 dark:hover:bg-cyan-950/50'
+  1512→              }`}>
+  1513→                {avatarPreview ? (
+  1514→                  <img src={avatarPreview} alt="Preview" className="w-12 h-12 rounded-lg object-cover" />
+  1515→                ) : (
+  1516→                  <>
+  1517→                    <svg className="w-8 h-8 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  1518→                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  1519→                    </svg>
+  1520→                    <div className="text-left">
+  1521→                      <p className="text-sm font-medium">Upload Image</p>
+  1522→                      <p className="text-xs text-muted-foreground">PNG, JPG up to 2MB</p>
+  1523→                    </div>
+  1524→                  </>
+  1525→                )}
+  1526→              </div>
+  1527→              <input
+  1528→                type="file"
+  1529→                accept="image/*"
+  1530→                onChange={handleAvatarUpload}
+  1531→                className="hidden"
+  1532→              />
+  1533→            </label>
+  1534→            
+  1535→            {/* Remove Avatar Option */}
+  1536→            {currentAvatar && (
+  1537→              <Button 
+  1538→                variant="outline" 
+  1539→                size="sm" 
+  1540→                className="w-full text-destructive hover:text-destructive"
+  1541→                onClick={handleRemoveAvatar}
+  1542→              >
+  1543→                🗑️ Remove Avatar
+  1544→              </Button>
+  1545→            )}
+  1546→            
+  1547→            <div className="flex gap-3 justify-end pt-2">
+  1548→              <Button variant="outline" onClick={() => setShowAvatarModal(false)}>
+  1549→                Cancel
+  1550→              </Button>
+  1551→              <Button 
+  1552→                onClick={saveAvatar}
+  1553→                className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white"
+  1554→              >
+  1555→                Save Avatar
+  1556→              </Button>
+  1557→            </div>
+  1558→          </div>
+  1559→        </DialogContent>
+  1560→      </Dialog>
+  1561→
+  1562→      {/* Full Profile Edit Modal */}
+  1563→      <Dialog open={showFullProfileModal} onOpenChange={setShowFullProfileModal}>
+  1564→        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+  1565→          <DialogHeader>
+  1566→            <DialogTitle>👤 Edit Complete Profile</DialogTitle>
+  1567→            <DialogDescription>
+  1568→              Update your professional information and research interests.
+  1569→            </DialogDescription>
+  1570→          </DialogHeader>
+  1571→          
+  1572→          {/* Profile Completion Indicator in Modal */}
+  1573→          <div className="mb-4 p-3 rounded-lg bg-muted/50">
+  1574→            <div className="flex items-center justify-between mb-2">
+  1575→              <span className="text-sm font-medium">Profile Strength</span>
+  1576→              <span className="text-sm font-bold text-primary">{completionPercentage}%</span>
+  1577→            </div>
+  1578→            <Progress value={completionPercentage} className="h-2" />
+  1579→          </div>
+  1580→          
+  1581→          <form onSubmit={(e) => { e.preventDefault(); handleSaveFullProfile(); }} className="space-y-4 mt-4">
+  1582→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1583→              <div>
+  1584→                <label className="block text-sm font-medium mb-1">Display Name *</label>
+  1585→                <Input
+  1586→                  value={fullProfile.displayName}
+  1587→                  onChange={(e) => setFullProfile({...fullProfile, displayName: e.target.value})}
+  1588→                  required
+  1589→                />
+  1590→              </div>
+  1591→              <div>
+  1592→                <label className="block text-sm font-medium mb-1">Email *</label>
+  1593→                <Input
+  1594→                  type="email"
+  1595→                  value={fullProfile.email}
+  1596→                  onChange={(e) => setFullProfile({...fullProfile, email: e.target.value})}
+  1597→                  required
+  1598→                />
+  1599→              </div>
+  1600→            </div>
+  1601→
+  1602→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1603→              <div>
+  1604→                <label className="block text-sm font-medium mb-1">
+  1605→                  Institution/Organization
+  1606→                  {!fullProfile.institution && <span className="text-muted-foreground ml-1">(+15%)</span>}
+  1607→                </label>
+  1608→                <Input
+  1609→                  value={fullProfile.institution}
+  1610→                  onChange={(e) => setFullProfile({...fullProfile, institution: e.target.value})}
+  1611→                  placeholder="MIT, Stanford, NASA..."
+  1612→                />
+  1613→              </div>
+  1614→              <div>
+  1615→                <label className="block text-sm font-medium mb-1">
+  1616→                  ORCID ID
+  1617→                  {!fullProfile.orcid && <span className="text-muted-foreground ml-1">(+10%)</span>}
+  1618→                </label>
+  1619→                <Input
+  1620→                  value={fullProfile.orcid}
+  1621→                  onChange={(e) => setFullProfile({...fullProfile, orcid: e.target.value})}
+  1622→                  placeholder="0000-0000-0000-0000"
+  1623→                />
+  1624→              </div>
+  1625→            </div>
+  1626→
+  1627→            <div>
+  1628→              <label className="block text-sm font-medium mb-1">
+  1629→                Research Interests
+  1630→                {!fullProfile.researchInterests && <span className="text-muted-foreground ml-1">(+15%)</span>}
+  1631→              </label>
+  1632→              <Input
+  1633→                value={fullProfile.researchInterests}
+  1634→                onChange={(e) => setFullProfile({...fullProfile, researchInterests: e.target.value})}
+  1635→                placeholder="Machine Learning, Genomics, Drug Discovery..."
+  1636→              />
+  1637→            </div>
+  1638→
+  1639→            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+  1640→              <div>
+  1641→                <label className="block text-sm font-medium mb-1">Website</label>
+  1642→                <Input
+  1643→                  type="url"
+  1644→                  value={fullProfile.website}
+  1645→                  onChange={(e) => setFullProfile({...fullProfile, website: e.target.value})}
+  1646→                  placeholder="https://yourlab.edu"
+  1647→                />
+  1648→              </div>
+  1649→              <div>
+  1650→                <label className="block text-sm font-medium mb-1">Timezone</label>
+  1651→                <Select value={fullProfile.timezone} onValueChange={(value) => setFullProfile({...fullProfile, timezone: value})}>
+  1652→                  <SelectTrigger>
+  1653→                    <SelectValue />
+  1654→                  </SelectTrigger>
+  1655→                  <SelectContent>
+  1656→                    <SelectItem value="America/New_York">Eastern Time (ET)</SelectItem>
+  1657→                    <SelectItem value="America/Chicago">Central Time (CT)</SelectItem>
+  1658→                    <SelectItem value="America/Denver">Mountain Time (MT)</SelectItem>
+  1659→                    <SelectItem value="America/Los_Angeles">Pacific Time (PT)</SelectItem>
+  1660→                    <SelectItem value="Europe/London">London (GMT)</SelectItem>
+  1661→                    <SelectItem value="Europe/Berlin">Central European (CET)</SelectItem>
+  1662→                    <SelectItem value="Asia/Tokyo">Japan (JST)</SelectItem>
+  1663→                    <SelectItem value="Asia/Shanghai">China (CST)</SelectItem>
+  1664→                  </SelectContent>
+  1665→                </Select>
+  1666→              </div>
+  1667→            </div>
+  1668→
+  1669→            <div>
+  1670→              <label className="block text-sm font-medium mb-1">
+  1671→                Bio
+  1672→                {(fullProfile.bio?.length || 0) <= 20 && <span className="text-muted-foreground ml-1">(+20%)</span>}
+  1673→              </label>
+  1674→              <textarea
+  1675→                value={fullProfile.bio}
+  1676→                onChange={(e) => setFullProfile({...fullProfile, bio: e.target.value})}
+  1677→                placeholder="Tell us about your research..."
+  1678→                rows={3}
+  1679→                className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm resize-none focus:ring-2 focus:ring-ring"
+  1680→                maxLength={500}
+  1681→              />
+  1682→              <p className="text-xs text-muted-foreground mt-1">{fullProfile.bio.length}/500 characters</p>
+  1683→            </div>
+  1684→
+  1685→            <div className="flex gap-3 justify-end pt-4">
+  1686→              <Button type="button" variant="outline" onClick={() => setShowFullProfileModal(false)}>
+  1687→                Cancel
+  1688→              </Button>
+  1689→              <Button 
+  1690→                type="submit" 
+  1691→                disabled={profileSaving || profileSaved}
+  1692→                className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white min-w-[120px]"
+  1693→              >
+  1694→                {profileSaving ? (
+  1695→                  <>
+  1696→                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+  1697→                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+  1698→                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+  1699→                    </svg>
+  1700→                    Saving...
+  1701→                  </>
+  1702→                ) : profileSaved ? (
+  1703→                  '✓ Saved!'
+  1704→                ) : (
+  1705→                  'Save Profile'
+  1706→                )}
+  1707→              </Button>
+  1708→            </div>
+  1709→          </form>
+  1710→        </DialogContent>
+  1711→      </Dialog>
+  1712→
+  1713→      {/* Custom scrollbar styles */}
+  1714→      <style jsx>{`
+  1715→        .custom-scrollbar::-webkit-scrollbar {
+  1716→          width: 6px;
+  1717→        }
+  1718→        .custom-scrollbar::-webkit-scrollbar-track {
+  1719→          background: transparent;
+  1720→        }
+  1721→        .custom-scrollbar::-webkit-scrollbar-thumb {
+  1722→          background: hsl(var(--muted));
+  1723→          border-radius: 3px;
+  1724→        }
+  1725→        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  1726→          background: hsl(var(--muted-foreground));
+  1727→        }
+  1728→      `}</style>
+  1729→    </div>
+  1730→  );
+  1731→}
+  1732→
+  1733→// ============ SUB-COMPONENTS ============
+  1734→
+  1735→function StatusItem({ name, health, warning, latency }: { name: string; health: number; warning?: boolean; latency?: string }) {
+  1736→  return (
+  1737→    <div className="space-y-2 p-4 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+  1738→      <div className="flex justify-between text-sm items-center">
+  1739→        <span className="font-medium">{name}</span>
+  1740→        <div className="flex items-center gap-2">
+  1741→          {latency && (
+  1742→            <span className="text-xs text-muted-foreground">{latency}</span>
+  1743→          )}
+  1744→          <span className={warning ? 'text-yellow-500' : 'text-green-500'}>
+  1745→            {health >= 95 ? '● Operational' : health >= 80 ? '◐ Degraded': '○ Critical'}
+  1746→          </span>
+  1747→        </div>
+  1748→      </div>
+  1749→      <Progress value={health} className={`h-2 ${warning ? '[&>div]:bg-yellow-500' : '[&>div]:bg-green-500'}`} />
+  1750→      <div className="flex justify-between text-xs text-muted-foreground">
+  1751→        <span>{health}% uptime</span>
+  1752→        <span>{health >= 95 ? 'Excellent' : health >= 80 ? 'Good' : 'Needs Attention'}</span>
+  1753→      </div>
+  1754→    </div>
+  1755→  );
+  1756→}
+  1757→
