@@ -44,8 +44,9 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'Main',
     items: [
-      { label: 'Home', href: '/', icon: '🏠', description: 'Landing page' },
+      { label: 'Landing Page', href: '/', icon: '🏠', description: 'Welcome & overview', badge: 'HOME', badgeVariant: 'outline' },
       { label: 'Dashboard', href: '/dashboard', icon: '📊', description: 'Your command center' },
+      { label: 'Subscription', href: '/subscription', icon: '⭐', description: 'Plans & pricing', badge: 'NEW' },
     ]
   },
   {
@@ -386,6 +387,7 @@ export function Footer() {
           <div>
             <h3 className="font-semibold mb-3 text-sm">Platform</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
+              <li><Link href="/" className="hover:text-foreground transition-colors font-medium text-foreground">🏠 Landing Page</Link></li>
               <li><Link href="/dashboard" className="hover:text-foreground transition-colors">Dashboard</Link></li>
               <li><Link href="/data" className="hover:text-foreground transition-colors">Data Lake</Link></li>
               <li><Link href="/workspace" className="hover:text-foreground transition-colors">Workspace</Link></li>
@@ -410,7 +412,7 @@ export function Footer() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li><Link href="/collaboration" className="hover:text-foreground transition-colors">Collaboration</Link></li>
               <li><Link href="/settings" className="hover:text-foreground transition-colors">Settings</Link></li>
-              <li><Link href="/api/subscription?action=form" className="hover:text-foreground transition-colors">Upgrade to Pro</Link></li>
+              <li><Link href="/subscription" className="hover:text-foreground transition-colors font-medium text-foreground">⭐ Subscription Plans</Link></li>
               <li><a href="https://github.com/testdemoqwenai2025-creator/scihub-pro-demo" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">GitHub</a></li>
             </ul>
           </div>
