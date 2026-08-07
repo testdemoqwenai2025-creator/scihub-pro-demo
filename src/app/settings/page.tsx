@@ -85,7 +85,9 @@ export default function SettingsPage() {
   // Calculate storage percentage for current tier
   const storagePercentage = Math.min(
     100,
-    (totalStorageUsed / currentVolumeTier.maxSize) * 100
+    totalStorageUsed > 0 && currentVolumeTier?.maxSize > 0 
+      ? (totalStorageUsed / currentVolumeTier.maxSize) * 100 
+      : 0
   );
 
   // Format bytes to readable string
@@ -246,7 +248,7 @@ export default function SettingsPage() {
                 <label className="text-sm font-medium">Research Interests</label>
                 <Input
                   placeholder="cancer-genomics, machine-learning, drug-discovery"
-                  defaultValue={userProfile.researchInterests.join(', ')}
+                  defaultValue={userProfile.researchInterests?.join(', ') || ''}
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
@@ -717,11 +719,11 @@ export default function SettingsPage() {
                     <p className="text-xs text-muted-foreground">{item.desc}</p>
                   </div>
                   <Switch
-                    checked={preferences.notifications[item.key as keyof NotificationPreferences]}
+                    checked={preferences.notifications?.[item.key as string] ?? false}
                     onCheckedChange={(checked) => 
                       updatePreferences({
                         notifications: {
-                          ...preferences.notifications,
+                          ...(preferences.notifications || {}),
                           [item.key]: checked,
                         },
                       })

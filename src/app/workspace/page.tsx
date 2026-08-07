@@ -1081,12 +1081,15 @@ export default function WorkspacePage() {
           {/* File List */}
           <div className="flex-1 overflow-auto p-2 space-y-1">
             {workspaceFiles.map((file) => (
-              <button
+              <div
                 key={file.id}
-                className={`w-full text-left p-3 rounded-lg transition-colors group ${
+                role="button"
+                tabIndex={0}
+                className={`w-full text-left p-3 rounded-lg transition-colors group cursor-pointer ${
                   activeFileId === file.id ? 'bg-primary/10 border border-primary/30' : 'hover:bg-muted'
                 }`}
                 onClick={() => setActiveFile(file.id)}
+                onKeyDown={(e) => e.key === 'Enter' && setActiveFile(file.id)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -1106,6 +1109,7 @@ export default function WorkspacePage() {
                         handleDeleteFile(file.id);
                       }}
                       className="p-1 hover:text-destructive"
+                      aria-label={`Delete ${file.name.value}`}
                     >
                       ✕
                     </button>
@@ -1120,7 +1124,7 @@ export default function WorkspacePage() {
                     {new Date(file.lastModified).toLocaleDateString()}
                   </span>
                 </div>
-              </button>
+              </div>
             ))}
 
             {workspaceFiles.length === 0 && (
