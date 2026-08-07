@@ -1,0 +1,1371 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * SciHub Pro - Enhanced Knowledge Graph Page
+     5→ * 
+     6→ * Interactive knowledge visualization featuring:
+     7→ * - Pure SVG-based graph rendering (no external libraries)
+     8→ * - Multiple entity types (papers, genes, compounds, authors, concepts, institutions)
+     9→ * - Rich relationship types with visual differentiation
+    10→ * - Force-directed, circular, hierarchical, and grid layouts
+    11→ * - Interactive zoom/pan controls
+    12→ * - Node detail panel with connected nodes
+    13→ * - Real-time statistics
+    14→ * - Export to PNG functionality
+    15→ * - Smooth CSS transitions and animations
+    16→ */
+    17→
+    18→import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+    19→import { useTranslation } from '@/i18n/useTranslation';
+    20→import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+    21→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+    22→import { Badge } from '@/components/ui/badge';
+    23→import { Button } from '@/components/ui/button';
+    24→import { Input } from '@/components/ui/input';
+    25→import {
+    26→  Select,
+    27→  SelectContent,
+    28→  SelectItem,
+    29→  SelectTrigger,
+    30→  SelectValue,
+    31→} from '@/components/ui/select';
+    32→
+    33→// ============ TYPES ============
+    34→
+    35→type NodeType = 'paper' | 'gene' | 'compound' | 'author' | 'concept' | 'institution';
+    36→type EdgeType = 'cites' | 'studies' | 'interacts-with' | 'authored-by' | 'similar-to' | 'mentions';
+    37→
+    38→interface GraphNode {
+    39→  id: string;
+    40→  label: string;
+    41→  type: NodeType;
+    42→  x: number;
+    43→  y: number;
+    44→  connections: number;
+    45→  importance: number; // 0-1 for sizing
+    46→  description?: string;
+    47→}
+    48→
+    49→interface GraphEdge {
+    50→  id: string;
+    51→  source: string;
+    52→  target: string;
+    53→  type: EdgeType;
+    54→  weight: number; // For line thickness
+    55→}
+    56→
+    57→interface GraphViewSettings {
+    58→  showLabels: boolean;
+    59→  showEdges: boolean;
+    60→  nodeSizeBy: 'connections' | 'importance' | 'uniform';
+    61→  layout: 'force' | 'circular' | 'hierarchical' | 'grid';
+    62→  filterType: string;
+    63→  showIcons: boolean;
+    64→}
+    65→
+    66→interface TransformState {
+    67→  scale: number;
+    68→  translateX: number;
+    69→  translateY: number;
+    70→}
+    71→
+    72→// ============ CONSTANTS & CONFIGURATION ============
+    73→
+    74→// Node type configuration
+    75→const NODE_TYPE_CONFIG: Record<NodeType, { color: string; icon: string; label: string }> = {
+    76→  paper: { color: '#3B82F6', icon: '📄', label: 'Paper' },
+    77→  gene: { color: '#10B981', icon: '🧬', label: 'Gene' },
+    78→  compound: { color: '#8B5CF6', icon: '⚗️', label: 'Compound' },
+    79→  author: { color: '#F59E0B', icon: '👤', label: 'Author' },
+    80→  concept: { color: '#06B6D4', icon: '💡', label: 'Concept' },
+    81→  institution: { color: '#EC4899', icon: '🏛️', label: 'Institution' },
+    82→};
+    83→
+    84→// Edge type configuration
+    85→const EDGE_TYPE_CONFIG: Record<EdgeType, { color: string; dashArray?: string; label: string }> = {
+    86→  cites: { color: '#6B7280', label: 'Cites' },
+    87→  studies: { color: '#3B82F6', dashArray: '8,4', label: 'Studies' },
+    88→  'interacts-with': { color: '#8B5CF6', dashArray: '3,3', label: 'Interacts' },
+    89→  'authored-by': { color: '#10B981', label: 'Authored by' },
+    90→  'similar-to': { color: '#D1D5DB', dashArray: '5,5', label: 'Similar' },
+    91→  mentions: { color: '#F59E0B', dashArray: '10,3', label: 'Mentions' },
+    92→};
+    93→
+    94→// SVG dimensions
+    95→const SVG_WIDTH = 1000;
+    96→const SVG_HEIGHT = 700;
+    97→
+    98→// ============ SAMPLE GRAPH DATA (CRISPR Gene Editing Theme) ============
+    99→
+   100→const SAMPLE_NODES: Omit<GraphNode, 'x' | 'y'>[] = [
+   101→  // Papers
+   102→  { id: 'p1', label: 'CRISPR-Cas9 Review 2024', type: 'paper', connections: 8, importance: 0.95, description: 'Comprehensive review of CRISPR-Cas9 gene editing technology advances in 2024.' },
+   103→  { id: 'p2', label: 'Base Editing Advances', type: 'paper', connections: 6, importance: 0.85, description: 'Recent developments in base editing technology for precise genetic modifications.' },
+   104→  { id: 'p3', label: 'Therapeutic Applications', type: 'paper', connections: 5, importance: 0.80, description: 'Clinical applications of gene editing in treating genetic disorders.' },
+   105→  { id: 'p4', label: 'Off-Target Analysis Methods', type: 'paper', connections: 4, importance: 0.72, description: 'Computational and experimental methods for detecting off-target effects.' },
+   106→  
+   107→  // Genes
+   108→  { id: 'g1', label: 'BRCA1', type: 'gene', connections: 5, importance: 0.90, description: 'Breast cancer type 1 susceptibility protein, a key target for gene therapy research.' },
+   109→  { id: 'g2', label: 'TP53', type: 'gene', connections: 7, importance: 0.92, description: 'Tumor protein p53, the most frequently mutated gene in human cancers.' },
+   110→  { id: 'g3', label: 'CFTR', type: 'gene', connections: 4, importance: 0.75, description: 'Cystic fibrosis transmembrane conductance regulator, target for CF treatment.' },
+   111→  { id: 'g4', label: 'HBB', type: 'gene', connections: 3, importance: 0.70, description: 'Hemoglobin beta, target for sickle cell disease therapy.' },
+   112→  
+   113→  // Compounds
+   114→  { id: 'c1', label: 'Cas9 Protein', type: 'compound', connections: 8, importance: 0.95, description: 'The endonuclease enzyme that enables CRISPR-Cas9 gene editing.' },
+   115→  { id: 'c2', label: 'sgRNA', type: 'compound', connections: 6, importance: 0.88, description: 'Single guide RNA that directs Cas9 to specific DNA sequences.' },
+   116→  { id: 'c3', label: 'Prime Editor', type: 'compound', connections: 4, importance: 0.82, description: 'Next-generation editing system for precise DNA modifications.' },
+   117→  
+   118→  // Authors
+   119→  { id: 'a1', label: 'Doudna, J.', type: 'author', connections: 5, importance: 0.95, description: 'Jennifer Doudna - Nobel laureate, co-inventor of CRISPR-Cas9 technology.' },
+   120→  { id: 'a2', label: 'Charpentier, E.', type: 'author', connections: 5, importance: 0.93, description: 'Emmanuelle Charpentier - Nobel laureate, co-inventor of CRISPR-Cas9 technology.' },
+   121→  { id: 'a3', label: 'Zhang, F.', type: 'author', connections: 4, importance: 0.87, description: 'Feng Zhang - Pioneer in CRISPR applications for mammalian cells.' },
+   122→  
+   123→  // Concepts
+   124→  { id: 'k1', label: 'Gene Therapy', type: 'concept', connections: 7, importance: 0.88, description: 'Therapeutic approach using genes to treat or prevent disease.' },
+   125→  { id: 'k2', label: 'Precision Medicine', type: 'concept', connections: 5, importance: 0.82, description: 'Medical care tailored to individual genetic profiles.' },
+   126→  { id: 'k3', label: 'Genome Engineering', type: 'concept', connections: 6, importance: 0.85, description: 'Direct manipulation of an organism\'s genetic material.' },
+   127→  
+   128→  // Institutions
+   129→  { id: 'i1', label: 'UC Berkeley', type: 'institution', connections: 4, importance: 0.78, description: 'University of California, Berkeley - Leading research institution in gene editing.' },
+   130→  { id: 'i2', label: 'MIT', type: 'institution', connections: 3, importance: 0.75, description: 'Massachusetts Institute of Technology - Hub for biotechnology innovation.' },
+   131→  { id: 'i3', label: 'Max Planck', type: 'institution', connections: 3, importance: 0.73, description: 'Max Planck Institute - European leader in molecular biology research.' },
+   132→];
+   133→
+   134→const SAMPLE_EDGES: GraphEdge[] = [
+   135→  // Paper relationships
+   136→  { id: 'e1', source: 'p1', target: 'p2', type: 'cites', weight: 2 },
+   137→  { id: 'e2', source: 'p1', target: 'p3', type: 'cites', weight: 2 },
+   138→  { id: 'e3', source: 'p2', target: 'p4', type: 'cites', weight: 1 },
+   139→  { id: 'e4', source: 'p3', target: 'p4', type: 'similar-to', weight: 1 },
+   140→  
+   141→  // Paper-Gene relationships (studies)
+   142→  { id: 'e5', source: 'p1', target: 'g1', type: 'studies', weight: 3 },
+   143→  { id: 'e6', source: 'p1', target: 'g2', type: 'studies', weight: 3 },
+   144→  { id: 'e7', source: 'p2', target: 'g3', type: 'studies', weight: 2 },
+   145→  { id: 'e8', source: 'p3', target: 'g4', type: 'studies', weight: 2 },
+   146→  { id: 'e9', source: 'p4', target: 'g1', type: 'studies', weight: 2 },
+   147→  { id: 'e10', source: 'p4', target: 'g2', type: 'studies', weight: 2 },
+   148→  
+   149→  // Paper-Compound relationships (mentions)
+   150→  { id: 'e11', source: 'p1', target: 'c1', type: 'mentions', weight: 3 },
+   151→  { id: 'e12', source: 'p1', target: 'c2', type: 'mentions', weight: 3 },
+   152→  { id: 'e13', source: 'p2', target: 'c3', type: 'mentions', weight: 2 },
+   153→  { id: 'e14', source: 'p3', target: 'c1', type: 'mentions', weight: 2 },
+   154→  
+   155→  // Author-Paper relationships (authored-by)
+   156→  { id: 'e15', source: 'a1', target: 'p1', type: 'authored-by', weight: 2 },
+   157→  { id: 'e16', source: 'a2', target: 'p1', type: 'authored-by', weight: 2 },
+   158→  { id: 'e17', source: 'a3', target: 'p2', type: 'authored-by', weight: 2 },
+   159→  { id: 'e18', source: 'a3', target: 'p4', type: 'authored-by', weight: 2 },
+   160→  
+   161→  // Gene-Gene interactions
+   162→  { id: 'e19', source: 'g1', target: 'g2', type: 'interacts-with', weight: 3 },
+   163→  { id: 'e20', source: 'g2', target: 'g3', type: 'interacts-with', weight: 2 },
+   164→  { id: 'e21', source: 'g3', target: 'g4', type: 'similar-to', weight: 1 },
+   165→  
+   166→  // Compound-Compound interactions
+   167→  { id: 'e22', source: 'c1', target: 'c2', type: 'interacts-with', weight: 4 },
+   168→  { id: 'e23', source: 'c2', target: 'c3', type: 'similar-to', weight: 2 },
+   169→  
+   170→  // Concept relationships
+   171→  { id: 'e24', source: 'k1', target: 'k2', type: 'similar-to', weight: 2 },
+   172→  { id: 'e25', source: 'k1', target: 'k3', type: 'similar-to', weight: 3 },
+   173→  { id: 'e26', source: 'k2', target: 'k3', type: 'similar-to', weight: 2 },
+   174→  
+   175→  // Paper-Concept relationships
+   176→  { id: 'e27', source: 'p1', target: 'k3', type: 'mentions', weight: 2 },
+   177→  { id: 'e28', source: 'p3', target: 'k1', type: 'mentions', weight: 3 },
+   178→  { id: 'e29', source: 'p2', target: 'k2', type: 'mentions', weight: 2 },
+   179→  
+   180→  // Author-Institution relationships
+   181→  { id: 'e30', source: 'a1', target: 'i1', type: 'authored-by', weight: 2 },
+   182→  { id: 'e31', source: 'a3', target: 'i2', type: 'authored-by', weight: 2 },
+   183→  { id: 'e32', source: 'a2', target: 'i3', type: 'authored-by', weight: 2 },
+   184→  
+   185→  // Institution-Concept relationships
+   186→  { id: 'e33', source: 'i1', target: 'k3', type: 'mentions', weight: 2 },
+   187→  { id: 'e34', source: 'i2', target: 'k1', type: 'mentions', weight: 2 },
+   188→];
+   189→
+   190→// ============ LAYOUT ALGORITHMS ============
+   191→
+   192→function applyForceLayout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
+   193→  const centerX = SVG_WIDTH / 2;
+   194→  const centerY = SVG_HEIGHT / 2;
+   195→  const iterations = 100;
+   196→  
+   197→  // Initialize positions if not set
+   198→  const positionedNodes = nodes.map(node => ({
+   199→    ...node,
+   200→    x: node.x || centerX + (Math.random() - 0.5) * 200,
+   201→    y: node.y || centerY + (Math.random() - 0.5) * 200,
+   202→  }));
+   203→  
+   204→  // Create adjacency map for faster lookup
+   205→  const adjacencyMap = new Map<string, { node: GraphNode; edge: GraphEdge}[]>();
+   206→  edges.forEach(edge => {
+   207→    if (!adjacencyMap.has(edge.source)) adjacencyMap.set(edge.source, []);
+   208→    if (!adjacencyMap.has(edge.target)) adjacencyMap.set(edge.target, []);
+   209→    const sourceNode = positionedNodes.find(n => n.id === edge.source);
+   210→    const targetNode = positionedNodes.find(n => n.id === edge.target);
+   211→    if (sourceNode) adjacencyMap.get(edge.source)!.push({ node: targetNode!, edge });
+   212→    if (targetNode) adjacencyMap.get(edge.target)!.push({ node: sourceNode!, edge });
+   213→  });
+   214→  
+   215→  // Simulate force-directed layout
+   216→  for (let iter = 0; iter < iterations; iter++) {
+   217→    const temperature = 1 - iter / iterations;
+   218→    
+   219→    positionedNodes.forEach((node, i) => {
+   220→      let fx = 0, fy = 0;
+   221→      
+   222→      // Repulsion between all nodes
+   223→      positionedNodes.forEach((other, j) => {
+   224→        if (i === j) return;
+   225→        const dx = node.x - other.x;
+   226→        const dy = node.y - other.y;
+   227→        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+   228→        const force = 1500 / (dist * dist);
+   229→        fx += (dx / dist) * force;
+   230→        fy += (dy / dist) * force;
+   231→      });
+   232→      
+   233→      // Attraction along edges
+   234→      const neighbors = adjacencyMap.get(node.id) || [];
+   235→      neighbors.forEach(({ node: other, edge }) => {
+   236→        const dx = other.x - node.x;
+   237→        const dy = other.y - node.y;
+   238→        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+   239→        const force = dist * 0.01 * edge.weight;
+   240→        fx += (dx / dist) * force;
+   241→        fy += (dy / dist) * force;
+   242→      });
+   243→      
+   244→      // Gravity toward center
+   245→      fx += (centerX - node.x) * 0.01;
+   246→      fy += (centerY - node.y) * 0.01;
+   247→      
+   248→      // Apply forces with temperature damping
+   249→      node.x += fx * temperature * 0.1;
+   250→      node.y += fy * temperature * 0.1;
+   251→      
+   252→      // Keep within bounds
+   253→      node.x = Math.max(50, Math.min(SVG_WIDTH - 50, node.x));
+   254→      node.y = Math.max(50, Math.min(SVG_HEIGHT - 50, node.y));
+   255→    });
+   256→  }
+   257→  
+   258→  return positionedNodes;
+   259→}
+   260→
+   261→function applyCircularLayout(nodes: GraphNode[]): GraphNode[] {
+   262→  const centerX = SVG_WIDTH / 2;
+   263→  const centerY = SVG_HEIGHT / 2;
+   264→  const radius = Math.min(centerX, centerY) - 80;
+   265→  
+   266→  return nodes.map((node, i) => ({
+   267→    ...node,
+   268→    x: centerX + radius * Math.cos((i / nodes.length) * Math.PI * 2 - Math.PI / 2),
+   269→    y: centerY + radius * Math.sin((i / nodes.length) * Math.PI * 2 - Math.PI / 2),
+   270→  }));
+   271→}
+   272→
+   273→function applyHierarchicalLayout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
+   274→  // Group nodes by type for hierarchical arrangement
+   275→  const typeOrder: NodeType[] = ['concept', 'paper', 'gene', 'compound', 'author', 'institution'];
+   276→  const groups: Record<string, GraphNode[]> = {};
+   277→  
+   278→  typeOrder.forEach(type => {
+   279→    groups[type] = nodes.filter(n => n.type === type);
+   280→  });
+   281→  
+   282→  const levelHeight = (SVG_HEIGHT - 100) / typeOrder.length;
+   283→  const positionedNodes: GraphNode[] = [];
+   284→  
+   285→  typeOrder.forEach((type, levelIndex) => {
+   286→    const groupNodes = groups[type];
+   287→    const y = 80 + levelIndex * levelHeight + levelHeight / 2;
+   288→    const groupWidth = (SVG_WIDTH - 100) / (groupNodes.length + 1);
+   289→    
+   290→    groupNodes.forEach((node, i) => {
+   291→      positionedNodes.push({
+   292→        ...node,
+   293→        x: 50 + groupWidth * (i + 1),
+   294→        y,
+   295→      });
+   296→    });
+   297→  });
+   298→  
+   299→  return positionedNodes;
+   300→}
+   301→
+   302→function applyGridLayout(nodes: GraphNode[]): GraphNode[] {
+   303→  const cols = Math.ceil(Math.sqrt(nodes.length));
+   304→  const rows = Math.ceil(nodes.length / cols);
+   305→  const cellWidth = (SVG_WIDTH - 100) / cols;
+   306→  const cellHeight = (SVG_HEIGHT - 100) / rows;
+   307→  
+   308→  return nodes.map((node, i) => ({
+   309→    ...node,
+   310→    x: 50 + cellWidth * (i % cols) + cellWidth / 2,
+   311→    y: 50 + cellHeight * Math.floor(i / cols) + cellHeight / 2,
+   312→  }));
+   313→}
+   314→
+   315→// ============ HELPER FUNCTIONS ============
+   316→
+   317→function getNodeColor(type: NodeType): string {
+   318→  return NODE_TYPE_CONFIG[type]?.color || '#6B7280';
+   319→}
+   320→
+   321→function getNodeIcon(type: NodeType): string {
+   322→  return NODE_TYPE_CONFIG[type]?.icon || '📍';
+   323→}
+   324→
+   325→function getEdgeColor(type: EdgeType): string {
+   326→  return EDGE_TYPE_CONFIG[type]?.color || '#6B7280';
+   327→}
+   328→
+   329→function getEdgeDashArray(type: EdgeType): string | undefined {
+   330→  return EDGE_TYPE_CONFIG[type]?.dashArray;
+   331→}
+   332→
+   333→function getNodeRadius(node: GraphNode, sizeBy: GraphViewSettings['nodeSizeBy']): number {
+   334→  switch (sizeBy) {
+   335→    case 'connections':
+   336→      return 15 + Math.min(node.connections, 10) * 2.5;
+   337→    case 'importance':
+   338→      return 15 + node.importance * 20;
+   339→    case 'uniform':
+   340→    default:
+   341→      return 25;
+   342→  }
+   343→}
+   344→
+   345→// ============ MAIN COMPONENT ============
+   346→
+   347→export default function KnowledgePage() {
+   348→  const { t } = useTranslation();
+   349→  const store = useSciHubStore();
+   350→  
+   351→  const {
+   352→    graphNodes,
+   353→    graphEdges,
+   354→    addGraphNode,
+   355→    addGraphEdge,
+   356→    clearGraph,
+   357→    activities,
+   358→    addActivity,
+   359→    savedItems,
+   360→    saveItem,
+   361→  } = store;
+   362→
+   363→  // UI State
+   364→  const [selectedNode, setSelectedNode] = useState<string | null>(null);
+   365→  const [searchQuery, setSearchQuery] = useState('');
+   366→  const [settings, setSettings] = useState<GraphViewSettings>({
+   367→    showLabels: true,
+   368→    showEdges: true,
+   369→    nodeSizeBy: 'importance',
+   370→    layout: 'force',
+   371→    filterType: 'all',
+   372→    showIcons: true,
+   373→  });
+   374→  const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+   375→  const [showDetailsPanel, setShowDetailsPanel] = useState(true);
+   376→  const svgRef = useRef<SVGSVGElement>(null);
+   377→  const [isInitialized, setIsInitialized] = useState(false);
+   378→  const [isDragging, setIsDragging] = useState(false);
+   379→  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+   380→  const [transform, setTransform] = useState<TransformState>({
+   381→    scale: 1,
+   382→    translateX: 0,
+   383→    translateY: 0,
+   384→  });
+   385→
+   386→  // Initialize with sample data on first load
+   387→  useEffect(() => {
+   388→    if (!isInitialized && graphNodes.length === 0) {
+   389→      // Initialize nodes with positions
+   390→      const initializedNodes: GraphNode[] = SAMPLE_NODES.map(node => ({
+   391→        ...node,
+   392→        x: SVG_WIDTH / 2 + (Math.random() - 0.5) * 300,
+   393→        y: SVG_HEIGHT / 2 + (Math.random() - 0.5) * 200,
+   394→      }));
+   395→      
+   396→      initializedNodes.forEach(node => addGraphNode(node));
+   397→      SAMPLE_EDGES.forEach(edge => addGraphEdge(edge));
+   398→      setIsInitialized(true);
+   399→      
+   400→      addActivity({
+   401→        type: 'query',
+   402→        message: createDynamicField('Loaded CRISPR Gene Editing knowledge graph (22 nodes, 34 edges)'),
+   403→        icon: '🕸️',
+   404→      });
+   405→    }
+   406→  }, []);
+   407→
+   408→  // Apply layout algorithm when layout setting changes
+   409→  const positionedNodes = useMemo(() => {
+   410→    if (graphNodes.length === 0) return [];
+   411→    
+   412→    let result: GraphNode[];
+   413→    
+   414→    switch (settings.layout) {
+   415→      case 'force':
+   416→        result = applyForceLayout(graphNodes as unknown as GraphNode[], graphEdges as unknown as GraphEdge[]);
+   417→        break;
+   418→      case 'circular':
+   419→        result = applyCircularLayout(graphNodes as unknown as GraphNode[]);
+   420→        break;
+   421→      case 'hierarchical':
+   422→        result = applyHierarchicalLayout(graphNodes as unknown as GraphNode[], graphEdges as unknown as GraphEdge[]);
+   423→        break;
+   424→      case 'grid':
+   425→        result = applyGridLayout(graphNodes as unknown as GraphNode[]);
+   426→        break;
+   427→      default:
+   428→        result = graphNodes as unknown as GraphNode[];
+   429→    }
+   430→    
+   431→    return result;
+   432→  }, [graphNodes, graphEdges, settings.layout]);
+   433→
+   434→  // Filter nodes based on settings
+   435→  const filteredNodes = useMemo(() => {
+   436→    if (settings.filterType === 'all') return positionedNodes;
+   437→    return positionedNodes.filter(node => node.type === settings.filterType);
+   438→  }, [positionedNodes, settings.filterType]);
+   439→
+   440→  const filteredEdges = useMemo(() => {
+   441→    const nodeIds = new Set(filteredNodes.map(n => n.id));
+   442→    return (graphEdges as unknown as GraphEdge[]).filter(
+   443→      edge => nodeIds.has(edge.source) && nodeIds.has(edge.target)
+   444→    );
+   445→  }, [graphEdges, filteredNodes]);
+   446→
+   447→  // Get selected node details
+   448→  const selectedNodeData = filteredNodes.find(n => n.id === selectedNode);
+   449→  const connectedEdges = filteredEdges.filter(
+   450→    e => e.source === selectedNode || e.target === selectedNode
+   451→  );
+   452→  const connectedNodeIds = connectedEdges.flatMap(e => [e.source, e.target]);
+   453→  const connectedNodes = filteredNodes.filter(n => connectedNodeIds.includes(n.id) && n.id !== selectedNode);
+   454→
+   455→  // Statistics
+   456→  const stats = useMemo(() => {
+   457→    const totalNodes = filteredNodes.length;
+   458→    const totalEdges = filteredEdges.length;
+   459→    const avgConnections = totalNodes > 0 
+   460→      ? (filteredNodes.reduce((sum, n) => sum + n.connections, 0) / totalNodes).toFixed(1)
+   461→      : '0';
+   462→    const nodeTypes = [...new Set(filteredNodes.map(n => n.type))];
+   463→    const maxConnections = Math.max(...filteredNodes.map(n => n.connections), 0);
+   464→    
+   465→    return { totalNodes, totalEdges, avgConnections, nodeTypes, maxConnections };
+   466→  }, [filteredNodes, filteredEdges]);
+   467→
+   468→  // Zoom handlers
+   469→  const handleZoomIn = useCallback(() => {
+   470→    setTransform(prev => ({ ...prev, scale: Math.min(prev.scale * 1.2, 3) }));
+   471→  }, []);
+   472→
+   473→  const handleZoomOut = useCallback(() => {
+   474→    setTransform(prev => ({ ...prev, scale: Math.max(prev.scale / 1.2, 0.3) }));
+   475→  }, []);
+   476→
+   477→  const handleResetView = useCallback(() => {
+   478→    setTransform({ scale: 1, translateX: 0, translateY: 0 });
+   479→  }, []);
+   480→
+   481→  const handleFitToScreen = useCallback(() => {
+   482→    setTransform({ scale: 1, translateX: 0, translateY: 0 });
+   483→  }, []);
+   484→
+   485→  // Pan handlers
+   486→  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+   487→    if (e.target === svgRef.current || (e.target as HTMLElement).tagName === 'svg') {
+   488→      setIsDragging(true);
+   489→      setDragStart({ x: e.clientX - transform.translateX, y: e.clientY - transform.translateY });
+   490→    }
+   491→  }, [transform]);
+   492→
+   493→  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+   494→    if (isDragging) {
+   495→      setTransform(prev => ({
+   496→        ...prev,
+   497→        translateX: e.clientX - dragStart.x,
+   498→        translateY: e.clientY - dragStart.y,
+   499→      }));
+   500→    }
+   501→  }, [isDragging, dragStart]);
+   502→
+   503→  const handleMouseUp = useCallback(() => {
+   504→    setIsDragging(false);
+   505→  }, []);
+   506→
+   507→  // Export to PNG
+   508→  const handleExportPNG = useCallback(() => {
+   509→    const svg = svgRef.current;
+   510→    if (!svg) return;
+   511→
+   512→    const svgData = new XMLSerializer().serializeToString(svg);
+   513→    const canvas = document.createElement('canvas');
+   514→    canvas.width = SVG_WIDTH * 2;
+   515→    canvas.height = SVG_HEIGHT * 2;
+   516→    const ctx = canvas.getContext('2d');
+   517→    if (!ctx) return;
+   518→
+   519→    const img = new Image();
+   520→    img.onload = () => {
+   521→      ctx.fillStyle = '#ffffff';
+   522→      ctx.fillRect(0, 0, canvas.width, canvas.height);
+   523→      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+   524→      
+   525→      const link = document.createElement('a');
+   526→      link.download = 'knowledge-graph.png';
+   527→      link.href = canvas.toDataURL('image/png');
+   528→      link.click();
+   529→      
+   530→      addActivity({
+   531→        type: 'save',
+   532→        message: createDynamicField('Exported knowledge graph as PNG'),
+   533→        icon: '📷',
+   534→      });
+   535→    };
+   536→    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+   537→  }, [addActivity]);
+   538→
+   539→  // Save current graph state
+   540→  const handleSaveGraph = () => {
+   541→    saveItem({
+   542→      type: 'query',
+   543→      title: `Knowledge Graph (${stats.totalNodes} nodes)`,
+   544→      source: 'knowledge-graph',
+   545→      metadata: {
+   546→        nodeCount: stats.totalNodes,
+   547→        edgeCount: stats.totalEdges,
+   548→        nodeTypes: stats.nodeTypes,
+   549→      },
+   550→      tags: ['knowledge-graph', 'visualization'],
+   551→    });
+   552→
+   553→    addActivity({
+   554→      type: 'save',
+   555→      message: createDynamicField(`Saved graph snapshot: ${stats.totalNodes} nodes, ${stats.totalEdges} edges`),
+   556→      icon: '🕸️',
+   557→    });
+   558→  };
+   559→
+   560→  // Search handler
+   561→  const handleSearch = () => {
+   562→    if (searchQuery.trim()) {
+   563→      const found = filteredNodes.find(n => 
+   564→        n.label.toLowerCase().includes(searchQuery.toLowerCase())
+   565→      );
+   566→      if (found) {
+   567→        setSelectedNode(found.id);
+   568→        addActivity({
+   569→          type: 'query',
+   570→          message: createDynamicField(`Found node: ${found.label}`),
+   571→          icon: getNodeIcon(found.type as NodeType),
+   572→        });
+   573→      }
+   574→    }
+   575→  };
+   576→
+   577→  return (
+   578→    <div className="min-h-screen bg-background">
+   579→      {/* Header */}
+   580→      <div className="border-b bg-card px-6 py-4">
+   581→        <div className="flex items-start justify-between">
+   582→          <div>
+   583→            <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
+   584→              <span className="text-3xl">🕸️</span>
+   585→              {t('knowledge.title') || 'Knowledge Graph'}
+   586→            </h1>
+   587→            <p className="text-muted-foreground mt-1 text-sm">
+   588→              Explore relationships between papers, genes, compounds, authors, and institutions
+   589→            </p>
+   590→          </div>
+   591→          
+   592→          {/* Quick Stats */}
+   593→          <div className="flex items-center gap-3">
+   594→            <StatBadge label="Nodes" value={stats.totalNodes.toString()} color="blue" />
+   595→            <StatBadge label="Edges" value={stats.totalEdges.toString()} color="green" />
+   596→            <StatBadge label="Types" value={stats.nodeTypes.length.toString()} color="purple" />
+   597→            <StatBadge label="Avg Conn." value={stats.avgConnections} color="orange" />
+   598→          </div>
+   599→        </div>
+   600→      </div>
+   601→
+   602→      <div className="flex h-[calc(100vh-120px)]">
+   603→        {/* Main Graph Area */}
+   604→        <div className="flex-1 relative overflow-hidden">
+   605→          <Card className="h-full rounded-none border-0 shadow-none">
+   606→            <CardContent className="p-0 h-full relative bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+   607→              
+   608→              {/* SVG Visualization */}
+   609→              <svg
+   610→                ref={svgRef}
+   611→                viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
+   612→                className="w-full h-full cursor-grab active:cursor-grabbing"
+   613→                style={{
+   614→                  transform: `translate(${transform.translateX}px, ${transform.translateY}px) scale(${transform.scale})`,
+   615→                  transformOrigin: 'center',
+   616→                }}
+   617→                onMouseDown={handleMouseDown}
+   618→                onMouseMove={handleMouseMove}
+   619→                onMouseUp={handleMouseUp}
+   620→                onMouseLeave={() => {
+   621→                  handleMouseUp();
+   622→                  setHoveredNode(null);
+   623→                }}
+   624→              >
+   625→                <defs>
+   626→                  {/* Arrow markers for different edge types */}
+   627→                  <marker id="arrowhead-gray" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+   628→                    <polygon points="0 0, 10 3.5, 0 7" fill="#6B7280" />
+   629→                  </marker>
+   630→                  <marker id="arrowhead-blue" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+   631→                    <polygon points="0 0, 10 3.5, 0 7" fill="#3B82F6" />
+   632→                  </marker>
+   633→                  <marker id="arrowhead-purple" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+   634→                    <polygon points="0 0, 10 3.5, 0 7" fill="#8B5CF6" />
+   635→                  </marker>
+   636→                  <marker id="arrowhead-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto" markerUnits="strokeWidth">
+   637→                    <polygon points="0 0, 10 3.5, 0 7" fill="#10B981" />
+   638→                  </marker>
+   639→                  
+   640→                  {/* Glow filters */}
+   641→                  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+   642→                    <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+   643→                    <feMerge>
+   644→                      <feMergeNode in="coloredBlur"/>
+   645→                      <feMergeNode in="SourceGraphic"/>
+   646→                    </feMerge>
+   647→                  </filter>
+   648→                  
+   649→                  {/* Shadow filter for nodes */}
+   650→                  <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+   651→                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.2"/>
+   652→                  </filter>
+   653→                </defs>
+   654→                
+   655→                {/* Edges Layer */}
+   656→                {settings.showEdges && filteredEdges.map(edge => {
+   657→                  const source = filteredNodes.find(n => n.id === edge.source);
+   658→                  const target = filteredNodes.find(n => n.id === edge.target);
+   659→                  if (!source || !target) return null;
+   660→                  
+   661→                  const isHighlighted = selectedNode && 
+   662→                    (edge.source === selectedNode || edge.target === selectedNode);
+   663→                  const isConnectedToHovered = hoveredNode && 
+   664→                    (edge.source === hoveredNode || edge.target === hoveredNode);
+   665→                  
+   666→                  return (
+   667→                    <g key={edge.id}>
+   668→                      {/* Edge line */}
+   669→                      <line
+   670→                        x1={source.x}
+   671→                        y1={source.y}
+   672→                        x2={target.x}
+   673→                        y2={target.y}
+   674→                        stroke={getEdgeColor(edge.type)}
+   675→                        strokeWidth={edge.weight * (isHighlighted || isConnectedToHovered ? 1.5 : 1)}
+   676→                        strokeDasharray={getEdgeDashArray(edge.type)}
+   677→                        opacity={isHighlighted ? 1 : isConnectedToHovered ? 0.8 : 0.5}
+   678→                        markerEnd={`url(#arrowhead-${edge.type === 'cites' ? 'gray' : edge.type === 'studies' ? 'blue' : edge.type === 'interacts-with' ? 'purple' : 'green'})`}
+   679→                        className="transition-all duration-300"
+   680→                      />
+   681→                    </g>
+   682→                  );
+   683→                })}
+   684→                
+   685→                {/* Nodes Layer */}
+   686→                {filteredNodes.map(node => {
+   687→                  const isSelected = node.id === selectedNode;
+   688→                  const isHovered = node.id === hoveredNode;
+   689→                  const isConnected = selectedNode && connectedNodeIds.includes(node.id);
+   690→                  const radius = getNodeRadius(node, settings.nodeSizeBy);
+   691→                  const config = NODE_TYPE_CONFIG[node.type];
+   692→                  
+   693→                  return (
+   694→                    <g
+   695→                      key={node.id}
+   696→                      transform={`translate(${node.x}, ${node.y})`}
+   697→                      onClick={(e) => {
+   698→                        e.stopPropagation();
+   699→                        setSelectedNode(node.id);
+   700→                        addActivity({
+   701→                          type: 'query',
+   702→                          message: createDynamicField(`Selected: ${node.label}`),
+   703→                          icon: config.icon,
+   704→                        });
+   705→                      }}
+   706→                      onMouseEnter={() => setHoveredNode(node.id)}
+   707→                      onMouseLeave={() => setHoveredNode(null)}
+   708→                      className="cursor-pointer"
+   709→                      style={{ transition: 'transform 0.2s ease-out' }}
+   710→                    >
+   711→                      {/* Outer ring for selection/hover */}
+   712→                      {(isSelected || isHovered) && (
+   713→                        <circle
+   714→                          r={radius + 8}
+   715→                          fill="none"
+   716→                          stroke={config.color}
+   717→                          strokeWidth={2}
+   718→                          opacity={0.3}
+   719→                          className="animate-pulse"
+   720→                        />
+   721→                      )}
+   722→                      
+   723→                      {/* Main node circle */}
+   724→                      <circle
+   725→                        r={radius}
+   726→                        fill={config.color}
+   727→                        stroke={isSelected ? '#000' : '#fff'}
+   728→                        strokeWidth={isSelected ? 3 : 2}
+   729→                        opacity={isSelected || isHovered || isConnected ? 1 : 0.85}
+   730→                        filter="url(#shadow)"
+   731→                        className="transition-all duration-200 ease-out"
+   732→                        style={{
+   733→                          transform: isSelected || isHovered ? 'scale(1.1)' : 'scale(1)',
+   734→                          transformOrigin: 'center',
+   735→                        }}
+   736→                      />
+   737→                      
+   738→                      {/* Inner gradient overlay */}
+   739→                      <circle
+   740→                        r={radius - 4}
+   741→                        fill="url(#gradient-overlay)"
+   742→                        opacity={0.2}
+   743→                      />
+   744→                      
+   745→                      {/* Node icon or initial */}
+   746→                      {settings.showIcons && (
+   747→                        <text
+   748→                          textAnchor="middle"
+   749→                          dy={radius > 25 ? 8 : 5}
+   750→                          fontSize={radius > 25 ? 16 : 12}
+   751→                          className="pointer-events-none select-none"
+   752→                        >
+   753→                          {config.icon}
+   754→                        </text>
+   755→                      )}
+   756→                      
+   757→                      {/* Label */}
+   758→                      {(settings.showLabels || isSelected || isHovered) && (
+   759→                        <text
+   760→                          y={radius + 18}
+   761→                          textAnchor="middle"
+   762→                          fontSize={isSelected ? 12 : 11}
+   763→                          fontWeight={isSelected ? 600 : 400}
+   764→                          fill="#1f2937"
+   765→                          className="pointer-events-none select-none"
+   766→                          style={{
+   767→                            textShadow: '0 1px 2px rgba(255,255,255,0.8)',
+   768→                          }}
+   769→                        >
+   770→                          {node.label.length > 18 ? node.label.substring(0, 16) + '...' : node.label}
+   771→                        </text>
+   772→                      )}
+   773→                      
+   774→                      {/* Connection count badge */}
+   775→                      {!settings.showLabels && !isSelected && !isHovered && (
+   776→                        <>
+   777→                        <circle
+   778→                          cy={-radius + 2}
+   779→                          r={10}
+   780→                          fill="#374151"
+   781→                          opacity={0.9}
+   782→                        />
+   783→                        <text
+   784→                          y={-radius + 6}
+   785→                          textAnchor="middle"
+   786→                          fontSize={9}
+   787→                          fill="#fff"
+   788→                          fontWeight={600}
+   789→                          className="pointer-events-none select-none"
+   790→                        >
+   791→                          {node.connections}
+   792→                        </text>
+   793→                        </>
+   794→                      )}
+   795→                    </g>
+   796→                  );
+   797→                })}
+   798→              </svg>
+   799→
+   800→              {/* Controls Panel - Top Left */}
+   801→              <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+   802→                {/* Filter Dropdown */}
+   803→                <Select 
+   804→                  value={settings.filterType} 
+   805→                  onValueChange={(v) => setSettings({ ...settings, filterType: v })}
+   806→                >
+   807→                  <SelectTrigger className="w-[150px] h-9 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border shadow-sm">
+   808→                    <SelectValue placeholder="Filter by type" />
+   809→                  </SelectTrigger>
+   810→                  <SelectContent>
+   811→                    <SelectItem value="all">🌐 All Types</SelectItem>
+   812→                    {(Object.entries(NODE_TYPE_CONFIG) as [NodeType, typeof NODE_TYPE_CONFIG[NodeType]][]).map(([type, config]) => (
+   813→                      <SelectItem key={type} value={type}>
+   814→                        {config.icon} {config.label}s
+   815→                      </SelectItem>
+   816→                    ))}
+   817→                  </SelectContent>
+   818→                </Select>
+   819→
+   820→                {/* Layout Dropdown */}
+   821→                <Select 
+   822→                  value={settings.layout} 
+   823→                  onValueChange={(v) => setSettings({ ...settings, layout: v as GraphViewSettings['layout'] })}
+   824→                >
+   825→                  <SelectTrigger className="w-[150px] h-9 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border shadow-sm">
+   826→                    <SelectValue placeholder="Layout" />
+   827→                  </SelectTrigger>
+   828→                  <SelectContent>
+   829→                    <SelectItem value="force">⚡ Force-Directed</SelectItem>
+   830→                    <SelectItem value="circular">⭕ Circular</SelectItem>
+   831→                    <SelectItem value="hierarchical">📊 Hierarchical</SelectItem>
+   832→                    <SelectItem value="grid">🔲 Grid</SelectItem>
+   833→                  </SelectContent>
+   834→                </Select>
+   835→
+   836→                {/* Size By Dropdown */}
+   837→                <Select 
+   838→                  value={settings.nodeSizeBy} 
+   839→                  onValueChange={(v) => setSettings({ ...settings, nodeSizeBy: v as GraphViewSettings['nodeSizeBy'] })}
+   840→                >
+   841→                  <SelectTrigger className="w-[150px] h-9 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm border shadow-sm">
+   842→                    <SelectValue placeholder="Node size" />
+   843→                  </SelectTrigger>
+   844→                  <SelectContent>
+   845→                    <SelectItem value="importance">⭐ Importance</SelectItem>
+   846→                    <SelectItem value="connections">🔗 Connections</SelectItem>
+   847→                    <SelectItem value="uniform">⬜ Uniform</SelectItem>
+   848→                  </SelectContent>
+   849→                </Select>
+   850→              </div>
+   851→
+   852→              {/* Action Buttons - Top Right */}
+   853→              <div className="absolute top-4 right-4 flex flex-wrap gap-2 z-10">
+   854→                <ButtonGroup>
+   855→                  <Button
+   856→                    size="sm"
+   857→                    variant="outline"
+   858→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 px-2"
+   859→                    onClick={() => setSettings({ ...settings, showLabels: !settings.showLabels })}
+   860→                    title={settings.showLabels ? 'Hide labels' : 'Show labels'}
+   861→                  >
+   862→                    🏷️ {settings.showLabels ? 'Hide Labels' : 'Show Labels'}
+   863→                  </Button>
+   864→                  <Button
+   865→                    size="sm"
+   866→                    variant="outline"
+   867→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 px-2"
+   868→                    onClick={() => setSettings({ ...settings, showEdges: !settings.showEdges })}
+   869→                    title={settings.showEdges ? 'Hide edges' : 'Show edges'}
+   870→                  >
+   871→                    🔗 {settings.showEdges ? 'Hide Edges' : 'Show Edges'}
+   872→                  </Button>
+   873→                  <Button
+   874→                    size="sm"
+   875→                    variant="outline"
+   876→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 px-2"
+   877→                    onClick={() => setSettings({ ...settings, showIcons: !settings.showIcons })}
+   878→                    title={settings.showIcons ? 'Hide icons' : 'Show icons'}
+   879→                  >
+   880→                    😊 {settings.showIcons ? 'Hide Icons' : 'Show Icons'}
+   881→                  </Button>
+   882→                </ButtonGroup>
+   883→
+   884→                <ButtonGroup>
+   885→                  <Button
+   886→                    size="sm"
+   887→                    variant="outline"
+   888→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 w-8 p-0"
+   889→                    onClick={handleZoomOut}
+   890→                    title="Zoom out"
+   891→                  >
+   892→                    ➖
+   893→                  </Button>
+   894→                  <Button
+   895→                    size="sm"
+   896→                    variant="outline"
+   897→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 w-8 p-0"
+   898→                    onClick={handleZoomIn}
+   899→                    title="Zoom in"
+   900→                  >
+   901→                    ➕
+   902→                  </Button>
+   903→                  <Button
+   904→                    size="sm"
+   905→                    variant="outline"
+   906→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 w-8 p-0"
+   907→                    onClick={handleResetView}
+   908→                    title="Reset view"
+   909→                  >
+   910→                    ↺
+   911→                  </Button>
+   912→                  <Button
+   913→                    size="sm"
+   914→                    variant="outline"
+   915→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 w-8 p-0"
+   916→                    onClick={handleFitToScreen}
+   917→                    title="Fit to screen"
+   918→                  >
+   919→                    ⛶
+   920→                  </Button>
+   921→                </ButtonGroup>
+   922→
+   923→                <ButtonGroup>
+   924→                  <Button
+   925→                    size="sm"
+   926→                    variant="outline"
+   927→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 px-2"
+   928→                    onClick={handleExportPNG}
+   929→                    title="Export as PNG"
+   930→                  >
+   931→                    📷 Export
+   932→                  </Button>
+   933→                  <Button
+   934→                    size="sm"
+   935→                    variant="outline"
+   936→                    className="bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm h-8 px-2"
+   937→                    onClick={handleSaveGraph}
+   938→                    title="Save graph"
+   939→                  >
+   940→                    💾 Save
+   941→                  </Button>
+   942→                  <Button
+   943→                    size="sm"
+   944→                    variant="outline"
+   945→                    className="bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 text-red-600 dark:text-red-400 backdrop-blur-sm h-8 px-2"
+   946→                    onClick={() => {
+   947→                      clearGraph();
+   948→                      setIsInitialized(false);
+   949→                      setSelectedNode(null);
+   950→                    }}
+   951→                    title="Reset graph"
+   952→                  >
+   953→                    🔄 Reset
+   954→                  </Button>
+   955→                </ButtonGroup>
+   956→              </div>
+   957→
+   958→              {/* Legend - Bottom Left */}
+   959→              <div className="absolute bottom-4 left-4 p-3 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-xl border shadow-lg z-10">
+   960→                <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mb-2">
+   961→                  Legend
+   962→                </h4>
+   963→                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+   964→                  {(Object.entries(NODE_TYPE_CONFIG) as [NodeType, typeof NODE_TYPE_CONFIG[NodeType]][]).map(([type, config]) => (
+   965→                    <button
+   966→                      key={type}
+   967→                      className="flex items-center gap-2 text-xs hover:bg-muted/50 rounded px-1 py-0.5 transition-colors"
+   968→                      onClick={() => setSettings({ ...settings, filterType: type })}
+   969→                    >
+   970→                      <span 
+   971→                        className="w-3 h-3 rounded-full shadow-sm flex-shrink-0" 
+   972→                        style={{ backgroundColor: config.color }}
+   973→                      />
+   974→                      <span>{config.icon} {config.label}</span>
+   975→                    </button>
+   976→                  ))}
+   977→                </div>
+   978→                
+   979→                <div className="border-t mt-2 pt-2">
+   980→                  <h4 className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mb-1.5">
+   981→                    Relationships
+   982→                  </h4>
+   983→                  <div className="space-y-1">
+   984→                    {(Object.entries(EDGE_TYPE_CONFIG) as [EdgeType, typeof EDGE_TYPE_CONFIG[EdgeType]][]).slice(0, 4).map(([type, config]) => (
+   985→                      <div key={type} className="flex items-center gap-2 text-xs">
+   986→                        <svg width="24" height="2" className="flex-shrink-0">
+   987→                          <line 
+   988→                            x1="0" y1="1" x2="24" y2="1" 
+   989→                            stroke={config.color} 
+   990→                            strokeWidth="2"
+   991→                            strokeDasharray={config.dashArray}
+   992→                          />
+   993→                        </svg>
+   994→                        <span className="text-muted-foreground">{config.label}</span>
+   995→                      </div>
+   996→                    ))}
+   997→                  </div>
+   998→                </div>
+   999→              </div>
+  1000→
+  1001→              {/* Zoom Indicator - Bottom Right */}
+  1002→              <div className="absolute bottom-4 right-4 px-3 py-1.5 bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-lg border shadow-sm text-xs font-mono z-10">
+  1003→                🔍 {Math.round(transform.scale * 100)}%
+  1004→              </div>
+  1005→
+  1006→              {/* Hover Tooltip */}
+  1007→              {hoveredNode && selectedNode !== hoveredNode && (() => {
+  1008→                const node = filteredNodes.find(n => n.id === hoveredNode);
+  1009→                if (!node) return null;
+  1010→                const config = NODE_TYPE_CONFIG[node.type];
+  1011→                return (
+  1012→                  <div 
+  1013→                    className="absolute pointer-events-none px-3 py-2 bg-white dark:bg-slate-800 border rounded-lg shadow-xl text-sm z-20 animate-in fade-in duration-150"
+  1014→                    style={{
+  1015→                      left: Math.min(Math.max(node.x * transform.scale + transform.translateX, 100), window.innerWidth - 200),
+  1016→                      top: Math.max(node.y * transform.scale + transform.translateY - 60, 10),
+  1017→                    }}
+  1018→                  >
+  1019→                    <div className="flex items-center gap-2">
+  1020→                      <span className="text-lg">{config.icon}</span>
+  1021→                      <span className="font-semibold">{node.label}</span>
+  1022→                    </div>
+  1023→                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+  1024→                      <span className="flex items-center gap-1">
+  1025→                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: config.color }} />
+  1026→                        {config.label}
+  1027→                      </span>
+  1028→                      <span>🔗 {node.connections} connections</span>
+  1029→                    </div>
+  1030→                    {node.description && (
+  1031→                      <p className="mt-1.5 text-xs text-muted-foreground line-clamp-2 max-w-[200px]">
+  1032→                        {node.description}
+  1033→                      </p>
+  1034→                    )}
+  1035→                  </div>
+  1036→                );
+  1037→              })()}
+  1038→            </CardContent>
+  1039→          </Card>
+  1040→        </div>
+  1041→
+  1042→        {/* Details Panel - Right Sidebar */}
+  1043→        {showDetailsPanel && selectedNodeData && (
+  1044→          <div className="w-80 border-l bg-card overflow-auto animate-in slide-in-from-right duration-300">
+  1045→            <div className="sticky top-0 bg-card border-b p-4 flex items-center justify-between z-10">
+  1046→              <h3 className="font-semibold text-lg">Node Details</h3>
+  1047→              <Button
+  1048→                size="sm"
+  1049→                variant="ghost"
+  1050→                className="h-8 w-8 p-0"
+  1051→                onClick={() => setShowDetailsPanel(false)}
+  1052→              >
+  1053→                ✕
+  1054→              </Button>
+  1055→            </div>
+  1056→            
+  1057→            <div className="p-4 space-y-5">
+  1058→              {/* Node Header */}
+  1059→              <div className="text-center p-4 rounded-xl bg-gradient-to-br from-muted/50 to-muted/30 border">
+  1060→                <span className="text-4xl block mb-2 drop-shadow-sm">
+  1061→                  {getNodeIcon(selectedNodeData.type as NodeType)}
+  1062→                </span>
+  1063→                <h3 className="font-bold text-lg leading-tight">{selectedNodeData.label}</h3>
+  1064→                <Badge 
+  1065→                  className="mt-2 text-white border-0 shadow-sm"
+  1066→                  style={{ backgroundColor: getNodeColor(selectedNodeData.type as NodeType) }}
+  1067→                >
+  1068→                  {NODE_TYPE_CONFIG[selectedNodeData.type as NodeType]?.label || selectedNodeData.type}
+  1069→                </Badge>
+  1070→              </div>
+  1071→
+  1072→              {/* Description */}
+  1073→              {selectedNodeData.description && (
+  1074→                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-100 dark:border-blue-900">
+  1075→                  <p className="text-sm text-muted-foreground leading-relaxed">
+  1076→                    {selectedNodeData.description}
+  1077→                  </p>
+  1078→                </div>
+  1079→              )}
+  1080→
+  1081→              {/* Stats Grid */}
+  1082→              <div className="grid grid-cols-2 gap-3">
+  1083→                <StatCard 
+  1084→                  icon="🔗" 
+  1085→                  label="Connections" 
+  1086→                  value={selectedNodeData.connections.toString()} 
+  1087→                />
+  1088→                <StatCard 
+  1089→                  icon="⭐" 
+  1090→                  label="Importance" 
+  1091→                  value={`${(selectedNodeData.importance * 100).toFixed(0)}%`} 
+  1092→                />
+  1093→                <StatCard 
+  1094→                  icon="📍" 
+  1095→                  label="Position" 
+  1096→                  value={`(${Math.round(selectedNodeData.x)}, ${Math.round(selectedNodeData.y)})`}
+  1097→                  small
+  1098→                />
+  1099→                <StatCard 
+  1100→                  icon="📐" 
+  1101→                  label="Radius" 
+  1102→                  value={getNodeRadius(selectedNodeData, settings.nodeSizeBy).toFixed(0)}
+  1103→                  suffix="px"
+  1104→                  small
+  1105→                />
+  1106→              </div>
+  1107→
+  1108→              {/* Connected Nodes */}
+  1109→              <div>
+  1110→                <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
+  1111→                  <span>🔗</span> Connected Nodes ({connectedNodes.length})
+  1112→                </h4>
+  1113→                <div className="space-y-1 max-h-52 overflow-auto pr-1 custom-scrollbar">
+  1114→                  {connectedNodes.length > 0 ? connectedNodes.map(node => {
+  1115→                    const edge = connectedEdges.find(e => 
+  1116→                      (e.source === selectedNode && e.target === node.id) ||
+  1117→                      (e.target === selectedNode && e.source === node.id)
+  1118→                    );
+  1119→                    return (
+  1120→                      <button
+  1121→                        key={node.id}
+  1122→                        className="w-full text-left p-2.5 rounded-lg hover:bg-muted transition-all duration-150 text-sm flex items-center gap-3 group border border-transparent hover:border-border"
+  1123→                        onClick={() => setSelectedNode(node.id)}
+  1124→                      >
+  1125→                        <span 
+  1126→                          className="w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0 shadow-sm"
+  1127→                          style={{ backgroundColor: `${getNodeColor(node.type as NodeType)}20` }}
+  1128→                        >
+  1129→                          {getNodeIcon(node.type as NodeType)}
+  1130→                        </span>
+  1131→                        <div className="flex-1 min-w-0">
+  1132→                          <div className="font-medium truncate group-hover:text-primary transition-colors">
+  1133→                            {node.label}
+  1134→                          </div>
+  1135→                          <div className="text-xs text-muted-foreground flex items-center gap-1">
+  1136→                            <span 
+  1137→                              className="w-1.5 h-1.5 rounded-full" 
+  1138→                              style={{ backgroundColor: getNodeColor(node.type as NodeType) }} 
+  1139→                            />
+  1140→                            {NODE_TYPE_CONFIG[node.type as NodeType]?.label}
+  1141→                            {edge && (
+  1142→                              <>
+  1143→                                <span className="mx-1">·</span>
+  1144→                                <span style={{ color: getEdgeColor(edge.type as EdgeType) }}>
+  1145→                                  {EDGE_TYPE_CONFIG[edge.type as EdgeType]?.label}
+  1146→                                </span>
+  1147→                              </>
+  1148→                            )}
+  1149→                          </div>
+  1150→                        </div>
+  1151→                      </button>
+  1152→                    );
+  1153→                  }) : (
+  1154→                    <p className="text-sm text-muted-foreground text-center py-4">
+  1155→                      No connected nodes
+  1156→                    </p>
+  1157→                  )}
+  1158→                </div>
+  1159→              </div>
+  1160→
+  1161→              {/* Relationships */}
+  1162→              <div>
+  1163→                <h4 className="font-medium text-sm mb-2 flex items-center gap-2">
+  1164→                  <span>↔️</span> Relationships ({connectedEdges.length})
+  1165→                </h4>
+  1166→                <div className="space-y-1.5 max-h-36 overflow-auto pr-1 custom-scrollbar">
+  1167→                  {connectedEdges.map((edge, i) => {
+  1168→                    const otherNodeId = edge.source === selectedNode ? edge.target : edge.source;
+  1169→                    const otherNode = filteredNodes.find(n => n.id === otherNodeId);
+  1170→                    const edgeConfig = EDGE_TYPE_CONFIG[edge.type as EdgeType];
+  1171→                    return (
+  1172→                      <div 
+  1173→                        key={i} 
+  1174→                        className="p-2 bg-muted/30 rounded-lg flex items-center justify-between text-xs group hover:bg-muted/50 transition-colors"
+  1175→                      >
+  1176→                        <div className="flex items-center gap-2">
+  1177→                          <svg width="20" height="2">
+  1178→                            <line 
+  1179→                              x1="0" y1="1" x2="20" y2="1" 
+  1180→                              stroke={edgeConfig?.color || '#6B7280'} 
+  1181→                              strokeWidth="2"
+  1182→                              strokeDasharray={edgeConfig?.dashArray}
+  1183→                            />
+  1184→                          </svg>
+  1185→                          <span className="font-medium" style={{ color: edgeConfig?.color }}>
+  1186→                            {edgeConfig?.label || edge.type}
+  1187→                          </span>
+  1188→                        </div>
+  1189→                        <span className="text-muted-foreground truncate max-w-[100px]">
+  1190→                          → {otherNode?.label}
+  1191→                        </span>
+  1192→                      </div>
+  1193→                    );
+  1194→                  })}
+  1195→                </div>
+  1196→              </div>
+  1197→
+  1198→              {/* Action Buttons */}
+  1199→              <div className="space-y-2 pt-3 border-t">
+  1200→                <Button size="sm" variant="outline" className="w-full justify-start gap-2">
+  1201→                  🔍 Find Related Papers
+  1202→                </Button>
+  1203→                <Button size="sm" variant="outline" className="w-full justify-start gap-2">
+  1204→                  📊 View Analysis
+  1205→                </Button>
+  1206→                <Button size="sm" variant="outline" className="w-full justify-start gap-2">
+  1207→                  ⭐ Save to Library
+  1208→                </Button>
+  1209→                <Button size="sm" variant="default" className="w-full justify-start gap-2">
+  1210→                  🚀 Explore Further
+  1211→                </Button>
+  1212→              </div>
+  1213→            </div>
+  1214→          </div>
+  1215→        )}
+  1216→
+  1217→        {/* Show panel button when hidden */}
+  1218→        {!showDetailsPanel && selectedNode && (
+  1219→          <Button
+  1220→            className="fixed right-4 top-1/2 -translate-y-1/2 z-20 rounded-l-none rounded-r-lg shadow-lg"
+  1221→            size="sm"
+  1222→            onClick={() => setShowDetailsPanel(true)}
+  1223→          >
+  1224→            ◀ Details
+  1225→          </Button>
+  1226→        )}
+  1227→      </div>
+  1228→
+  1229→      {/* Search Bar - Bottom */}
+  1230→      <div className="fixed bottom-0 left-0 right-0 bg-card border-t p-4 z-30">
+  1231→        <div className="max-w-2xl mx-auto flex items-center gap-3">
+  1232→          <div className="relative flex-1">
+  1233→            <Input
+  1234→              placeholder="Search nodes by name... (e.g., BRCA1, Doudna, Cas9)"
+  1235→              value={searchQuery}
+  1236→              onChange={(e) => setSearchQuery(e.target.value)}
+  1237→              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+  1238→              className="pl-10 h-10"
+  1239→            />
+  1240→            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+  1241→              🔍
+  1242→            </span>
+  1243→          </div>
+  1244→          <Button onClick={handleSearch} className="h-10">
+  1245→            Search
+  1246→          </Button>
+  1247→          <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground pl-2 border-l">
+  1248→            <kbd className="px-1.5 py-0.5 bg-muted rounded font-mono">Click</kbd>
+  1249→            <span>Select node</span>
+  1250→            <kbd className="px-1.5 py-0.5 bg-muted rounded font-mono ml-2">Drag</kbd>
+  1251→            <span>Pan view</span>
+  1252→          </div>
+  1253→        </div>
+  1254→      </div>
+  1255→
+  1256→      {/* Empty State when no data */}
+  1257→      {graphNodes.length === 0 && !isInitialized && (
+  1258→        <div className="fixed inset-0 flex items-center justify-center bg-background/80 z-40">
+  1259→          <Card className="max-w-md mx-4">
+  1260→            <CardContent className="p-8 text-center">
+  1261→              <span className="text-5xl block mb-4">🕸️</span>
+  1262→              <h3 className="text-xl font-bold mb-2">Loading Knowledge Graph...</h3>
+  1263→              <p className="text-muted-foreground mb-4">
+  1264→                Preparing your interactive visualization
+  1265→              </p>
+  1266→              <div className="flex justify-center">
+  1267→                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+  1268→              </div>
+  1269→            </CardContent>
+  1270→          </Card>
+  1271→        </div>
+  1272→      )}
+  1273→
+  1274→      {/* Call-to-action for advanced features */}
+  1275→      <Card className="m-4 border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/30">
+  1276→        <CardContent className="p-4">
+  1277→          <div className="flex items-center justify-between flex-wrap gap-4">
+  1278→            <div>
+  1279→              <h4 className="font-medium text-purple-900 dark:text-purple-100 flex items-center gap-2">
+  1280→                🔮 Unlock Advanced Graph Features
+  1281→              </h4>
+  1282→              <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
+  1283→                Get real-time collaboration, larger graphs (10K+ nodes), custom layouts, AI-powered insights, and more with Pro tier.
+  1284→              </p>
+  1285→            </div>
+  1286→            <Button 
+  1287→              variant="outline" 
+  1288→              className="border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/50 whitespace-nowrap"
+  1289→              onClick={() => store.triggerUpgradePrompt('collaboration')}
+  1290→            >
+  1291→              Upgrade to Pro →
+  1292→            </Button>
+  1293→          </div>
+  1294→        </CardContent>
+  1295→      </Card>
+  1296→
+  1297→      {/* Custom Styles */}
+  1298→      <style jsx global>{`
+  1299→        .custom-scrollbar::-webkit-scrollbar {
+  1300→          width: 6px;
+  1301→        }
+  1302→        .custom-scrollbar::-webkit-scrollbar-track {
+  1303→          background: transparent;
+  1304→        }
+  1305→        .custom-scrollbar::-webkit-scrollbar-thumb {
+  1306→          background-color: hsl(var(--muted-foreground) / 0.3);
+  1307→          border-radius: 3px;
+  1308→        }
+  1309→        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  1310→          background-color: hsl(var(--muted-foreground) / 0.5);
+  1311→        }
+  1312→        
+  1313→        @keyframes pulse-glow {
+  1314→          0%, 100% { opacity: 0.3; transform: scale(1); }
+  1315→          50% { opacity: 0.5; transform: scale(1.05); }
+  1316→        }
+  1317→        
+  1318→        .animate-pulse-glow {
+  1319→          animation: pulse-glow 2s ease-in-out infinite;
+  1320→        }
+  1321→      `}</style>
+  1322→    </div>
+  1323→  );
+  1324→}
+  1325→
+  1326→// ============ SUB-COMPONENTS ============
+  1327→
+  1328→function StatBadge({ label, value, color }: { label: string; value: string; color: string }) {
+  1329→  const colorClasses: Record<string, string> = {
+  1330→    blue: 'bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800',
+  1331→    green: 'bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800',
+  1332→    purple: 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800',
+  1333→    orange: 'bg-orange-50 dark:bg-orange-950/30 text-orange-700 dark:text-orange-300 border-orange-200 dark:border-orange-800',
+  1334→  };
+  1335→
+  1336→  return (
+  1337→    <div className={`px-2.5 py-1 rounded-lg border text-xs font-medium ${colorClasses[color] || ''}`}>
+  1338→      <span className="text-muted-foreground mr-1">{label}:</span>
+  1339→      <span className="font-bold">{value}</span>
+  1340→    </div>
+  1341→  );
+  1342→}
+  1343→
+  1344→function StatCard({ icon, label, value, suffix = '', small = false }: { 
+  1345→  icon: string; 
+  1346→  label: string; 
+  1347→  value: string; 
+  1348→  suffix?: string;
+  1349→  small?: boolean;
+  1350→}) {
+  1351→  return (
+  1352→    <div className={`p-3 bg-muted/50 rounded-lg text-center ${small ? 'p-2' : ''}`}>
+  1353→      <div className={`font-bold text-foreground ${small ? 'text-sm' : 'text-lg'}`}>
+  1354→        {value}{suffix}
+  1355→      </div>
+  1356→      <div className={`text-muted-foreground ${small ? 'text-[10px]' : 'text-xs'} flex items-center justify-center gap-1`}>
+  1357→        <span>{icon}</span>
+  1358→        <span>{label}</span>
+  1359→      </div>
+  1360→    </div>
+  1361→  );
+  1362→}
+  1363→
+  1364→function ButtonGroup({ children }: { children: React.ReactNode }) {
+  1365→  return (
+  1366→    <div className="flex items-center bg-white/95 dark:bg-slate-800/95 backdrop-blur-sm rounded-lg border shadow-sm overflow-hidden">
+  1367→      {children}
+  1368→    </div>
+  1369→  );
+  1370→}
+  1371→
