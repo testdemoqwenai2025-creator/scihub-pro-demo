@@ -77,7 +77,7 @@ const SAMPLE_EDGES: GraphEdge[] = [
   { id: 'e2', source: '1', target: '3', type: 'applied-in', weight: 2 },
   { id: 'e3', source: '1', target: '4', type: 'targets', weight: 3 },
   { id: 'e4', source: '1', target: '7', type: 'uses', weight: 4 },
-  { id: 'e5', source: '2', source: '5', type: 'authored-by', weight: 3 },
+  { id: 'e5', source: '2', target: '5', type: 'authored-by', weight: 3 },
   { id: 'e6', source: '2', target: '9', type: 'affiliated-with', weight: 2 },
   { id: 'e7', source: '3', target: '8', type: 'part-of', weight: 2 },
   { id: 'e8', source: '3', target: '10', type: 'published-in', weight: 2 },
@@ -89,8 +89,12 @@ const SAMPLE_EDGES: GraphEdge[] = [
 
 // ============ COMPONENTS ============
 
-function GraphVisualization() {
-  const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
+interface GraphVisualizationProps {
+  selectedNode: GraphNode | null;
+  onNodeSelect: (node: GraphNode | null) => void;
+}
+
+function GraphVisualization({ selectedNode, onNodeSelect }: GraphVisualizationProps) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -182,7 +186,7 @@ function GraphVisualization() {
                 strokeWidth={isSelected ? 3 : 2}
                 filter={isSelected ? 'url(#glow)' : undefined}
                 className="cursor-pointer transition-all duration-300 hover:opacity-80"
-                onClick={() => setSelectedNode(isSelected ? null : node)}
+                onClick={() => onNodeSelect(selectedNode?.id === node.id ? null : node)}
                 onMouseEnter={() => setHoveredNode(node.id)}
                 onMouseLeave={() => setHoveredNode(null)}
               />
@@ -413,7 +417,7 @@ export default function KnowledgeGraphPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Graph Visualization - Takes 3 columns */}
         <div className="lg:col-span-3">
-          <GraphVisualization />
+          <GraphVisualization selectedNode={selectedNode} onNodeSelect={setSelectedNode} />
         </div>
 
         {/* Sidebar */}
