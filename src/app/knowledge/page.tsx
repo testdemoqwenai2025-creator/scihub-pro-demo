@@ -3,22 +3,15 @@
 /**
  * SciHub Pro - Knowledge Graph Page (Robust Version)
  * 
- * Fixed to prevent errors with simplified SVG visualization
+ * Fixed: Instant rendering with error handling for GitHub Pages static export
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 
 // ============ TYPES ============
 
@@ -87,7 +80,7 @@ const SAMPLE_EDGES: GraphEdge[] = [
   { id: 'e12', source: '7', target: '1', type: 'component-of', weight: 4 },
 ];
 
-// ============ COMPONENTS ============
+// ============ GRAPH VISUALIZATION COMPONENT ============
 
 interface GraphVisualizationProps {
   selectedNode: GraphNode | null;
@@ -99,11 +92,12 @@ function GraphVisualization({ selectedNode, onNodeSelect }: GraphVisualizationPr
   const svgRef = useRef<SVGSVGElement>(null);
 
   return (
-    <div className="relative w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl overflow-hidden" style={{ height: '500px' }}>
+    <div className="relative w-full bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl overflow-hidden" style={{ minHeight: '500px' }}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`}
         className="w-full h-full"
+        style={{ minHeight: '500px' }}
       >
         {/* Definitions */}
         <defs>
@@ -176,7 +170,7 @@ function GraphVisualization({ selectedNode, onNodeSelect }: GraphVisualizationPr
                 />
               )}
               
-              {/* Main circle */}
+              {/* Main circle - clickable */}
               <circle
                 cx={node.x}
                 cy={node.y}
@@ -191,7 +185,7 @@ function GraphVisualization({ selectedNode, onNodeSelect }: GraphVisualizationPr
                 onMouseLeave={() => setHoveredNode(null)}
               />
 
-              {/* Icon */}
+              {/* Icon inside node */}
               <text
                 x={node.x}
                 y={node.y}
@@ -248,13 +242,16 @@ function GraphVisualization({ selectedNode, onNodeSelect }: GraphVisualizationPr
   );
 }
 
+// ============ NODE DETAIL PANEL COMPONENT ============
+
 function NodeDetailPanel({ node }: { node: GraphNode | null }) {
   if (!node) {
     return (
-      <Card className="h-full flex items-center justify-center text-muted-foreground">
+      <Card className="h-full flex items-center justify-center text-muted-foreground min-h-[300px]">
         <CardContent className="text-center py-8">
           <span className="text-4xl block mb-3">🔍</span>
-          <p>Click on a node to see details</p>
+          <p className="text-lg font-medium">Click on a node</p>
+          <p className="text-sm mt-1">to see details here</p>
         </CardContent>
       </Card>
     );
@@ -264,7 +261,7 @@ function NodeDetailPanel({ node }: { node: GraphNode | null }) {
   const connectedEdges = SAMPLE_EDGES.filter(e => e.source === node.id || e.target === node.id);
   const connectedNodes = connectedEdges.flatMap(e => 
     [SAMPLE_NODES.find(n => n.id === e.source), SAMPLE_NODES.find(n => n.id === e.target)]
-  ).filter(Boolean).slice(0, 5);
+  ).filter((n): n is GraphNode => n !== undefined).slice(0, 5);
 
   return (
     <Card className="border-primary/30">
@@ -301,8 +298,8 @@ function NodeDetailPanel({ node }: { node: GraphNode | null }) {
         {connectedNodes.length > 0 && (
           <div className="pt-2 border-t">
             <p className="text-sm font-medium mb-2">Connected Nodes:</p>
-            <div className="space-y-1">
-              {connectedNodes.map(n => n && (
+            <div className="space-y-1 max-h-[150px] overflow-y-auto">
+              {connectedNodes.map(n => (
                 <div key={n.id} className="flex items-center gap-2 text-sm p-1 rounded hover:bg-muted">
                   <span>{NODE_TYPE_CONFIG[n.type].icon}</span>
                   <span className="truncate">{n.label}</span>
@@ -325,21 +322,16 @@ function NodeDetailPanel({ node }: { node: GraphNode | null }) {
   );
 }
 
-// ============ MAIN KNOWLEDGE GRAPH COMPONENT ============
+// ============ MAIN KNOWLEDGE GRAPH PAGE COMPONENT ============
 
 export default function KnowledgeGraphPage() {
+  // State - no artificial loading delay!
   const [selectedLayout, setSelectedLayout] = useState('force');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
-  // Simulate loading
-  useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 600);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Stats calculation
+  // Stats calculation (always available)
   const stats = {
     nodes: SAMPLE_NODES.length,
     edges: SAMPLE_EDGES.length,
@@ -347,161 +339,181 @@ export default function KnowledgeGraphPage() {
     maxConnections: Math.max(...SAMPLE_NODES.map(n => n.connections)),
   };
 
-  // Loading skeleton
-  if (isLoading) {
+  // Error boundary fallback
+  if (hasError) {
     return (
       <div className="min-h-screen bg-background p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-12 w-64 bg-muted rounded-lg"></div>
-          <div className="h-[500px] bg-muted rounded-xl"></div>
+        <div className="max-w-4xl mx-auto text-center py-16">
+          <span className="text-6xl block mb-4">⚠️</span>
+          <h1 className="text-2xl font-bold mb-2">Unable to Load Knowledge Graph</h1>
+          <p className="text-muted-foreground mb-6">
+            There was an error rendering the graph visualization.
+          </p>
+          <Button onClick={() => setHasError(false)} variant="outline">
+            🔄 Try Again
+          </Button>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-6">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3 mb-2">
-          <span className="text-4xl">🕸️</span>
-          Knowledge Graph Explorer
-        </h1>
-        <p className="text-muted-foreground text-lg">
-          Visualize relationships between papers, genes, authors, and concepts.
-        </p>
-      </div>
+  try {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3 mb-2">
+            <span className="text-4xl">🕸️</span>
+            Knowledge Graph Explorer
+          </h1>
+          <p className="text-muted-foreground text-lg">
+            Visualize relationships between papers, genes, authors, and concepts.
+          </p>
+        </div>
 
-      {/* Controls Bar */}
-      <Card className="mb-6 border-border/50">
-        <CardContent className="p-4">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex-1 min-w-[250px] relative">
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search nodes..."
-                className="pl-10"
-              />
-              <span className="absolute left-3 top-1/2 -translate-y-1/2">🔍</span>
+        {/* Controls Bar */}
+        <Card className="mb-6 border-border/50">
+          <CardContent className="p-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex-1 min-w-[250px] relative">
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search nodes..."
+                  className="pl-10"
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2">🔍</span>
+              </div>
+
+              {/* Layout selector buttons (simpler than Select for reliability) */}
+              <div className="flex gap-1 bg-muted rounded-lg p-1">
+                {['Force-Directed', 'Circular', 'Hierarchical', 'Grid'].map((layout) => (
+                  <button
+                    key={layout}
+                    onClick={() => setSelectedLayout(layout.toLowerCase())}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                      selectedLayout === layout.toLowerCase()
+                        ? 'bg-background shadow-sm text-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {layout}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <Badge variant="outline" className="py-1 px-3">
+                  📊 {stats.nodes} Nodes
+                </Badge>
+                <Badge variant="outline" className="py-1 px-3">
+                  🔗 {stats.edges} Edges
+                </Badge>
+                <Badge variant="outline" className="py-1 px-3">
+                  🏷️ {stats.types} Types
+                </Badge>
+              </div>
             </div>
+          </CardContent>
+        </Card>
 
-            <Select value={selectedLayout} onValueChange={setSelectedLayout}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Layout" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="force">Force-Directed</SelectItem>
-                <SelectItem value="circular">Circular</SelectItem>
-                <SelectItem value="hierarchical">Hierarchical</SelectItem>
-                <SelectItem value="grid">Grid</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <div className="flex gap-2">
-              <Badge variant="outline" className="py-1 px-3">
-                📊 {stats.nodes} Nodes
-              </Badge>
-              <Badge variant="outline" className="py-1 px-3">
-                🔗 {stats.edges} Edges
-              </Badge>
-              <Badge variant="outline" className="py-1 px-3">
-                🏷️ {stats.types} Types
-              </Badge>
-            </div>
+        {/* Main Content Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Graph Visualization - Takes 3 columns */}
+          <div className="lg:col-span-3">
+            <GraphVisualization 
+              selectedNode={selectedNode} 
+              onNodeSelect={setSelectedNode} 
+            />
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Graph Visualization - Takes 3 columns */}
-        <div className="lg:col-span-3">
-          <GraphVisualization selectedNode={selectedNode} onNodeSelect={setSelectedNode} />
-        </div>
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Node Detail Panel */}
+            <NodeDetailPanel node={selectedNode} />
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Node Detail Panel */}
-          <NodeDetailPanel node={selectedNode} />
+            {/* Quick Actions */}
+            <Card className="border-border/50">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">⚡ Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Link href="/query">
+                  <Button variant="outline" className="w-full justify-start gap-2" size="sm">
+                    🔍 Search Related Papers
+                  </Button>
+                </Link>
+                <Link href="/data">
+                  <Button variant="outline" className="w-full justify-start gap-2" size="sm">
+                    💾 Export Graph Data
+                  </Button>
+                </Link>
+                <Link href="/alphafold">
+                  <Button variant="outline" className="w-full justify-start gap-2" size="sm">
+                    🧬 View Protein Structures
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
 
-          {/* Quick Actions */}
-          <Card className="border-border/50">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">⚡ Quick Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              <Link href="/query">
-                <Button variant="outline" className="w-full justify-start gap-2" size="sm">
-                  🔍 Search Related Papers
-                </Button>
-              </Link>
-              <Link href="/data">
-                <Button variant="outline" className="w-full justify-start gap-2" size="sm">
-                  💾 Export Graph Data
-                </Button>
-              </Link>
-              <Link href="/alphafold">
-                <Button variant="outline" className="w-full justify-start gap-2" size="sm">
-                  🧬 View Protein Structures
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          {/* Statistics */}
-          <Card className="border-border/50">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">📈 Graph Statistics</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total Nodes</span>
-                <span className="font-bold">{stats.nodes}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Total Edges</span>
-                <span className="font-bold">{stats.edges}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Most Connected</span>
-                <span className="font-bold">{stats.maxConnections} links</span>
-              </div>
-              <div className="pt-2 border-t">
-                <p className="text-xs text-muted-foreground">
-                  Current theme: <strong>CRISPR Gene Editing</strong>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Type Legend */}
-          <Card className="border-border/50">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">🎨 Node Types</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {Object.entries(NODE_TYPE_CONFIG).map(([key, config]) => (
-                <div key={key} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted transition-colors">
-                  <div className="flex items-center gap-2">
-                    <div 
-                      className="w-4 h-4 rounded-full" 
-                      style={{ backgroundColor: config.color }}
-                    ></div>
-                    <span className="text-sm font-medium">{config.icon} {config.label}</span>
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {SAMPLE_NODES.filter(n => n.type === key).length}
-                  </Badge>
+            {/* Statistics */}
+            <Card className="border-border/50">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">📈 Graph Statistics</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Nodes</span>
+                  <span className="font-bold">{stats.nodes}</span>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Total Edges</span>
+                  <span className="font-bold">{stats.edges}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Most Connected</span>
+                  <span className="font-bold">{stats.maxConnections} links</span>
+                </div>
+                <div className="pt-2 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    Current theme: <strong>CRISPR Gene Editing</strong>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
 
-      {/* Footer spacing */}
-      <div className="h-8"></div>
-    </div>
-  );
+            {/* Type Legend */}
+            <Card className="border-border/50">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">🎨 Node Types</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {Object.entries(NODE_TYPE_CONFIG).map(([key, config]) => (
+                  <div key={key} className="flex items-center justify-between p-2 rounded-lg hover:bg-muted transition-colors">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-4 h-4 rounded-full" 
+                        style={{ backgroundColor: config.color }}
+                      ></div>
+                      <span className="text-sm font-medium">{config.icon} {config.label}</span>
+                    </div>
+                    <Badge variant="outline" className="text-xs">
+                      {SAMPLE_NODES.filter(n => n.type === key).length}
+                    </Badge>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        {/* Footer spacing */}
+        <div className="h-8"></div>
+      </div>
+    );
+  } catch (error) {
+    console.error('Knowledge Graph render error:', error);
+    setHasError(true);
+    return null;
+  }
 }
