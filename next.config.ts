@@ -1,22 +1,21 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "export",
+  output: "standalone",
   /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
   
-  // GitHub Pages requires trailing slashes for SPA-like behavior
-  trailingSlash: true,
+  // Enable server-side API routes
+  serverExternalPackages: [],
   
-  // Base path for GitHub Pages (update with your repo name)
-  basePath: process.env.NODE_ENV === 'production' ? '/scihub-pro-demo' : '',
-  
-  // Disable image optimization for static export
+  // Image optimization enabled for dynamic mode
   images: {
-    unoptimized: true,
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+    ],
   },
 };
 

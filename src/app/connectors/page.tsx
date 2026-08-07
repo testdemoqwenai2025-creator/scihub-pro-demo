@@ -1,5 +1,14 @@
 'use client';
 
+/**
+ * SciHub Pro - Connectors Page (Enhanced)
+ * 
+ * Shows all scientific data sources with:
+ * - FREE tier: 12 APIs, no key required
+ * - PREMIUM tier: Scopus, Web of Science, IEEE (subscription required)
+ * - Subscription form when clicking premium features
+ */
+
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useDynamicStore } from '@/store/useDynamicStore';
@@ -10,20 +19,84 @@ import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
 
-// ============ CONNECTOR CATEGORIES ============
+// ============ TYPES ============
 
 interface ConnectorCategory {
   value: string;
   label: string;
   icon: string;
 }
+
+interface PremiumConnector {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  price: string;
+  features: string[];
+}
+
+interface FormData {
+  email: string;
+  name: string;
+  institution: string;
+  role: string;
+  useCase: string;
+  message: string;
+  agreeToTerms: boolean;
+  newsletterOptIn: boolean;
+}
+
+// ============ PREMIUM CONNECTORS ============
+
+const PREMIUM_CONNECTORS: PremiumConnector[] = [
+  {
+    id: 'scopus',
+    name: 'Scopus (Elsevier)',
+    icon: '📖',
+    description: 'Largest abstract & citation database. Enhanced curation quality.',
+    price: '$2,999/year',
+    features: ['Enhanced citations', 'Author profiles', 'Plagiarism check', 'Journal metrics']
+  },
+  {
+    id: 'web-of-science',
+    name: 'Web of Science',
+    icon: '🕸️',
+    description: 'Premier citation network. Complete coverage across sciences.',
+    price: '$5,000+/year',
+    features: ['Citation network', 'Impact factor', 'H-index calc', 'Historical data']
+  },
+  {
+    id: 'ieee-xplore',
+    name: 'IEEE Xplore',
+    icon: '⚡',
+    description: 'Digital library for electrical engineering & CS.',
+    price: '$1,500/year',
+    features: ['Full-text PDF', 'Technical standards', 'E-learning courses']
+  }
+];
 
 // ============ CONNECTORS PAGE ============
 
@@ -38,11 +111,28 @@ export default function ConnectorsPage() {
     createDynamicField,
   } = useDynamicStore();
 
+  // UI State
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [configuringConnector, setConfiguringConnector] = useState<string | null>(null);
   const [tempApiKey, setTempApiKey] = useState('');
   const [isSyncingAll, setIsSyncingAll] = useState(false);
+  
+  // Subscription form state
+  const [showSubscriptionForm, setShowSubscriptionForm] = useState(false);
+  const [selectedPremiumConnector, setSelectedPremiumConnector] = useState<PremiumConnector | null>(null);
+  const [formData, setFormData] = useState<FormData>({
+    email: '',
+    name: '',
+    institution: '',
+    role: '',
+    useCase: '',
+    message: '',
+    agreeToTerms: false,
+    newsletterOptIn: true
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   // Filter sources based on search and category
   const filteredConnectors = connectors.filter(connector => {
@@ -97,7 +187,7 @@ export default function ConnectorsPage() {
 
     for (const id of connectedIds) {
       await syncConnector(id);
-      await new Promise(resolve => setTimeout(resolve, 500)); // Stagger requests
+      await new Promise(resolve => setTimeout(resolve, 500));
     }
 
     setIsSyncingAll(false);
@@ -108,11 +198,57 @@ export default function ConnectorsPage() {
     });
   };
 
+  // Handle premium connector click - show subscription form
+  const handlePremiumClick = (connector: PremiumConnector) => {
+    setSelectedPremiumConnector(connector);
+    setShowSubscriptionForm(true);
+  };
+
+  // Handle subscription form submission
+  const handleSubscriptionSubmit = async () => {
+    setIsSubmitting(true);
+    
+    try {
+      const response = await fetch('/api/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          tier: 'pro',
+          connectorId: selectedPremiumConnector?.id
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        setSubmitSuccess(true);
+        addActivity({
+          type: 'create',
+          message: createDynamicField(`Subscription request submitted for ${selectedPremiumConnector?.name}`),
+          icon: '⭐',
+        });
+        
+        // Reset after delay
+        setTimeout(() => {
+          setShowSubscriptionForm(false);
+          setSubmitSuccess(false);
+          setFormData({
+            email: '', name: '', institution: '', role: '',
+            useCase: '', message: '', agreeToTerms: false, newsletterOptIn: true
+          });
+        }, 3000);
+      }
+    } catch (error) {
+      console.error('Submission error:', error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Stats calculations
   const totalSources = connectors.length;
   const connectedCount = connectors.filter(c => c.isConnected.value).length;
-  const freeTierCount = connectors.length; // All are free tier
-  const apiAvailableCount = connectors.filter(c => c.freeTierLimit > 0).length;
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -121,264 +257,486 @@ export default function ConnectorsPage() {
         <h1 className="text-3xl font-bold text-foreground">{t('connectors.title')}</h1>
         <p className="text-muted-foreground mt-1">{t('connectors.subtitle')}</p>
         <p className="text-sm text-muted-foreground mt-2">
-          🆓 All data sources shown are free-tier. No API keys required for basic access.
-          Premium features may require authentication.
+          🆓 <strong>12 Free Scientific APIs</strong> available now • 
+          <span className="text-purple-600 ml-1">3 Premium databases</span> require subscription
         </p>
       </div>
 
-      {/* Controls */}
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="flex-1">
-          <Input
-            placeholder={t('connectors.search_sources') || 'Search data sources...'}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="max-w-md"
-          />
-        </div>
-        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Select category" />
-          </SelectTrigger>
-          <SelectContent>
-            {categories.map(cat => (
-              <SelectItem key={cat.value} value={cat.value}>
-                {cat.icon} {cat.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button 
-          variant="outline" 
-          onClick={handleSyncAll}
-          disabled={isSyncingAll || connectedCount === 0}
-        >
-          {isSyncingAll ? '🔄 Syncing...' : `🔄 Sync All (${connectedCount})`}
-        </Button>
-      </div>
+      {/* Tabs for Free vs Premium */}
+      <Tabs defaultValue="free" className="mb-8">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="free" className="gap-2">
+            🆓 Free APIs ({totalSources})
+          </TabsTrigger>
+          <TabsTrigger value="premium" className="gap-2">
+            ⭐ Premium ({PREMIUM_CONNECTORS.length})
+          </TabsTrigger>
+        </TabsList>
 
-      {/* Stats Bar - Dynamic */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-2xl">🔗</span>
-            <div>
-              <p className="text-sm text-muted-foreground">Total Sources</p>
-              <p className="text-xl font-bold">{totalSources}</p>
+        {/* ============ FREE TIER TAB ============ */}
+        <TabsContent value="free" className="space-y-6">
+          {/* Controls */}
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex-1">
+              <Input
+                placeholder={t('connectors.search_sources') || 'Search data sources...'}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="max-w-md"
+              />
             </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-2xl">✅</span>
-            <div>
-              <p className="text-sm text-muted-foreground">Connected</p>
-              <p className="text-xl font-bold text-green-500">{connectedCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-2xl">🆓</span>
-            <div>
-              <p className="text-sm text-muted-foreground">Free Tier</p>
-              <p className="text-xl font-bold text-blue-500">{freeTierCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-2xl">⚡</span>
-            <div>
-              <p className="text-sm text-muted-foreground">API Available</p>
-              <p className="text-xl font-bold text-purple-500">{apiAvailableCount}</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Data Sources Grid - Fully Dynamic */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredConnectors.map((connector) => (
-          <Card key={connector.id} className={`hover:shadow-lg transition-all duration-300 hover:-translate-y-1 ${
-            configuringConnector === connector.id ? 'ring-2 ring-primary' : ''
-          }`}>
-            <CardHeader className="pb-3">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-3xl">{getConnectorIcon(connector.id)}</span>
-                  <div>
-                    <CardTitle className="text-lg">{connector.name}</CardTitle>
-                    <CardDescription className="text-xs mt-1 capitalize">
-                      {getConnectorCategory(connector.id)}
-                    </CardDescription>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {getStatusBadge(connector.syncStatus)}
-                  {connector.isConnected.isDirty && (
-                    <Badge variant="secondary" className="text-xs animate-pulse">New</Badge>
-                  )}
-                </div>
-              </div>
-            </CardHeader>
-            
-            <CardContent className="space-y-4">
-              {/* Description */}
-              <p className="text-sm text-muted-foreground line-clamp-2">
-                {getConnectorDescription(connector.id)}
-              </p>
-
-              {/* Info Grid */}
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="flex items-center gap-1">
-                  <span>📊</span>
-                  <span>{formatRecordCount(connector.recordCount.value)}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span>⏱️</span>
-                  <span>{connector.freeTierLimit > 0 ? `${connector.freeTierLimit}/s limit` : 'No limit'}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span>🆓</span>
-                  <span className="text-green-600">100% Free</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <span>🔌</span>
-                  <span>{connector.apiEndpoint.isDirty ? '✏️ Configured' : 'REST API'}</span>
-                </div>
-              </div>
-
-              {/* Features */}
-              <div className="flex flex-wrap gap-1">
-                {connector.features.slice(0, 3).map((feature, idx) => (
-                  <Badge key={idx} variant="outline" className="text-xs">
-                    {feature}
-                  </Badge>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>
+                    {cat.icon} {cat.label}
+                  </SelectItem>
                 ))}
-                {connector.features.length > 3 && (
-                  <Badge variant="outline" className="text-xs">
-                    +{connector.features.length - 3}
-                  </Badge>
-                )}
-              </div>
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              onClick={handleSyncAll}
+              disabled={isSyncingAll || connectedCount === 0}
+            >
+              {isSyncingAll ? '🔄 Syncing...' : `🔄 Sync All (${connectedCount})`}
+            </Button>
+          </div>
 
-              {/* API Key Configuration (when expanded) */}
-              {configuringConnector === connector.id && (
-                <div className="pt-3 border-t space-y-3 bg-muted/30 rounded-lg p-3">
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">
-                      API Key ({connector.freeTierLimit > 0 ? 'Optional' : 'Required'})
-                    </label>
-                    <Input
-                      type="password"
-                      value={tempApiKey}
-                      onChange={(e) => setTempApiKey(e.target.value)}
-                      placeholder={connector.apiKey.value || 'Enter API key...'}
-                      className="mt-1 h-8 text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {connector.freeTierLimit > 0 
-                        ? `Free tier allows ${connector.freeTierLimit} req/s without key`
-                        : 'API key required for access'
+          {/* Stats Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <span className="text-2xl">🔗</span>
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Sources</p>
+                  <p className="text-xl font-bold">{totalSources}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <span className="text-2xl">✅</span>
+                <div>
+                  <p className="text-sm text-muted-foreground">Connected</p>
+                  <p className="text-xl font-bold text-green-500">{connectedCount}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <span className="text-2xl">🆓</span>
+                <div>
+                  <p className="text-sm text-muted-foreground">Free Tier</p>
+                  <p className="text-xl font-bold text-blue-500">{totalSources}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4 flex items-center gap-3">
+                <span className="text-2xl">⚡</span>
+                <div>
+                  <p className="text-sm text-muted-foreground">No API Key Needed</p>
+                  <p className="text-xl font-bold text-green-500">{connectors.filter(c => !c.apiKey.value).length}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Data Sources Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredConnectors.map((connector) => (
+              <Card key={connector.id} className={`hover:shadow-lg transition-all duration-300 hover:-translate-y-1 ${
+                configuringConnector === connector.id ? 'ring-2 ring-primary' : ''
+              }`}>
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">{getConnectorIcon(connector.id)}</span>
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          {connector.name}
+                          <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            FREE
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription className="text-xs mt-1 capitalize">
+                          {getConnectorCategory(connector.id)}
+                        </CardDescription>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {getStatusBadge(connector.syncStatus)}
+                    </div>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {getConnectorDescription(connector.id)}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="flex items-center gap-1">
+                      <span>📊</span>
+                      <span>{formatRecordCount(connector.recordCount.value)}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span>⏱️</span>
+                      <span>{connector.freeTierLimit > 0 ? `${connector.freeTierLimit}/s limit` : 'No limit'}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span>🆓</span>
+                      <span className="text-green-600">100% Free</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span>🔌</span>
+                      <span>REST API</span>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-1">
+                    {connector.features.slice(0, 3).map((feature, idx) => (
+                      <Badge key={idx} variant="outline" className="text-xs">
+                        {feature}
+                      </Badge>
+                    ))}
+                  </div>
+
+                  {/* API Key Configuration */}
+                  {configuringConnector === connector.id && (
+                    <div className="pt-3 border-t space-y-3 bg-muted/30 rounded-lg p-3">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">
+                          API Key (Optional for enhanced limits)
+                        </label>
+                        <Input
+                          type="password"
+                          value={tempApiKey}
+                          onChange={(e) => setTempApiKey(e.target.value)}
+                          placeholder="Enter API key..."
+                          className="mt-1 h-8 text-sm"
+                        />
+                      </div>
+                      
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => handleSaveApiKey(connector.id)}>
+                          Save Configuration
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setConfiguringConnector(null)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2 border-t">
+                    <Button
+                      size="sm"
+                      variant={connector.isConnected.value ? 'default' : 'outline'}
+                      onClick={() => handleToggleConnection(connector.id)}
+                      className="flex-1"
+                      disabled={connector.syncStatus === 'syncing'}
+                    >
+                      {connector.syncStatus === 'syncing' 
+                        ? '⏳ Connecting...'
+                        : connector.isConnected.value 
+                          ? `Connected ✅` 
+                          : 'Connect'
                       }
-                    </p>
-                  </div>
-                  
-                  <div>
-                    <label className="text-xs font-medium text-muted-foreground">API Endpoint</label>
-                    <Input
-                      value={connector.apiEndpoint.value}
-                      readOnly
-                      className="mt-1 h-8 text-xs font-mono"
-                    />
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={() => handleSaveApiKey(connector.id)}>
-                      Save Configuration
                     </Button>
-                    <Button size="sm" variant="outline" onClick={() => setConfiguringConnector(null)}>
-                      Cancel
+                    
+                    {connector.isConnected.value && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => syncConnector(connector.id)}
+                        disabled={connector.syncStatus === 'syncing'}
+                      >
+                        🔄
+                      </Button>
+                    )}
+                    
+                    <Button size="sm" variant="outline" onClick={() => {
+                      setConfiguringConnector(configuringConnector === connector.id ? null : connector.id);
+                      setTempApiKey(connector.apiKey.value);
+                    }}>
+                      ⚙️
                     </Button>
                   </div>
-                </div>
-              )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
 
-              {/* Actions */}
-              <div className="flex gap-2 pt-2 border-t">
-                <Button
-                  size="sm"
-                  variant={connector.isConnected.value ? 'default' : 'outline'}
-                  onClick={() => handleToggleConnection(connector.id)}
-                  className="flex-1"
-                  disabled={connector.syncStatus === 'syncing'}
-                >
-                  {connector.syncStatus === 'syncing' 
-                    ? '⏳ Connecting...'
-                    : connector.isConnected.value 
-                      ? `${t('connectors.disconnect')} ✅` 
-                      : t('connectors.connect')
-                  }
-                </Button>
+        {/* ============ PREMIUM TIER TAB ============ */}
+        <TabsContent value="premium" className="space-y-6">
+          <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-950 dark:to-indigo-950 rounded-lg p-6 mb-6 border border-purple-200 dark:border-purple-800">
+            <h2 className="text-xl font-semibold text-purple-900 dark:text-purple-100 mb-2">
+              ⭐ Premium Scientific Databases
+            </h2>
+            <p className="text-purple-700 dark:text-purple-300 text-sm mb-4">
+              Unlock access to subscription-based research databases with enhanced citation data, 
+              full-text PDFs, and comprehensive coverage.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-3 gap-4 text-sm">
+              <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3">
+                <h3 className="font-medium text-purple-800 dark:text-purple-200">Pro Plan</h3>
+                <p className="text-2xl font-bold text-purple-600">$9.99<span className="text-sm font-normal">/mo</span></p>
+                <ul className="mt-2 space-y-1 text-xs text-purple-600 dark:text-purple-400">
+                  <li>✓ All premium connectors</li>
+                  <li>✓ Unlimited API requests</li>
+                  <li>✓ Full-text PDF access</li>
+                  <li>✓ Priority support</li>
+                </ul>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3">
+                <h3 className="font-medium text-purple-800 dark:text-purple-200">Enterprise</h3>
+                <p className="text-2xl font-bold text-purple-600">Custom</p>
+                <ul className="mt-2 space-y-1 text-xs text-purple-600 dark:text-purple-400">
+                  <li>✓ Everything in Pro</li>
+                  <li>✓ Unlimited everything</li>
+                  <li>✓ Custom integrations</li>
+                  <li>✓ Dedicated support</li>
+                </ul>
+              </div>
+              
+              <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3">
+                <h3 className="font-medium text-purple-800 dark:text-purple-200">Free Alternative</h3>
+                <p className="text-2xl font-bold text-green-600">$0</p>
+                <ul className="mt-2 space-y-1 text-xs text-green-600 dark:text-green-400">
+                  <li>✓ 12 free APIs included</li>
+                  <li>✓ 1,000 requests/day</li>
+                  <li>✓ Basic search & export</li>
+                  <li>✓ Community support</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Premium Connectors Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {PREMIUM_CONNECTORS.map((connector) => (
+              <Card key={connector.id} className="relative overflow-hidden border-2 border-dashed border-purple-300 dark:border-purple-700">
+                <div className="absolute top-0 right-0 bg-gradient-to-l from-purple-500 to-transparent w-24 h-24 opacity-10"></div>
                 
-                {connector.isConnected.value && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => syncConnector(connector.id)}
-                    disabled={connector.syncStatus === 'syncing'}
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">{connector.icon}</span>
+                      <div>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                          {connector.name}
+                          <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                            PREMIUM
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription className="text-xs mt-1">
+                          {connector.price}
+                        </CardDescription>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-4">
+                  <p className="text-sm text-muted-foreground line-clamp-2">
+                    {connector.description}
+                  </p>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium text-muted-foreground">Features:</p>
+                    <ul className="space-y-1">
+                      {connector.features.map((feature, idx) => (
+                        <li key={idx} className="text-xs flex items-center gap-2">
+                          <span className="text-purple-500">✦</span>
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <Button 
+                    className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                    onClick={() => handlePremiumClick(connector)}
                   >
-                    {connector.syncStatus === 'syncing' ? '🔄' : '🔄'}
+                    Request Access →
                   </Button>
-                )}
-                
-                <Button size="sm" variant="outline" onClick={() => {
-                  setConfiguringConnector(configuringConnector === connector.id ? null : connector.id);
-                  setTempApiKey(connector.apiKey.value);
-                }}>
-                  ⚙️
-                </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+      </Tabs>
 
-                <Button size="sm" variant="outline" asChild>
-                  <a href={getConnectorUrl(connector.id)} target="_blank" rel="noopener noreferrer">
-                    {t('connectors.view_docs')}
-                  </a>
-                </Button>
+      {/* ============ SUBSCRIPTION FORM DIALOG ============ */}
+      <Dialog open={showSubscriptionForm} onOpenChange={setShowSubscriptionForm}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              ⭐ Request Access to {selectedPremiumConnector?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Fill out the form below and we'll get you set up within 24-48 hours.
+              <br />
+              <span className="text-sm text-muted-foreground mt-1 block">
+                Or enjoy our <a href="#" className="text-green-600 underline">12 free scientific APIs</a> immediately!
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          {!submitSuccess ? (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Email Address *</label>
+                  <Input
+                    type="email"
+                    placeholder="your@institution.edu"
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Full Name</label>
+                  <Input
+                    placeholder="Dr. Jane Smith"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  />
+                </div>
               </div>
 
-              {/* Last Sync Info */}
-              {connector.lastSync && (
-                <div className="text-xs text-muted-foreground pt-1 border-t">
-                  Last synced: {connector.lastSync.toLocaleString()}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Institution/Organization *</label>
+                  <Input
+                    placeholder="MIT, Stanford, NIH..."
+                    value={formData.institution}
+                    onChange={(e) => setFormData({...formData, institution: e.target.value})}
+                    required
+                  />
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Your Role *</label>
+                  <Select value={formData.role} onValueChange={(value) => setFormData({...formData, role: value})}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select role..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="undergraduate">Undergraduate Student</SelectItem>
+                      <SelectItem value="masters">Graduate Student (Masters)</SelectItem>
+                      <SelectItem value="phd">Graduate Student (PhD)</SelectItem>
+                      <SelectItem value="postdoc">Postdoctoral Researcher</SelectItem>
+                      <SelectItem value="faculty">Faculty/Professor</SelectItem>
+                      <SelectItem value="researcher">Research Scientist</SelectItem>
+                      <SelectItem value="industry">Industry R&D</SelectItem>
+                      <SelectItem value="datascientist">Data Scientist</SelectItem>
+                      <SelectItem value="librarian">Librarian</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
 
-      {/* Empty State */}
-      {filteredConnectors.length === 0 && (
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">No data sources found matching your criteria.</p>
-          <Button 
-            variant="outline" 
-            className="mt-4"
-            onClick={() => {
-              setSearchQuery('');
-              setSelectedCategory('all');
-            }}
-          >
-            Clear Filters
-          </Button>
-        </div>
-      )}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Intended Use Case *</label>
+                <textarea
+                  className="w-full min-h-[80px] px-3 py-2 text-sm border rounded-md bg-background"
+                  placeholder="Describe how you plan to use SciHub Pro in your research..."
+                  value={formData.useCase}
+                  onChange={(e) => setFormData({...formData, useCase: e.target.value})}
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Additional Requirements</label>
+                <textarea
+                  className="w-full min-h-[60px] px-3 py-2 text-sm border rounded-md bg-background"
+                  placeholder="Any specific features, integrations, or questions..."
+                  value={formData.message}
+                  onChange={(e) => setFormData({...formData, message: e.target.value})}
+                />
+              </div>
+
+              <div className="flex items-center gap-4 text-sm">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.newsletterOptIn}
+                    onChange={(e) => setFormData({...formData, newsletterOptIn: e.target.checked})}
+                    className="rounded"
+                  />
+                  Receive weekly research tips & updates
+                </label>
+              </div>
+
+              <div className="flex items-start gap-2 text-sm bg-yellow-50 dark:bg-yellow-950 p-3 rounded-lg">
+                <input
+                  type="checkbox"
+                  checked={formData.agreeToTerms}
+                  onChange={(e) => setFormData({...formData, agreeToTerms: e.target.checked})}
+                  className="rounded mt-0.5"
+                  required
+                />
+                <span>
+                  I agree to the{' '}
+                  <a href="#" className="underline text-primary">Terms of Service</a>
+                  {' '}and{' '}
+                  <a href="#" className="underline text-primary">Privacy Policy</a> *
+                </span>
+              </div>
+
+              <DialogFooter className="gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setShowSubscriptionForm(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleSubscriptionSubmit}
+                  disabled={!formData.agreeToTerms || !formData.email || !formData.institution || !formData.useCase || isSubmitting}
+                  className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700"
+                >
+                  {isSubmitting ? '⏳ Submitting...' : 'Submit Request →'}
+                </Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <div className="py-8 text-center">
+              <div className="text-5xl mb-4">🎉</div>
+              <h3 className="text-xl font-semibold text-green-600 mb-2">Request Submitted!</h3>
+              <p className="text-muted-foreground mb-4">
+                We'll be in touch within 24-48 hours at <strong>{formData.email}</strong>
+              </p>
+              <p className="text-sm text-muted-foreground">
+                In the meantime, enjoy full access to our 12 free scientific APIs! 🚀
+              </p>
+              <Button 
+                variant="outline" 
+                className="mt-4"
+                onClick={() => setShowSubscriptionForm(false)}
+              >
+                Back to Connectors
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Free Tier Info Panel */}
       <Card className="mt-8">
         <CardHeader>
-          <CardTitle className="text-base">🆓 Free Tier Information</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2">
+            🆓 Free Tier Information
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
@@ -422,7 +780,7 @@ export default function ConnectorsPage() {
           
           <div className="mt-4 p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground">
             💡 <strong>Tip:</strong> All free tiers provide sufficient access for research purposes. 
-            API keys unlock higher rate limits and premium features but are not required for basic functionality.
+            API keys unlock higher rate limits but are not required for basic functionality.
           </div>
         </CardContent>
       </Card>
