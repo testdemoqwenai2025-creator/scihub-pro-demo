@@ -157,7 +157,7 @@ export function KeyboardShortcutsProvider({ children }: KeyboardShortcutsProvide
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     const isModKey = e.ctrlKey || e.metaKey;
-    const activeElement = document.activeElement;
+    const activeElement = document.activeElement as HTMLElement | null;
     const isInputFocused = activeElement?.tagName === 'INPUT' || 
                            activeElement?.tagName === 'TEXTAREA' || 
                            activeElement?.isContentEditable;

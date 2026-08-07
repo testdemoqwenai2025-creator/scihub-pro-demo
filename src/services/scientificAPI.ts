@@ -26,6 +26,9 @@ export interface SearchResult {
   journal?: string;
   publisher?: string;
   subjects?: string[];
+  openAccess?: boolean;
+  volume?: number;
+  pages?: string;
 }
 
 export interface DataSource {
@@ -133,8 +136,12 @@ async function searchCrossRef(params: QueryParams): Promise<SearchResult[]> {
 
     const json = await response.json();
     
-    return (json.message?.items || []).map((item: any) => ({
-      id: item.DOI || `crossref-${item['posted-date']?.date-time || Date.now()}`,
+    return (json.message?.items || []).map((item: any) => {
+      const postedDate = item['posted-date'];
+      const dateTimeValue = postedDate ? postedDate['date-time'] : null;
+      const fallbackId = 'crossref-' + (dateTimeValue || Date.now().toString());
+      return {
+        id: item.DOI || fallbackId,
       title: Array.isArray(item.title) ? item.title[0] : item.title || 'Untitled',
       authors: (item.author || []).slice(0, 5).map((a: any) => 
         `${a.given} ${a.family}`.trim()
@@ -151,7 +158,8 @@ async function searchCrossRef(params: QueryParams): Promise<SearchResult[]> {
       journal: Array.isArray(item['container-title']) ? item['container-title'][0] : undefined,
       publisher: item.publisher,
       subjects: item.subject || [],
-    }));
+      };
+    });
   } catch (error) {
     console.warn('CrossRef API failed, using fallback:', error);
     return generateSyntheticResults(params.query, params.limit);
@@ -328,7 +336,7 @@ function generateSyntheticResults(query: string, count: number = 10): SearchResu
       doi: `10.5555/synthetic.${20240000 + i}`,
       abstract: `This study presents novel findings related to ${query}. Our research demonstrates significant advances in methodology and provides insights that may inform future investigations in this domain. The implications extend to practical applications across multiple disciplines.`,
       url: '#',
-      source: 'synthetic',
+      source: 'synthetic' as any, // Synthetic results use 'synthetic' as source
       type: ['article', 'preprint', 'dataset'][Math.floor(Math.random() * 3)] as SearchResult['type'],
       citations: Math.floor(relevance * 500),
       journal: syntheticJournals[i % syntheticJournals.length],

@@ -1052,7 +1052,7 @@ export default function Home() {
             <div>
               <h4 className="font-semibold text-white mb-4">Resources</h4>
               <ul className="space-y-2">
-                <li><Link href="/documentation" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Documentation</a></li>
+                <li><Link href="/documentation" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Documentation</Link></li>
                 <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">API Reference</a></li>
                 <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Community</a></li>
                 <li><a href="#" className="text-slate-400 hover:text-cyan-400 text-sm transition-colors">Status</a></li>

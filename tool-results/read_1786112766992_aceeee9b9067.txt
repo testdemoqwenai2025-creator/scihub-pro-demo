@@ -1,0 +1,1100 @@
+     1→'use client';
+     2→
+     3→/**
+     4→ * SciHub Pro - AlphaFold Connector Component
+     5→ * 
+     6→ * Complete UI for Google DeepMind's AlphaFold Protein Structure Database
+     7→ * Features:
+     8→ * - UniProt ID lookup
+     9→ * - Protein search by gene name/description
+    10→ * - Structure visualization (simplified 3D representation)
+    11→ * - Confidence score display (pLDDT)
+    12→ * - PDB file download
+    13→ * - Batch query support
+    14→ * - Featured proteins showcase
+    15→ * - Database statistics
+    16→ * 
+    17→ * FREE TIER: Fully functional, no API key required!
+    18→ */
+    19→
+    20→import { useState, useEffect, useCallback } from 'react';
+    21→import {
+    22→  Card,
+    23→  CardContent,
+    24→  CardHeader,
+    25→  CardTitle,
+    26→  CardDescription,
+    27→} from '@/components/ui/card';
+    28→import { Badge } from '@/components/ui/badge';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Input } from '@/components/ui/input';
+    31→import { Textarea } from '@/components/ui/textarea';
+    32→import { Progress } from '@/components/ui/progress';
+    33→import { Separator } from '@/components/ui/separator';
+    34→import {
+    35→  Dialog,
+    36→  DialogContent,
+    37→  DialogDescription,
+    38→  DialogHeader,
+    39→  DialogTitle,
+    40→  DialogTrigger,
+    41→} from '@/components/ui/dialog';
+    42→import {
+    43→  Tabs,
+    44→  TabsContent,
+    45→  TabsList,
+    46→  TabsTrigger,
+    47→} from '@/components/ui/tabs';
+    48→import {
+    49→  Tooltip,
+    50→  TooltipContent,
+    51→  TooltipProvider,
+    52→  TooltipTrigger,
+    53→} from '@/components/ui/tooltip';
+    54→import {
+    55→  Select,
+    56→  SelectContent,
+    57→  SelectItem,
+    58→  SelectTrigger,
+    59→  SelectValue,
+    60→} from '@/components/ui/select';
+    61→import {
+    62→  Search,
+    63→  Download,
+    64→  ExternalLink,
+    65→  Dna,
+    66→  Atom,
+    67→  CheckCircle2,
+    68→  AlertTriangle,
+    69→  Info,
+    70→  Loader2,
+    71→  Star,
+    72→  Zap,
+    73→  Globe,
+    74→  FileText,
+    75→  Copy,
+    76→  RefreshCw,
+    77→  ChevronRight,
+    78→  Layers,
+    79→  Target,
+    80→  BarChart3,
+    81→} from 'lucide-react';
+    82→
+    83→// Import AlphaFold API service
+    84→import {
+    85→  fetchProteinByUniProt,
+    86→  searchProteins,
+    87→  fetchStructureData,
+    88→  batchQueryProteins,
+    89→  getFeaturedProteins,
+    90→  getDatabaseStats,
+    91→  formatPDBDownload,
+    92→  generateCitation,
+    93→  type AlphaFoldProtein,
+    94→  type AlphaFoldSearchResult,
+    95→  type BatchQueryResult,
+    96→} from '@/services/alphaFoldAPI';
+    97→
+    98→// ============ TYPES ============
+    99→
+   100→interface ProteinVisualizationProps {
+   101→  protein: AlphaFoldProtein;
+   102→  confidenceScores?: number[];
+   103→}
+   104→
+   105→// ============ SUB-COMPONENTS ============
+   106→
+   107→// Confidence Score Badge
+   108→function ConfidenceBadge({ score, size = 'default' }: { score: number; size?: 'sm' | 'default' | 'lg' }) {
+   109→  const getColor = () => {
+   110→    if (score >= 90) return 'bg-green-100 text-green-800 border-green-300';
+   111→    if (score >= 70) return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+   112→    return 'bg-red-100 text-red-800 border-red-300';
+   113→  };
+   114→
+   115→  const getLabel = () => {
+   116→    if (score >= 90) return 'High Confidence';
+   117→    if (score >= 70) return 'Medium Confidence';
+   118→    return 'Low Confidence';
+   119→  };
+   120→
+   121→  const sizeClasses = {
+   122→    sm: 'px-2 py-0.5 text-xs',
+   123→    default: 'px-3 py-1 text-sm',
+   124→    lg: 'px-4 py-2 text-base'
+   125→  };
+   126→
+   127→  return (
+   128→    <Badge variant="outline" className={`${getColor()} ${sizeClasses[size]}`}>
+   129→      {score.toFixed(1)}% • {getLabel()}
+   130→    </Badge>
+   131→  );
+   132→}
+   133→
+   134→// Resolution Indicator
+   135→function ResolutionIndicator({ resolution }: { resolution: string }) {
+   136→  const config = {
+   137→    High: { color: 'text-green-600', icon: CheckCircle2, bg: 'bg-green-50' },
+   138→    Medium: { color: 'text-yellow-600', icon: AlertTriangle, bg: 'bg-yellow-50' },
+   139→    Low: { color: 'text-red-600', icon: AlertTriangle, bg: 'bg-red-50' }
+   140→  };
+   141→  
+   142→  const { color, icon: Icon, bg } = config[resolution as keyof typeof config] || config.Medium;
+   143→  
+   144→  return (
+   145→    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md ${bg}`}>
+   146→      <Icon className={`h-4 w-4 ${color}`} />
+   147→      <span className={`text-sm font-medium ${color}`}>{resolution}</span>
+   148→    </div>
+   149→  );
+   150→}
+   151→
+   152→// Simplified 3D Molecule Visualization
+   153→function ProteinStructureViewer({ protein, confidenceScores }: ProteinVisualizationProps) {
+   154→  const [rotation, setRotation] = useState(0);
+   155→  const [showConfidence, setShowConfidence] = useState(true);
+   156→
+   157→  // Auto-rotate animation
+   158→  useEffect(() => {
+   159→    const interval = setInterval(() => {
+   160→      setRotation(r => (r + 0.5) % 360);
+   161→    }, 50);
+   162→    return () => clearInterval(interval);
+   163→  }, []);
+   164→
+   165→  // Generate simplified atom positions based on sequence length
+   166→  const generateAtoms = () => {
+   167→    const count = Math.min(protein.sequenceLength || 200, 150);
+   168→    const atoms = [];
+   169→    
+   170→    for (let i = 0; i < count; i++) {
+   171→      const angle = (i / count) * Math.PI * 4 + (rotation * Math.PI / 180);
+   172→      const radius = 30 + Math.sin(i * 0.1) * 20;
+   173→      const height = (i / count) * 120 - 60;
+   174→      
+   175→      const x = Math.cos(angle) * radius;
+   176→      const y = height;
+   177→      const z = Math.sin(angle) * radius;
+   178→      
+   179→      const confidence = confidenceScores?.[i % (confidenceScores?.length || 1)] || (protein.confidenceScore || 80);
+   180→      
+   181→      atoms.push({
+   182→        id: i,
+   183→        x, y, z,
+   184→        confidence,
+   185→        type: i % 3 === 0 ? 'alpha' : i % 3 === 1 ? 'beta' : 'coil'
+   186→      });
+   187→    }
+   188→    
+   189→    return atoms;
+   190→  };
+   191→
+   192→  const atoms = generateAtoms();
+   193→  
+   194→  const getAtomColor = (atom: typeof atoms[0]) => {
+   195→    if (!showConfidence) {
+   196→      return atom.type === 'alpha' ? '#3b82f6' : atom.type === 'beta' ? '#ef4444' : '#22c55e';
+   197→    }
+   198→    if (atom.confidence >= 90) return '#22c55e'; // Green for high
+   199→    if (atom.confidence >= 70) return '#eab308'; // Yellow for medium
+   200→    return '#ef4444'; // Red for low
+   201→  };
+   202→
+   203→  return (
+   204→    <div className="relative w-full h-[400px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-lg overflow-hidden">
+   205→      {/* Grid background */}
+   206→      <div className="absolute inset-0 opacity-10" style={{
+   207→        backgroundImage: `
+   208→          linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px),
+   209→          linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)
+   210→        `,
+   211→        backgroundSize: '40px 40px'
+   212→      }} />
+   213→      
+   214→      {/* SVG Visualization */}
+   215→      <svg viewBox="-100 -80 200 160" className="w-full h-full" style={{ transform: 'rotateX(15deg)' }}>
+   216→        {/* Bonds between nearby atoms */}
+   217→        {atoms.map((atom, i) => 
+   218→          i > 0 && (
+   219→            <line
+   220→              key={`bond-${i}`}
+   221→              x1={atoms[i-1].x}
+   222→              y1={atoms[i-1].y}
+   223→              x2={atom.x}
+   224→              y2={atom.y}
+   225→              stroke="rgba(255,255,255,0.2)"
+   226→              strokeWidth="0.5"
+   227→            />
+   228→          )
+   229→        )}
+   230→        
+   231→        {/* Atoms */}
+   232→        {atoms.map((atom) => (
+   233→          <circle
+   234→            key={atom.id}
+   235→            cx={atom.x}
+   236→            cy={atom.y}
+   237→            r={atom.type === 'alpha' ? 2.5 : atom.type === 'beta' ? 2 : 1.5}
+   238→            fill={getAtomColor(atom)}
+   239→            opacity={0.9}
+   240→          />
+   241→        ))}
+   242→        
+   243→        {/* Center label */}
+   244→        <text x="0" y="75" textAnchor="middle" fill="rgba(255,255,255,0.6)" fontSize="6" fontFamily="monospace">
+   245→          {protein.uniprotId}
+   246→        </text>
+   247→      </svg>
+   248→
+   249→      {/* Controls overlay */}
+   250→      <div className="absolute bottom-4 left-4 right-4 flex justify-between items-center">
+   251→        <div className="flex gap-2">
+   252→          <Button
+   253→            variant="secondary"
+   254→            size="sm"
+   255→            onClick={() => setShowConfidence(!showConfidence)}
+   256→            className="bg-black/50 hover:bg-black/70 text-white border-white/20"
+   257→          >
+   258→            {showConfidence ? 'Show Type' : 'Show Confidence'}
+   259→          </Button>
+   260→        </div>
+   261→        
+   262→        <Badge variant="outline" className="bg-black/50 text-white border-white/20">
+   263→          {atoms.length} residues visualized
+   264→        </Badge>
+   265→      </div>
+   266→
+   267→      {/* Legend */}
+   268→      <div className="absolute top-4 right-4 bg-black/50 rounded-lg p-3 backdrop-blur-sm">
+   269→        <p className="text-xs text-white font-semibold mb-2">Legend</p>
+   270→        {showConfidence ? (
+   271→          <>
+   272→            <div className="flex items-center gap-2 mb-1">
+   273→              <div className="w-3 h-3 rounded-full bg-green-500" />
+   274→              <span className="text-xs text-gray-300">High (&ge;90%)</span>
+   275→            </div>
+   276→            <div className="flex items-center gap-2 mb-1">
+   277→              <div className="w-3 h-3 rounded-full bg-yellow-500" />
+   278→              <span className="text-xs text-gray-300">Medium (70-90%)</span>
+   279→            </div>
+   280→            <div className="flex items-center gap-2">
+   281→              <div className="w-3 h-3 rounded-full bg-red-500" />
+   282→              <span className="text-xs text-gray-300">Low (&lt;70%)</span>
+   283→            </div>
+   284→          </>
+   285→        ) : (
+   286→          <>
+   287→            <div className="flex items-center gap-2 mb-1">
+   288→              <div className="w-3 h-3 rounded-full bg-blue-500" />
+   289→              <span className="text-xs text-gray-300">Alpha helix</span>
+   290→            </div>
+   291→            <div className="flex items-center gap-2 mb-1">
+   292→              <div className="w-3 h-3 rounded-full bg-red-500" />
+   293→              <span className="text-xs text-gray-300">Beta sheet</span>
+   294→            </div>
+   295→            <div className="flex items-center gap-2">
+   296→              <div className="w-3 h-3 rounded-full bg-green-500" />
+   297→              <span className="text-xs text-gray-300">Coil</span>
+   298→            </div>
+   299→          </>
+   300→        )}
+   301→      </div>
+   302→    </div>
+   303→  );
+   304→}
+   305→
+   306→// Confidence Score Chart
+   307→function ConfidenceChart({ scores }: { scores: number[] }) {
+   308→  const maxScore = 100;
+   309→  const chartHeight = 80;
+   310→  const barWidth = 3;
+   311→  const gap = 1;
+   312→
+   313→  return (
+   314→    <div className="w-full overflow-x-auto py-2">
+   315→      <div className="inline-flex items-end gap-[1px]" style={{ minHeight: chartHeight }}>
+   316→        {scores.slice(0, 100).map((score, i) => {
+   317→          const height = (score / maxScore) * chartHeight;
+   318→          const color = score >= 90 ? '#22c55e' : score >= 70 ? '#eab308' : '#ef4444';
+   319→          
+   320→          return (
+   321→            <TooltipProvider key={i}>
+   322→              <Tooltip>
+   323→                <TooltipTrigger asChild>
+   324→                  <div
+   325→                    className="transition-all hover:opacity-80"
+   326→                    style={{
+   327→                      width: barWidth,
+   328→                      height: `${height}px`,
+   329→                      backgroundColor: color,
+   330→                      borderRadius: '1px'
+   331→                    }}
+   332→                  />
+   333→                </TooltipTrigger>
+   334→                <TooltipContent side="top">
+   335→                  <p className="text-xs">Residue {i + 1}: {score.toFixed(1)}%</p>
+   336→                </TooltipContent>
+   337→              </Tooltip>
+   338→            </TooltipProvider>
+   339→          );
+   340→        })}
+   341→      </div>
+   342→      <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+   343→        <span>1</span>
+   344→        <span>Position</span>
+   345→        <span>{Math.min(scores.length, 100)}</span>
+   346→      </div>
+   347→    </div>
+   348→  );
+   349→}
+   350→
+   351→// Protein Result Card
+   352→function ProteinResultCard({ 
+   353→  protein, 
+   354→  onViewDetails,
+   355→  isSelected,
+   356→  onSelect 
+   357→}: { 
+   358→  protein: AlphaFoldProtein; 
+   359→  onViewDetails: (protein: AlphaFoldProtein) => void;
+   360→  isSelected?: boolean;
+   361→  onSelect?: () => void;
+   362→}) {
+   363→  return (
+   364→    <Card 
+   365→      className={`cursor-pointer transition-all hover:shadow-md ${
+   366→        isSelected ? 'ring-2 ring-blue-500 bg-blue-50/50' : ''
+   367→      }`}
+   368→      onClick={onSelect || (() => onViewDetails(protein))}
+   369→    >
+   370→      <CardContent className="p-4">
+   371→        <div className="flex justify-between items-start mb-3">
+   372→          <div className="flex-1 min-w-0">
+   373→            <h4 className="font-semibold text-sm truncate">{protein.name || protein.geneName}</h4>
+   374→            <p className="text-xs text-muted-foreground mt-1">{protein.organism}</p>
+   375→          </div>
+   376→          <ConfidenceBadge score={protein.confidenceScore || 80} size="sm" />
+   377→        </div>
+   378→        
+   379→        <div className="grid grid-cols-2 gap-2 text-xs">
+   380→          <div className="flex items-center gap-1">
+   381→            <Dna className="h-3 w-3 text-blue-500" />
+   382→            <span className="font-mono">{protein.uniprotId}</span>
+   383→          </div>
+   384→          <div className="flex items-center gap-1">
+   385→            <Layers className="h-3 w-3 text-purple-500" />
+   386→            <span>{protein.sequenceLength || '?'} aa</span>
+   387→          </div>
+   388→          <div className="flex items-center gap-1">
+   389→            <Target className="h-3 w-3 text-green-500" />
+   390→            <ResolutionIndicator resolution={protein.resolution || 'Medium'} />
+   391→          </div>
+   392→          <div className="flex items-center gap-1">
+   393→            <BarChart3 className="h-3 w-3 text-orange-500" />
+   394→            <span>{protein.coverage?.toFixed(0)}% coverage</span>
+   395→          </div>
+   396→        </div>
+   397→
+   398→        <div className="mt-3 flex gap-2">
+   399→          <Button 
+   400→            size="sm" 
+   401→            variant="outline"
+   402→            onClick={(e) => { e.stopPropagation(); onViewDetails(protein); }}
+   403→            className="flex-1"
+   404→          >
+   405→            View Details
+   406→          </Button>
+   407→          <Button 
+   408→            size="sm" 
+   409→            variant="ghost"
+   410→            onClick={(e) => { e.stopPropagation(); window.open(`https://alphafold.ebi.ac.uk/entry/${protein.uniprotId}`, '_blank'); }}
+   411→          >
+   412→            <ExternalLink className="h-4 w-4" />
+   413→          </Button>
+   414→        </div>
+   415→      </CardContent>
+   416→    </Card>
+   417→  );
+   418→}
+   419→
+   420→// Main AlphaFold Component
+   421→export function AlphaFoldConnector() {
+   422→  // State management
+   423→  const [activeTab, setActiveTab] = useState('search');
+   424→  const [searchQuery, setSearchQuery] = useState('');
+   425→  const [isSearching, setIsSearching] = useState(false);
+   426→  const [searchResults, setSearchResults] = useState<AlphaFoldSearchResult | null>(null);
+   427→  const [selectedProtein, setSelectedProtein] = useState<AlphaFoldProtein | null>(null);
+   428→  const [structureData, setStructureData] = useState<any>(null);
+   429→  const [isLoadingStructure, setIsLoadingStructure] = useState(false);
+   430→  const [featuredProteins, setFeaturedProteins] = useState<AlphaFoldProtein[]>([]);
+   431→  const [dbStats, setDbStats] = useState<any>(null);
+   432→  const [batchInput, setBatchInput] = useState('');
+   433→  const [batchResults, setBatchResults] = useState<BatchQueryResult | null>(null);
+   434→  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+   435→
+   436→  // Load featured proteins and stats on mount
+   437→  useEffect(() => {
+   438→    loadInitialData();
+   439→  }, []);
+   440→
+   441→  const loadInitialData = async () => {
+   442→    try {
+   443→      const [proteins, stats] = await Promise.all([
+   444→        getFeaturedProteins(),
+   445→        getDatabaseStats()
+   446→      ]);
+   447→      setFeaturedProteins(proteins);
+   448→      setDbStats(stats);
+   449→    } catch (error) {
+   450→      console.error('Error loading initial data:', error);
+   451→    }
+   452→  };
+   453→
+   454→  // Search handler
+   455→  const handleSearch = async () => {
+   456→    if (!searchQuery.trim()) return;
+   457→    
+   458→    setIsSearching(true);
+   459→    try {
+   460→      // Determine if it's a UniProt ID (starts with letter followed by numbers/letters)
+   461→      const isUniProtId = /^[A-Z][0-9A-Z]{1,10}$/i.test(searchQuery.trim());
+   462→      
+   463→      let results: AlphaFoldSearchResult;
+   464→      
+   465→      if (isUniProtId) {
+   466→        // Direct UniProt ID lookup
+   467→        const protein = await fetchProteinByUniProt(searchQuery.trim());
+   468→        results = {
+   469→          query: searchQuery.trim(),
+   470→          results: [protein],
+   471→          totalFound: 1,
+   472→          searchTime: Date.now(),
+   473→          source: 'alphafold'
+   474→        };
+   475→      } else {
+   476→        // Keyword search
+   477→        results = await searchProteins(searchQuery.trim());
+   478→      }
+   479→      
+   480→      setSearchResults(results);
+   481→    } catch (error) {
+   482→      console.error('Search error:', error);
+   483→    } finally {
+   484→      setIsSearching(false);
+   485→    }
+   486→  };
+   487→
+   488→  // View protein details
+   489→  const handleViewDetails = async (protein: AlphaFoldProtein) => {
+   490→    setSelectedProtein(protein);
+   491→    setIsLoadingStructure(true);
+   492→    
+   493→    try {
+   494→      const structure = await fetchStructureData(protein.uniprotId);
+   495→      setStructureData(structure);
+   496→    } catch (error) {
+   497→      console.error('Error loading structure:', error);
+   498→    } finally {
+   499→      setIsLoadingStructure(false);
+   500→    }
+   501→  };
+   502→
+   503→  // Batch query handler
+   504→  const handleBatchQuery = async () => {
+   505→    const ids = batchInput
+   506→      .split(/[\n,]+/)
+   507→      .map(id => id.trim())
+   508→      .filter(id => id.length > 0);
+   509→    
+   510→    if (ids.length === 0) return;
+   511→    
+   512→    setIsBatchProcessing(true);
+   513→    try {
+   514→      const results = await batchQueryProteins(ids);
+   515→      setBatchResults(results);
+   516→    } catch (error) {
+   517→      console.error('Batch query error:', error);
+   518→    } finally {
+   519→      setIsBatchProcessing(false);
+   520→    }
+   521→  };
+   522→
+   523→  // Download PDB handler
+   524→  const handleDownloadPDB = (protein: AlphaFoldProtein) => {
+   525→    const pdbContent = formatPDBDownload(protein, structureData?.pdbContent);
+   526→    const blob = new Blob([pdbContent], { type: 'text/plain' });
+   527→    const url = URL.createObjectURL(blob);
+   528→    const a = document.createElement('a');
+   529→    a.href = url;
+   530→    a.download = `${protein.entryId}-alphafold.pdb`;
+   531→    document.body.appendChild(a);
+   532→    a.click();
+   533→    document.body.removeChild(a);
+   534→    URL.revokeObjectURL(url);
+   535→  };
+   536→
+   537→  // Copy citation handler
+   538→  const handleCopyCitation = (protein: AlphaFoldProtein) => {
+   539→    const citation = generateCitation(protein);
+   540→    navigator.clipboard.writeText(citation);
+   541→  };
+   542→
+   543→  return (
+   544→    <div className="space-y-6">
+   545→      {/* Header Card */}
+   546→      <Card className="border-2 border-blue-200 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20">
+   547→        <CardHeader>
+   548→          <div className="flex items-start justify-between">
+   549→            <div className="space-y-2">
+   550→              <div className="flex items-center gap-3">
+   551→                <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl">
+   552→                  <Dna className="h-8 w-8 text-white" />
+   553→                </div>
+   554→                <div>
+   555→                  <CardTitle className="text-2xl flex items-center gap-2">
+   556→                    AlphaFold DB Connector
+   557→                    <Badge className="bg-green-100 text-green-800 border-green-300">
+   558→                      <Zap className="h-3 w-3 mr-1" />
+   559→                      FREE TIER
+   560→                    </Badge>
+   561→                  </CardTitle>
+   562→                  <CardDescription className="text-base mt-1">
+   563→                    Google DeepMind&apos;s Revolutionary AI Protein Structure Prediction
+   564→                  </CardDescription>
+   565→                </div>
+   566→              </div>
+   567→              
+   568→              <p className="text-sm text-muted-foreground max-w-3xl">
+   569→                Access 200M+ predicted protein structures with Nobel Prize-level accuracy. 
+   570→                No API key required. Free for research and educational use.
+   571→                Powered by artificial intelligence that solved the 50-year grand challenge of protein folding.
+   572→              </p>
+   573→            </div>
+   574→            
+   575→            <div className="hidden md:flex flex-col gap-2 min-w-[160px]">
+   576→              <a 
+   577→                href="https://alphafold.ebi.ac.uk/" 
+   578→                target="_blank" 
+   579→                rel="noopener noreferrer"
+   580→                className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+   581→              >
+   582→                <Globe className="h-4 w-4" />
+   583→                alphafold.ebi.ac.uk
+   584→              </a>
+   585→              <a 
+   586→                href="https://www.nature.com/articles/s41586-021-03819-2" 
+   587→                target="_blank" 
+   588→                rel="noopener noreferrer"
+   589→                className="text-sm text-purple-600 hover:text-purple-800 flex items-center gap-1"
+   590→              >
+   591→                <FileText className="h-4 w-4" />
+   592→                Nature Paper (2021)
+   593→              </a>
+   594→            </div>
+   595→          </div>
+   596→        </CardHeader>
+   597→        
+   598→        <CardContent>
+   599→          {/* Stats Row */}
+   600→          {dbStats && (
+   601→            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+   602→              <div className="text-center p-3 bg-white/50 dark:bg-black/20 rounded-lg">
+   603→                <p className="text-2xl font-bold text-blue-600">200M+</p>
+   604→                <p className="text-xs text-muted-foreground">Total Structures</p>
+   605→              </div>
+   606→              <div className="text-center p-3 bg-white/50 dark:bg-black/20 rounded-lg">
+   607→                <p className="text-2xl font-bold text-purple-600">48M+</p>
+   608→                <p className="text-xs text-muted-foreground">Organisms Covered</p>
+   609→              </div>
+   610→              <div className="text-center p-3 bg-white/50 dark:bg-black/20 rounded-lg">
+   611→                <p className="text-2xl font-bold text-green-600">~90%</p>
+   612→                <p className="text-xs text-muted-foreground">High Confidence</p>
+   613→              </div>
+   614→              <div className="text-center p-3 bg-white/50 dark:bg-black/20 rounded-lg">
+   615→                <p className="text-2xl font-bold text-orange-600">$0</p>
+   616→                <p className="text-xs text-muted-foreground">Cost Per Query</p>
+   617→              </div>
+   618→            </div>
+   619→          )}
+   620→        </CardContent>
+   621→      </Card>
+   622→
+   623→      {/* Main Tabs */}
+   624→      <Tabs value={activeTab} onValueChange={setActiveTab}>
+   625→        <TabsList className="grid w-full grid-cols-4">
+   626→          <TabsTrigger value="search" className="flex items-center gap-2">
+   627→            <Search className="h-4 w-4" />
+   628→            Search
+   629→          </TabsTrigger>
+   630→          <TabsTrigger value="featured" className="flex items-center gap-2">
+   631→            <Star className="h-4 w-4" />
+   632→            Featured
+   633→          </TabsTrigger>
+   634→          <TabsTrigger value="batch" className="flex items-center gap-2">
+   635→            <Layers className="h-4 w-4" />
+   636→            Batch Query
+   637→          </TabsTrigger>
+   638→          <TabsTrigger value="about" className="flex items-center gap-2">
+   639→            <Info className="h-4 w-4" />
+   640→            About
+   641→          </TabsTrigger>
+   642→        </TabsList>
+   643→
+   644→        {/* SEARCH TAB */}
+   645→        <TabsContent value="search" className="space-y-4 mt-4">
+   646→          <Card>
+   647→            <CardHeader>
+   648→              <CardTitle className="text-lg">Find Protein Structures</CardTitle>
+   649→              <CardDescription>
+   650→                Search by UniProt ID (e.g., P00533) or gene name (e.g., EGFR)
+   651→              </CardDescription>
+   652→            </CardHeader>
+   653→            <CardContent>
+   654→              <div className="flex gap-3">
+   655→                <Input
+   656→                  placeholder="Enter UniProt ID or gene name..."
+   657→                  value={searchQuery}
+   658→                  onChange={(e) => setSearchQuery(e.target.value)}
+   659→                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+   660→                  className="flex-1 font-mono"
+   661→                />
+   662→                <Button 
+   663→                  onClick={handleSearch} 
+   664→                  disabled={isSearching || !searchQuery.trim()}
+   665→                  className="min-w-[120px]"
+   666→                >
+   667→                  {isSearching ? (
+   668→                    <>
+   669→                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   670→                      Searching...
+   671→                    </>
+   672→                  ) : (
+   673→                    <>
+   674→                      <Search className="h-4 w-4 mr-2" />
+   675→                      Search
+   676→                    </>
+   677→                  )}
+   678→                </Button>
+   679→              </div>
+   680→
+   681→              {/* Quick examples */}
+   682→              <div className="mt-3 flex flex-wrap gap-2">
+   683→                <span className="text-sm text-muted-foreground">Try:</span>
+   684→                {['P00533 (EGFR)', 'P04637 (p53)', 'P0DTC2 (Spike)', 'P69905 (Hemoglobin)'].map(example => (
+   685→                  <button
+   686→                    key={example}
+   687→                    onClick={() => setSearchQuery(example.split(' ')[0])}
+   688→                    className="text-sm px-2 py-1 bg-muted hover:bg-muted/80 rounded transition-colors font-mono"
+   689→                  >
+   690→                    {example}
+   691→                  </button>
+   692→                ))}
+   693→              </div>
+   694→            </CardContent>
+   695→          </Card>
+   696→
+   697→          {/* Search Results */}
+   698→          {searchResults && (
+   699→            <div className="space-y-4">
+   700→              <div className="flex items-center justify-between">
+   701→                <h3 className="font-semibold">
+   702→                  Results ({searchResults.totalFound} found)
+   703→                </h3>
+   704→                <Badge variant="outline">
+   705→                  Source: {searchResults.source} • {searchResults.searchTime}ms
+   706→                </Badge>
+   707→              </div>
+   708→              
+   709→              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+   710→                {searchResults.results.map((protein) => (
+   711→                  <ProteinResultCard
+   712→                    key={protein.uniprotId}
+   713→                    protein={protein}
+   714→                    onViewDetails={handleViewDetails}
+   715→                    isSelected={selectedProtein?.uniprotId === protein.uniprotId}
+   716→                    onSelect={() => handleViewDetails(protein)}
+   717→                  />
+   718→                ))}
+   719→              </div>
+   720→            </div>
+   721→          )}
+   722→
+   723→          {/* Selected Protein Detail View */}
+   724→          {selectedProtein && (
+   725→            <Card className="border-2 border-blue-200">
+   726→              <CardHeader>
+   727→                <div className="flex justify-between items-start">
+   728→                  <div>
+   729→                    <CardTitle className="flex items-center gap-3">
+   730→                      <Atom className="h-6 w-6 text-blue-500" />
+   731→                      {selectedProtein.name || selectedProtein.geneName}
+   732→                    </CardTitle>
+   733→                    <CardDescription className="mt-2">
+   734→                      {selectedProtein.functionDescription}
+   735→                    </CardDescription>
+   736→                  </div>
+   737→                  <ConfidenceBadge score={selectedProtein.confidenceScore || 80} size="lg" />
+   738→                </div>
+   739→              </CardHeader>
+   740→              
+   741→              <CardContent className="space-y-6">
+   742→                {/* Metadata Grid */}
+   743→                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   744→                  <div className="p-3 bg-muted/50 rounded-lg">
+   745→                    <p className="text-xs text-muted-foreground">UniProt ID</p>
+   746→                    <p className="font-mono font-semibold">{selectedProtein.uniprotId}</p>
+   747→                  </div>
+   748→                  <div className="p-3 bg-muted/50 rounded-lg">
+   749→                    <p className="text-xs text-muted-foreground">Gene Name</p>
+   750→                    <p className="font-semibold">{selectedProtein.geneName}</p>
+   751→                  </div>
+   752→                  <div className="p-3 bg-muted/50 rounded-lg">
+   753→                    <p className="text-xs text-muted-foreground">Organism</p>
+   754→                    <p className="font-semibold text-sm">{selectedProtein.organism}</p>
+   755→                  </div>
+   756→                  <div className="p-3 bg-muted/50 rounded-lg">
+   757→                    <p className="text-xs text-muted-foreground">Sequence Length</p>
+   758→                    <p className="font-semibold">{selectedProtein.sequenceLength || '?'} amino acids</p>
+   759→                  </div>
+   760→                  <div className="p-3 bg-muted/50 rounded-lg">
+   761→                    <p className="text-xs text-muted-foreground">Coverage</p>
+   762→                    <Progress value={selectedProtein.coverage || 0} className="mt-1" />
+   763→                    <p className="text-xs text-right mt-1">{selectedProtein.coverage?.toFixed(1)}%</p>
+   764→                  </div>
+   765→                  <div className="p-3 bg-muted/50 rounded-lg">
+   766→                    <p className="text-xs text-muted-foreground">Resolution</p>
+   767→                    <ResolutionIndicator resolution={selectedProtein.resolution || 'Medium'} />
+   768→                  </div>
+   769→                  <div className="p-3 bg-muted/50 rounded-lg">
+   770→                    <p className="text-xs text-muted-foreground">Last Updated</p>
+   771→                    <p className="font-semibold text-sm">{selectedProtein.lastUpdated}</p>
+   772→                  </div>
+   773→                  <div className="p-3 bg-muted/50 rounded-lg">
+   774→                    <p className="text-xs text-muted-foreground">Entry ID</p>
+   775→                    <p className="font-mono text-sm">{selectedProtein.entryId}</p>
+   776→                  </div>
+   777→                </div>
+   778→
+   779→                <Separator />
+   780→
+   781→                {/* 3D Structure Visualization */}
+   782→                <div>
+   783→                  <h4 className="font-semibold mb-3 flex items-center gap-2">
+   784→                    <Dna className="h-5 w-5 text-purple-500" />
+   785→                    Predicted 3D Structure
+   786→                  </h4>
+   787→                  
+   788→                  {isLoadingStructure ? (
+   789→                    <div className="flex items-center justify-center h-[400px] bg-muted/30 rounded-lg">
+   790→                      <div className="text-center space-y-3">
+   791→                        <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-500" />
+   792→                        <p className="text-sm text-muted-foreground">Loading structure data...</p>
+   793→                      </div>
+   794→                    </div>
+   795→                  ) : (
+   796→                    <ProteinStructureViewer 
+   797→                      protein={selectedProtein}
+   798→                      confidenceScores={structureData?.plddtScores}
+   799→                    />
+   800→                  )}
+   801→
+   802→                  {/* Confidence Chart */}
+   803→                  {structureData?.plddtScores && (
+   804→                    <div className="mt-4">
+   805→                      <h5 className="text-sm font-medium mb-2">Per-Residue Confidence (pLDDT)</h5>
+   806→                      <ConfidenceChart scores={structureData.plddtScores} />
+   807→                    </div>
+   808→                  )}
+   809→                </div>
+   810→
+   811→                <Separator />
+   812→
+   813→                {/* Action Buttons */}
+   814→                <div className="flex flex-wrap gap-3">
+   815→                  <Button 
+   816→                    onClick={() => handleDownloadPDB(selectedProtein)}
+   817→                    className="flex items-center gap-2"
+   818→                  >
+   819→                    <Download className="h-4 w-4" />
+   820→                    Download PDB File
+   821→                  </Button>
+   822→                  
+   823→                  <Button 
+   824→                    variant="outline"
+   825→                    onClick={() => handleCopyCitation(selectedProtein)}
+   826→                    className="flex items-center gap-2"
+   827→                  >
+   828→                    <Copy className="h-4 w-4" />
+   829→                    Copy Citation
+   830→                  </Button>
+   831→                  
+   832→                  <Button 
+   833→                    variant="outline"
+   834→                    asChild
+   835→                  >
+   836→                    <a 
+   837→                      href={`https://alphafold.ebi.ac.uk/entry/${selectedProtein.uniprotId}`} 
+   838→                      target="_blank" 
+   839→                      rel="noopener noreferrer"
+   840→                      className="flex items-center gap-2"
+   841→                    >
+   842→                      <ExternalLink className="h-4 w-4" />
+   843→                      View on AlphaFold DB
+   844→                    </a>
+   845→                  </Button>
+   846→                </div>
+   847→              </CardContent>
+   848→            </Card>
+   849→          )}
+   850→        </TabsContent>
+   851→
+   852→        {/* FEATURED TAB */}
+   853→        <TabsContent value="featured" className="space-y-4 mt-4">
+   854→          <div>
+   855→            <h3 className="font-semibold mb-4 flex items-center gap-2">
+   856→              <Star className="h-5 w-5 text-yellow-500" />
+   857→              Featured Proteins (Well-Studied Examples)
+   858→            </h3>
+   859→            
+   860→            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+   861→              {featuredProteins.map((protein) => (
+   862→                <ProteinResultCard
+   863→                  key={protein.uniprotId}
+   864→                  protein={protein}
+   865→                  onViewDetails={handleViewDetails}
+   866→                  isSelected={selectedProtein?.uniprotId === protein.uniprotId}
+   867→                  onSelect={() => handleViewDetails(protein)}
+   868→                />
+   869→              ))}
+   870→            </div>
+   871→          </div>
+   872→        </TabsContent>
+   873→
+   874→        {/* BATCH QUERY TAB */}
+   875→        <TabsContent value="batch" className="space-y-4 mt-4">
+   876→          <Card>
+   877→            <CardHeader>
+   878→              <CardTitle className="text-lg">Batch Protein Lookup</CardTitle>
+   879→              <CardDescription>
+   880→                Look up multiple proteins at once by entering their UniProt IDs (one per line or comma-separated)
+   881→              </CardDescription>
+   882→            </CardHeader>
+   883→            <CardContent className="space-y-4">
+   884→              <Textarea
+   885→                placeholder={`P00533\nP04637\nP0DTC2\nP69905`}
+   886→                value={batchInput}
+   887→                onChange={(e) => setBatchInput(e.target.value)}
+   888→                rows={8}
+   889→                className="font-mono text-sm"
+   890→              />
+   891→              
+   892→              <div className="flex justify-between items-center">
+   893→                <span className="text-sm text-muted-foreground">
+   894→                  {batchInput.split(/[\n,]+/).filter(id => id.trim().length > 0).length} IDs entered
+   895→                </span>
+   896→                <Button 
+   897→                  onClick={handleBatchQuery}
+   898→                  disabled={isBatchProcessing || !batchInput.trim()}
+   899→                >
+   900→                  {isBatchProcessing ? (
+   901→                    <>
+   902→                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+   903→                      Processing...
+   904→                    </>
+   905→                  ) : (
+   906→                    <>
+   907→                      <Layers className="h-4 w-4 mr-2" />
+   908→                      Query All ({batchInput.split(/[\n,]+/).filter(id => id.trim().length > 0).length})
+   909→                    </>
+   910→                  )}
+   911→                </Button>
+   912→              </div>
+   913→            </CardContent>
+   914→          </Card>
+   915→
+   916→          {/* Batch Results */}
+   917→          {batchResults && (
+   918→            <Card>
+   919→              <CardHeader>
+   920→                <div className="flex justify-between items-center">
+   921→                  <CardTitle className="text-lg">Batch Results</CardTitle>
+   922→                  <div className="flex gap-2">
+   923→                    <Badge variant="outline" className="text-green-600">
+   924→                      ✓ {batchResults.successCount} successful
+   925→                    </Badge>
+   926→                    {batchResults.failureCount > 0 && (
+   927→                      <Badge variant="outline" className="text-red-600">
+   928→                        ✗ {batchResults.failureCount} failed
+   929→                      </Badge>
+   930→                    )}
+   931→                  </div>
+   932→                </div>
+   933→              </CardHeader>
+   934→              <CardContent>
+   935→                <div className="space-y-2">
+   936→                  {Array.from(batchResults.results.entries()).map(([id, protein]) => (
+   937→                    <div 
+   938→                      key={id}
+   939→                      className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer hover:bg-muted transition-colors"
+   940→                      onClick={() => handleViewDetails(protein)}
+   941→                    >
+   942→                      <div className="flex items-center gap-3">
+   943→                        <CheckCircle2 className="h-4 w-4 text-green-500" />
+   944→                        <span className="font-mono font-medium">{id}</span>
+   945→                        <span className="text-sm text-muted-foreground">
+   946→                          {protein.name || protein.geneName}
+   947→                        </span>
+   948→                      </div>
+   949→                      <div className="flex items-center gap-3">
+   950→                        <ConfidenceBadge score={protein.confidenceScore || 80} size="sm" />
+   951→                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+   952→                      </div>
+   953→                    </div>
+   954→                  ))}
+   955→                </div>
+   956→                
+   957→                <p className="text-xs text-muted-foreground mt-4 text-right">
+   958→                  Queried at: {new Date(batchResults.timestamp).toLocaleString()}
+   959→                </p>
+   960→              </CardContent>
+   961→            </Card>
+   962→          )}
+   963→        </TabsContent>
+   964→
+   965→        {/* ABOUT TAB */}
+   966→        <TabsContent value="about" className="space-y-4 mt-4">
+   967→          <div className="grid gap-6 md:grid-cols-2">
+   968→            <Card>
+   969→              <CardHeader>
+   970→                <CardTitle className="text-lg">What is AlphaFold?</CardTitle>
+   971→              </CardHeader>
+   972→              <CardContent className="space-y-3 text-sm">
+   973→                <p>
+   974→                  <strong>AlphaFold</strong> is an AI system developed by DeepMind that predicts 
+   975→                  protein structures from amino acid sequences. In November 2020, AlphaFold 2 won 
+   976→                  the CASP14 competition by a huge margin, effectively solving the 50-year-old 
+   977→                  &quot;protein folding problem&quot; — one of biology&apos;s greatest challenges.
+   978→                </p>
+   979→                <p>
+   980→                  The <strong>AlphaFold DB</strong>, hosted by EMBL-EBI, provides free access to 
+   981→                  predicted structures for nearly all cataloged proteins — over 200 million predictions 
+   982→                  covering virtually every known organism.
+   983→                </p>
+   984→                <p>
+   985→                  This technology has been recognized with numerous awards including the 
+   986→                  <strong>2024 Nobel Prize in Chemistry</strong>.
+   987→                </p>
+   988→              </CardContent>
+   989→            </Card>
+   990→
+   991→            <Card>
+   992→              <CardHeader>
+   993→                <CardTitle className="text-lg">Understanding Confidence Scores</CardTitle>
+   994→              </CardHeader>
+   995→              <CardContent className="space-y-3 text-sm">
+   996→                <div className="space-y-2">
+   997→                  <div className="flex items-center gap-2 p-2 bg-green-50 rounded">
+   998→                    <div className="w-4 h-4 rounded-full bg-green-500" />
+   999→                    <strong>&gt;= 90 (High):</strong> Very reliable prediction
+  1000→                  </div>
+  1001→                  <div className="flex items-center gap-2 p-2 bg-yellow-50 rounded">
+  1002→                    <div className="w-4 h-4 rounded-full bg-yellow-500" />
+  1003→                    <strong>70-90 (Medium):</strong> Generally reliable, use with caution
+  1004→                  </div>
+  1005→                  <div className="flex items-center gap-2 p-2 bg-red-50 rounded">
+  1006→                    <div className="w-4 h-4 rounded-full bg-red-500" />
+  1007→                    <strong>&lt; 70 (Low):</strong> Unstructured region or low confidence
+  1008→                  </div>
+  1009→                </div>
+  1010→                <p className="text-muted-foreground">
+  1011→                  The pLDDT (predicted Local Distance Difference Test) score indicates how confident 
+  1012→                  the model is in each residue&apos;s predicted position.
+  1013→                </p>
+  1014→              </CardContent>
+  1015→            </Card>
+  1016→
+  1017→            <Card>
+  1018→              <CardHeader>
+  1019→                <CardTitle className="text-lg">Free Tier Features</CardTitle>
+  1020→              </CardHeader>
+  1021→              <CardContent>
+  1022→                <ul className="space-y-2 text-sm">
+  1023→                  {[
+  1024→                    'Unlimited protein lookups by UniProt ID',
+  1025→                    'Keyword/gene name search',
+  1026→                    '3D structure visualization',
+  1027→                    'Per-residue confidence analysis',
+  1028→                    'PDB file downloads',
+  1029→                    'Batch queries (up to 100 per request)',
+  1030→                    'Academic citation generation',
+  1031→                    'Direct links to AlphaFold DB entries'
+  1032→                  ].map(feature => (
+  1033→                    <li key={feature} className="flex items-center gap-2">
+  1034→                      <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+  1035→                      {feature}
+  1036→                    </li>
+  1037→                  ))}
+  1038→                </ul>
+  1039→              </CardContent>
+  1040→            </Card>
+  1041→
+  1042→            <Card>
+  1043→              <CardHeader>
+  1044→                <CardTitle className="text-lg">Use Cases</CardTitle>
+  1045→              </CardHeader>
+  1046→              <CardContent>
+  1047→                <ul className="space-y-2 text-sm">
+  1048→                  {[
+  1049→                    'Drug target identification & validation',
+  1050→                    'Protein engineering & design',
+  1051→                    'Functional annotation of unknown proteins',
+  1052→                    'Evolutionary biology research',
+  1053→                    'Educational demonstrations',
+  1054→                    'Structural genomics projects',
+  1055→                    'Variant effect prediction',
+  1056→                    'Antibody design'
+  1057→                  ].map(useCase => (
+  1058→                    <li key={useCase} className="flex items-center gap-2">
+  1059→                      <ChevronRight className="h-4 w-4 text-blue-500 flex-shrink-0" />
+  1060→                      {useCase}
+  1061→                    </li>
+  1062→                  ))}
+  1063→                </ul>
+  1064→              </CardContent>
+  1065→            </Card>
+  1066→          </div>
+  1067→
+  1068→          {/* Citation Box */}
+  1069→          <Card className="bg-muted/30">
+  1070→            <CardHeader>
+  1071→              <CardTitle className="text-lg">How to Cite</CardTitle>
+  1072→            </CardHeader>
+  1073→            <CardContent>
+  1074→              <div className="p-4 bg-background rounded-lg border font-mono text-sm">
+  1075→                <p>Jumper, J., Evans, R., Pritzel, A., et al. (2021).</p>
+  1076→                <p>Highly accurate protein structure prediction with AlphaFold.</p>
+  1077→                <p><em>Nature, 596</em>(7873), 583-589.</p>
+  1078→                <p className="mt-2 text-muted-foreground">
+  1079→                  doi: 10.1038/s41586-021-03819-2
+  1080→                </p>
+  1081→              </div>
+  1082→              <p className="text-xs text-muted-foreground mt-2">
+  1083→                Also cite the AlphaFold Protein Structure Database when using specific predictions.
+  1084→              </p>
+  1085→            </CardContent>
+  1086→          </Card>
+  1087→        </TabsContent>
+  1088→      </Tabs>
+  1089→    </div>
+  1090→  );
+  1091→}
+  1092→
+  1093→// Export sub-components for reuse
+  1094→export {
+  1095→  ProteinStructureViewer,
+  1096→  ConfidenceBadge,
+  1097→  ConfidenceChart,
+  1098→  ProteinResultCard,
+  1099→};
+  1100→

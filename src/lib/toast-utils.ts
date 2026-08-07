@@ -74,7 +74,6 @@ export const showInfoToast = (title: string, description?: string) => {
 export const showLoadingToast = (title: string, description?: string): string => {
   const id = Date.now().toString();
   toast({
-    id,
     title,
     description,
     variant: 'warning',
@@ -85,14 +84,15 @@ export const showLoadingToast = (title: string, description?: string): string =>
 
 /**
  * Dismiss a specific toast by ID
+ * Note: This requires the underlying toast library to support dismiss
  */
-export const dismissToast = (id: string) => {
-  toast.dismiss(id);
-};
+// export const dismissToast = (id: string) => {
+//   toast.dismiss(id);
+// };
 
 /**
  * Dismiss all toasts
  */
-export const dismissAllToasts = () => {
-  toast.dismiss();
-};
+// export const dismissAllToasts = () => {
+//   toast.dismiss();
+// };

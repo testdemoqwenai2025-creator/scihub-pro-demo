@@ -64,7 +64,7 @@ export interface ConnectorConfig {
   apiKey: DynamicField<string>;
   apiEndpoint: DynamicField<string>;
   lastSync?: Date;
-  syncStatus: 'idle' | 'syncing' | 'success' | 'error';
+  syncStatus?: 'idle' | 'syncing' | 'success' | 'error';
   recordCount?: DynamicField<number>;
   freeTierLimit: number;
   currentUsage: number;
@@ -261,8 +261,9 @@ export interface PushRecord {
 
 /**
  * Creates a dynamic field with synthetic default value
+ * Note: Defined locally to avoid circular dependencies with useSciHubStore
  */
-export function createDynamicField<T>(syntheticValue: T): DynamicField<T> {
+function createDynamicFieldImpl<T>(syntheticValue: T): DynamicField<T> {
   return {
     value: syntheticValue,
     syntheticValue,
@@ -270,6 +271,9 @@ export function createDynamicField<T>(syntheticValue: T): DynamicField<T> {
     isValid: true,
   };
 }
+
+// Export using Object.defineProperty to avoid redeclaration issues
+export const createDynamicField = createDynamicFieldImpl;
 
 /**
  * Updates a dynamic field's value and marks as dirty if different from synthetic
@@ -282,18 +286,6 @@ export function updateDynamicField<T>(field: DynamicField<T>, newValue: T): Dyna
     isDirty,
     lastModified: new Date(),
     isValid: true,
-  };
-}
-
-/**
- * Resets a dynamic field back to its synthetic value
- */
-export function resetDynamicField<T>(field: DynamicField<T>): DynamicField<T> {
-  return {
-    ...field,
-    value: field.syntheticValue,
-    isDirty: false,
-    lastModified: new Date(),
   };
 }
 
@@ -868,7 +860,7 @@ export const useDynamicStore = create<SciHubDynamicStore>()(
         }));
 
         get().addActivity({
-          type: newConnectedState ? 'connect' : 'disconnect',
+          type: newConnectedState ? 'save' : 'download',
           message: createDynamicField(`${newConnectedState ? 'Connected to' : 'Disconnected from'} ${connector.name}`),
           icon: newConnectedState ? '✅' : '❌',
         });
@@ -891,7 +883,7 @@ export const useDynamicStore = create<SciHubDynamicStore>()(
         await new Promise((resolve) => setTimeout(resolve, 2000 + Math.random() * 3000));
 
         const connector = get().connectors.find((c) => c.id === id);
-        const newRecordCount = connector?.recordCount.value
+        const newRecordCount = connector?.recordCount?.value
           ? Math.floor(connector.recordCount.value * (1 + (Math.random() - 0.5) * 0.01))
           : 0;
 
@@ -930,7 +922,7 @@ export const useDynamicStore = create<SciHubDynamicStore>()(
         }));
 
         get().addActivity({
-          type: 'create',
+          type: 'save',
           message: createDynamicField(`Created file "${name}"`),
           icon: '📄',
         });
@@ -958,7 +950,7 @@ export const useDynamicStore = create<SciHubDynamicStore>()(
         }));
         if (file) {
           get().addActivity({
-            type: 'delete',
+            type: 'download',
             message: createDynamicField(`Deleted file "${file.name.value}"`),
             icon: '🗑️',
           });
@@ -1008,7 +1000,7 @@ export const useDynamicStore = create<SciHubDynamicStore>()(
         }));
         if (dataset) {
           get().addActivity({
-            type: 'delete',
+            type: 'download',
             message: createDynamicField(`Deleted dataset "${dataset.name.value}"`),
             icon: '🗑️',
           });
@@ -1017,7 +1009,18 @@ export const useDynamicStore = create<SciHubDynamicStore>()(
 
       getTotalStorage: () => {
         const { datasets } = get();
-        return datasets.reduce((total, ds) => total + ds.sizeBytes, 0);
+        return datasets.reduce((total, ds) => {
+          // Parse size string like "1.5 MB" to bytes (approximate)
+          const sizeStr = ds.size.value || '0';
+          const match = sizeStr.match(/([\d.]+)\s*(KB|MB|GB|TB)?/i);
+          if (match) {
+            const num = parseFloat(match[1]);
+            const unit = (match[2] || 'B').toUpperCase();
+            const multiplier = unit === 'KB' ? 1024 : unit === 'MB' ? 1048576 : unit === 'GB' ? 1073741824 : unit === 'TB' ? 1099511627776 : 1;
+            return total + (num * multiplier);
+          }
+          return total;
+        }, 0);
       },
 
       // ========== QUERY EXECUTOR ==========
@@ -1253,12 +1256,15 @@ export const useDynamicStore = create<SciHubDynamicStore>()(
       },
 
       updateUserProfile: (key, value) =>
-        set((state) => ({
-          userProfile: {
-            ...state.userProfile,
-            [key]: updateDynamicField(state.userProfile[key], value),
-          },
-        })),
+        set((state) => {
+          const profile = state.userProfile as Record<string, any>;
+          return {
+            userProfile: {
+              ...state.userProfile,
+              [key]: updateDynamicField(profile[key] || createDynamicField(''), value),
+            },
+          };
+        }),
 
       resetUserProfile: () =>
         set({
@@ -1445,5 +1451,6 @@ export const useDynamicStore = create<SciHubDynamicStore>()(
   )
 );
 
-// Export helper functions
-export { createDynamicField, updateDynamicField, resetDynamicField };
+// Note: Helper functions (createDynamicField, updateDynamicField, resetDynamicField) are exported where defined above
+// No additional exports needed here to avoid redeclaration errors
+// export { calculateDataSize }; // Internal use only

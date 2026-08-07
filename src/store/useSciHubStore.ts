@@ -20,6 +20,10 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { createDynamicField, updateDynamicField } from './useDynamicStore';
+
+// Helper function for generating unique IDs
+const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 
 // ============================================================================
 // COMPREHENSIVE TYPE SYSTEM
@@ -163,6 +167,17 @@ export interface LogEntry {
   timestamp: Date;
   level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' | 'SUCCESS';
   message: string;
+}
+
+export interface ComputeNode {
+  id: string;
+  name: string;
+  status: 'online' | 'offline' | 'maintenance';
+  cpuUsage: number;
+  memoryUsage: number;
+  gpuUsage: number;
+  gpus: number;
+  runningJobs: number;
 }
 
 // Workspace types
@@ -482,30 +497,13 @@ export const VOLUME_TIERS: VolumeTier[] = [
 // HELPER FUNCTIONS
 // ============================================================================
 
-export function createDynamicField<T>(value: T, synthetic = true): DynamicField<T> {
-  return {
-    value,
-    syntheticValue: synthetic ? value : (undefined as T),
-    isDirty: false,
-    isValid: true,
-  };
-}
+// Helper functions are now in useDynamicStore.ts to avoid duplication
+// Only import updateDynamicField (createDynamicField is defined locally in useDynamicStore)
+export { updateDynamicField } from './useDynamicStore';
 
-export function updateDynamicField<T>(field: DynamicField<T>, newValue: T): DynamicField<T> {
-  return {
-    ...field,
-    value: newValue,
-    isDirty: JSON.stringify(newValue) !== JSON.stringify(field.syntheticValue),
-    lastModified: new Date(),
-    isValid: true,
-  };
-}
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-}
-
-// ============================================================================
+/**
+ * Generates a unique ID for records
+ */
 // SYNTHETIC DATA GENERATORS (Pre-seeding for Zero Friction Onboarding)
 // ============================================================================
 
@@ -1185,7 +1183,7 @@ const generateSyntheticNotifications = (): NotificationItem[] => [
     read: true,
     actionUrl: '/data',
     actionLabel: 'Browse Data',
-    priority: 'info',
+    priority: 'low',
   },
 ];
 
@@ -1255,6 +1253,7 @@ interface SciHubStore {
   
   // === UI STATE ===
   sidebarOpen: boolean;
+  sidebarCollapsed: boolean;
   modals: Record<string, boolean>;
   loadingStates: Record<string, boolean>;
   errors: Record<string, string | null>;
@@ -1557,6 +1556,7 @@ export const useSciHubStore = create<SciHubStore>()(
 
       // UI State
       sidebarOpen: true,
+      sidebarCollapsed: false,
       modals: {},
       loadingStates: {},
       errors: {},
@@ -1619,9 +1619,7 @@ export const useSciHubStore = create<SciHubStore>()(
         set((state) => ({
           dashboardStats: {
             ...state.dashboardStats,
-            [key]: typeof value === 'number'
-              ? updateDynamicField(state.dashboardStats[key], value)
-              : state.dashboardStats[key],
+            [key]: updateDynamicField(state.dashboardStats[key] as any, value) as any,
           },
         })),
 
@@ -1630,7 +1628,7 @@ export const useSciHubStore = create<SciHubStore>()(
           activities: [
             {
               ...activity,
-              id: generateId(),
+              id: `activity-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
               timestamp: new Date(),
             },
             ...state.activities,
@@ -2350,14 +2348,14 @@ export const useSciHubStore = create<SciHubStore>()(
             
             set((state) => ({
               upgradePrompts: [...state.upgradePrompts, newPrompt],
-              currentVolumeTier,
+              currentVolumeTier: currentTier.tier as any,
             }));
             
             return { shouldPrompt: true, prompt: newPrompt };
           }
         }
         
-        set({ currentVolumeTier });
+        set({ currentVolumeTier: currentTier.tier as any });
         return { shouldPrompt: false };
       },
 
@@ -2605,7 +2603,7 @@ export const useSciHubStore = create<SciHubStore>()(
           });
           
           get().addActivity({
-            type: 'import',
+            type: 'upload',
             message: createDynamicField('Imported application state from backup'),
             icon: '📥',
           });
@@ -2620,7 +2618,7 @@ export const useSciHubStore = create<SciHubStore>()(
         // Reset all dynamic fields to their synthetic values
         console.log('Resetting all fields to original values');
         get().addActivity({
-          type: 'reset',
+          type: 'error_recovery',
           message: createDynamicField('Reset all fields to default values'),
           icon: '↩️',
         });

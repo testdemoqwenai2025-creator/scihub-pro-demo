@@ -15,7 +15,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
-import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+import { useSciHubStore } from '@/store/useSciHubStore';
+import { createDynamicField } from '@/store/useDynamicStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -1366,7 +1367,7 @@ export default function WorkspacePage() {
     });
 
     addActivity({
-      type: 'create',
+      type: 'save',
       message: createDynamicField(`Created file: ${newFileName}`),
       icon: '📄',
     });
@@ -1493,7 +1494,7 @@ export default function WorkspacePage() {
     });
 
     addActivity({
-      type: 'create',
+      type: 'save',
       message: createDynamicField(`Created file from template: ${template.name}`),
       icon: '📋',
     });
@@ -1507,7 +1508,7 @@ export default function WorkspacePage() {
 
     deleteWorkspaceFile(id);
     addActivity({
-      type: 'delete',
+      type: 'error_recovery',
       message: createDynamicField(`Deleted file: ${file.name.value}`),
       icon: '🗑️',
     });

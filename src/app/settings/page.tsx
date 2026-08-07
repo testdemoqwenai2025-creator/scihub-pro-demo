@@ -16,6 +16,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
 import { useSciHubStore, VOLUME_TIERS } from '@/store/useSciHubStore';
+import { createDynamicField } from '@/store/useDynamicStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -148,7 +149,7 @@ export default function SettingsPage() {
       
       if (success) {
         addActivity({
-          type: 'import',
+          type: 'upload',
           message: createDynamicField('Imported application backup'),
           icon: '📤',
         });
@@ -169,7 +170,7 @@ export default function SettingsPage() {
     resetAllFields();
     setShowResetConfirm(false);
     addActivity({
-      type: 'reset',
+      type: 'error_recovery',
       message: createDynamicField('Reset all fields to default values'),
       icon: '↩️',
     });
@@ -698,7 +699,7 @@ export default function SettingsPage() {
                   onClick={() => {
                     localStorage.clear();
                     addActivity({
-                      type: 'delete',
+                      type: 'error_recovery',
                       message: createDynamicField('Cleared local cache'),
                       icon: '🗑️',
                     });
@@ -745,13 +746,13 @@ export default function SettingsPage() {
                     <p className="text-xs text-muted-foreground">{item.desc}</p>
                   </div>
                   <Switch
-                    checked={preferences.notifications?.[item.key as string] ?? false}
+                    checked={preferences.notifications?.[item.key as keyof typeof preferences.notifications] ?? false}
                     onCheckedChange={(checked) => 
                       updatePreferences({
                         notifications: {
                           ...(preferences.notifications || {}),
                           [item.key]: checked,
-                        },
+                        } as any,
                       })
                     }
                   />

@@ -57,6 +57,9 @@ interface ConnectorConfig {
   subscriptionRequired?: boolean;
   subscriptionPrice?: string;
   subscriptionBenefits?: string[];
+  
+  // Additional metadata (optional)
+  scientificImpact?: string;
 }
 
 const CONNECTORS: ConnectorConfig[] = [

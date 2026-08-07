@@ -52,6 +52,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { showSuccessToast, showErrorToast, showInfoToast, showLoadingToast } from '@/lib/toast-utils';
+import { AlphaFoldConnector } from '@/components/AlphaFoldConnector';
 
 // ============ TYPES ============
 
@@ -857,6 +858,27 @@ export default function ConnectorsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* ============ FEATURED: ALPHA FOLD CONNECTOR ============ */}
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Badge className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0 px-3 py-1">
+                ⭐ FEATURED CONNECTOR
+              </Badge>
+              <span className="text-sm text-muted-foreground">
+                AI-Powered Protein Structure Prediction — FREE TIER
+              </span>
+            </div>
+            <a
+              href="/alphafold"
+              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1 font-medium"
+            >
+              Open Full Page →
+            </a>
+          </div>
+          <AlphaFoldConnector />
+        </div>
+
         {/* Main Tabs */}
         <Tabs defaultValue="free" className="space-y-6">
           <TabsList className="grid w-full max-w-2xl grid-cols-3 h-12">

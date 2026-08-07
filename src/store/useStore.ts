@@ -181,6 +181,7 @@ export interface QueryExecution {
   rows?: Record<string, any>[];
   error?: string;
   executionPlan?: ExecutionStep[];
+  logs?: string[];
 }
 
 export interface ExecutionStep {
@@ -339,6 +340,7 @@ export interface Comment {
   parentId?: string;
   replies: Comment[];
   likes: number;
+  likedBy: string[];
   isPinned: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -538,7 +540,7 @@ interface SciHubStore {
   // ============ DATA CACHE ============
   apiCache: Map<string, APICacheEntry>;
   setCachedData: <T>(key: string, data: T, ttl?: number) => T | null;
-  getCachedData: <T>(key: string): T | null;
+  getCachedData: <T>(key: string) => T | null;
   invalidateCache: (pattern?: string) => void;
   clearCache: () => void;
 
@@ -1400,6 +1402,8 @@ export const useSciHubStore = create<SciHubStore>()(
         set((state) => ({
           comments: [comment, ...state.comments],
         }));
+        
+        return comment;
       },
 
       likeComment: (commentId, userId) =>
@@ -1457,7 +1461,8 @@ export const useSciHubStore = create<SciHubStore>()(
 
           // Complete after simulated time
           setTimeout(() => {
-            const model = state.aethelModels.find(m => m.id === jobData.modelId);
+            const currentState = get();
+            const model = currentState.aethelModels.find(m => m.id === jobData.modelId);
             const response = generateMockAIResponse(model?.type || 'llm', jobData.prompt);
 
             set((state) => ({

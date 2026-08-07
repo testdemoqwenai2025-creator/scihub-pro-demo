@@ -13,7 +13,8 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
-import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+import { useSciHubStore } from '@/store/useSciHubStore';
+import { createDynamicField } from '@/store/useDynamicStore';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

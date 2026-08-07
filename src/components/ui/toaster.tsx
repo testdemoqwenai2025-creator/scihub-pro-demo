@@ -12,7 +12,7 @@ import {
 import { CheckCircle2, XCircle, AlertTriangle, Info } from "lucide-react"
 
 // Icon mapping for different variants
-const VariantIcon = ({ variant }: { variant?: string }) => {
+const VariantIcon = ({ variant }: { variant?: string | null }) => {
   switch (variant) {
     case "success":
       return <CheckCircle2 className="h-5 w-5 text-green-600" />

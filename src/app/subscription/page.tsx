@@ -212,7 +212,8 @@ export default function SubscriptionPage() {
           // Reset form
           setFormData({
             email: '', name: '', institution: '', role: '',
-            useCase: '', message: '', agreeToTerms: false, newsletterOptIn: true
+            useCase: '', message: '', agreeToTerms: false, newsletterOptIn: true,
+            tier: 'pro'
           });
         }, 3000);
       } else {

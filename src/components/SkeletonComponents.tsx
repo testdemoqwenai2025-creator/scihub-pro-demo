@@ -126,11 +126,13 @@ export function ChartSkeleton() {
       <Skeleton className="h-5 w-40" />
       <div className="flex items-end gap-2 h-48">
         {Array.from({ length: 12 }).map((_, i) => (
-          <Skeleton 
+          <div 
             key={i} 
-            className="flex-1 rounded-t" 
+            className="flex-1 rounded-t overflow-hidden" 
             style={{ height: `${Math.random() * 100}%` }}
-          />
+          >
+            <Skeleton className="w-full h-full" />
+          </div>
         ))}
       </div>
       <div className="flex justify-between">
@@ -240,10 +242,12 @@ export function WorkspaceSkeleton() {
           {Array.from({ length: 15 }).map((_, i) => (
             <div key={i} className="flex items-center gap-2">
               <Skeleton className="h-4 w-8" />
-              <Skeleton 
-                className="h-4" 
-                style={{ width: `${Math.random() * 60 + 30}%` }} 
-              />
+              <div 
+                className="flex-1 overflow-hidden" 
+                style={{ width: `${Math.random() * 60 + 30}%` }}
+              >
+                <Skeleton className="h-4 w-full" />
+              </div>
             </div>
           ))}
         </div>

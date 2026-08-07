@@ -55,6 +55,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Data Lake', href: '/data', icon: '💾', description: 'Dataset management', badge: '4 datasets' },
       { label: 'Connectors', href: '/connectors', icon: '🔗', description: '12 Free APIs + Premium', badge: 'NEW', badgeVariant: 'default' },
+      { label: 'AlphaFold', href: '/alphafold', icon: '🧬', description: 'Protein structure AI (FREE)', badge: 'FREE', badgeVariant: 'secondary' },
       { label: 'Search', href: '/query', icon: '🔍', description: 'Literature search' },
       { label: 'Knowledge Graph', href: '/knowledge', icon: '🕸️', description: 'Visual exploration' },
     ]

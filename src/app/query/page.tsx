@@ -18,7 +18,8 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from '@/i18n/useTranslation';
-import { useSciHubStore, createDynamicField } from '@/store/useSciHubStore';
+import { useSciHubStore } from '@/store/useSciHubStore';
+import { createDynamicField } from '@/store/useDynamicStore';
 import { searchScientificLiterature, type SearchResult as APISearchResult } from '@/services/scientificAPI';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -94,6 +95,8 @@ interface SearchResult {
   url?: string;
   publisher?: string;
   subjects?: string[];
+  volume?: number;
+  pages?: string;
 }
 
 interface SearchHistoryItem {
@@ -102,6 +105,7 @@ interface SearchHistoryItem {
   resultCount: number;
   timestamp: Date;
   filters?: Partial<SearchFilters>;
+  source?: string;
 }
 
 interface SearchState {
@@ -1172,7 +1176,7 @@ export default function QueryPage() {
     const bibtex = results.map(r => {
       const citeKey = r.doi 
         ? r.doi.replace(/[/.]/g, '').substring(0, 20)
-        : r.authors[0]?.split(' ').pop()?.toLowerCase() + r.year;
+        : (r.authors?.[0]?.split(' ').pop()?.toLowerCase() || 'unknown') + r.year;
       
       return `@article{${citeKey},
   title = {${r.title}},
