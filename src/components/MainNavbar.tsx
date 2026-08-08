@@ -58,7 +58,14 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'AlphaFold', href: '/alphafold', icon: '🧬', description: 'Protein structure AI (FREE)', badge: 'FREE', badgeVariant: 'secondary' },
       { label: 'Search', href: '/query', icon: '🔍', description: 'Literature search' },
       { label: 'Knowledge Graph', href: '/knowledge', icon: '🕸️', description: 'Visual exploration' },
-      { label: 'Paper Playlist', href: '/playlist', icon: '🎵', description: 'ML-powered paper curation', badge: 'NEW', badgeVariant: 'secondary' },
+    ]
+  },
+  {
+    label: '🎵 Playlist',
+    items: [
+      { label: 'Paper Playlist', href: '/playlist', icon: '🎵', description: 'ML-powered paper curation & recommendations', badge: 'NEW', badgeVariant: 'secondary' },
+      { label: 'Paper Battle Mode', href: '/battle', icon: '⚔️', description: 'AI Agent debate system' },
+      { label: 'Hot Papers Arena', href: '/hot', icon: '🔥', description: 'Trending papers with AI analysis', badge: 'HOT' },
     ]
   },
   {
