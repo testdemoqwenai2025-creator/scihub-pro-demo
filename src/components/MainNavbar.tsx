@@ -64,7 +64,7 @@ const NAV_SECTIONS: NavSection[] = [
     label: '🎵 Playlist',
     items: [
       { label: 'Paper Playlist', href: '/playlist', icon: '🎵', description: 'ML-powered paper curation & recommendations', badge: 'NEW', badgeVariant: 'secondary' },
-      { label: 'Paper Battle Mode', href: '/battle', icon: '⚔️', description: 'AI Agent debate system' },
+      { label: 'Paper Battle Mode ⚡', href: '/paper-battle', icon: '⚔️', description: 'Dual AI debate system for deep insights', badge: 'NEW', badgeVariant: 'destructive' },
       { label: 'Hot Papers Arena', href: '/hot', icon: '🔥', description: 'Trending papers with AI analysis', badge: 'HOT' },
       { label: 'Computation Hub', href: '/compute-hub', icon: '⚡', description: 'Quantum, HPC, AI & Bioinformatics tools', badge: 'NEW', badgeVariant: 'default' },
     ]
