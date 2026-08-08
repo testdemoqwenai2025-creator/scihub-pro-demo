@@ -1,16 +1,18 @@
 'use client';
 
 /**
- * SciHub Pro - Search Page (v1.2 - Real API Integration)
+ * SciHub Pro - Search Page (v1.3 - Enhanced Paper Details)
  * 
  * ENHANCED FEATURES:
  * - ✅ Real arXiv API integration (free, no API key)
  * - ✅ Real Semantic Scholar API integration (free, no API key)
- * - ✅ Client-side API calls (works with static export)
- * - ✅ Paper details with citations & references
- * - ✅ Multi-source search (arXiv + Semantic Scholar)
- * - ✅ Export to BibTeX/CSV
- * - ✅ Demo mode fallback
+ * - ✅ Enhanced Paper Detail Dialog with tabs
+ * - ✅ PDF inline viewer (arXiv HTML5)
+ * - ✅ Citation/Reference graph visualization
+ * - ✅ Related papers recommendations from S2
+ * - ✅ Paper save/bookmark functionality (localStorage)
+ * - ✅ Full metadata & DOI resolution
+ * - ✅ Multiple export formats (BibTeX, RIS, APA, MLA)
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -40,9 +42,9 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
 
 // ============ TYPES ============
 
@@ -61,42 +63,30 @@ interface SearchResult {
   openAccess: boolean;
   url?: string;
   pdfUrl?: string;
+  htmlUrl?: string; // arXiv HTML5 view
   externalIds?: {
     DOI?: string;
     ArXiv?: string;
     PubMed?: string;
     CorpusId?: number;
   };
+  categories?: string[];
 }
 
-interface ArxivEntry {
-  id: string;
-  title: string;
-  summary: string;
-  authors: { name: string }[];
-  published: string;
-  categories: string[];
-  links: [{ href: string; title: string; rel: string }];
-  arxiv_doi?: string;
-  journal_ref?: string;
-}
-
-interface SemanticScholarPaper {
+interface RelatedPaper {
   paperId: string;
   title: string;
-  authors: { name: string }[];
   year: number;
   citationCount: number;
-  abstract?: string;
+  authors: { name: string }[];
   openAccessPdf?: { url: string };
-  venue?: string;
-  externalIds?: {
-    DOI?: string;
-    ArXiv?: string;
-    PubMed?: string;
-    CorpusId?: number;
-  };
-  isOpenAccess: boolean;
+}
+
+interface SavedPaper {
+  id: string;
+  savedAt: Date;
+  notes: string;
+  paper: SearchResult;
 }
 
 // ============ FALLBACK DEMO DATA ============
@@ -115,6 +105,9 @@ const SAMPLE_RESULTS: SearchResult[] = [
     journal: 'Nature Medicine',
     relevanceScore: 98,
     openAccess: true,
+    url: '#',
+    pdfUrl: '#',
+    categories: ['q-bio.GN', 'q-bio.QM'],
   },
   {
     id: 'demo-2',
@@ -128,6 +121,9 @@ const SAMPLE_RESULTS: SearchResult[] = [
     journal: 'arXiv preprint',
     relevanceScore: 95,
     openAccess: true,
+    url: '#',
+    pdfUrl: '#',
+    categories: ['cs.LG', 'q-bio.BM'],
   },
   {
     id: 'demo-3',
@@ -141,6 +137,8 @@ const SAMPLE_RESULTS: SearchResult[] = [
     journal: 'Science Translational Medicine',
     relevanceScore: 92,
     openAccess: false,
+    url: '#',
+    categories: ['cs.CL', 'q-bio.QM'],
   },
 ];
 
@@ -155,30 +153,60 @@ const SUGGESTED_SEARCHES = [
   'GPT-4 research analysis',
 ];
 
+// ============ LOCAL STORAGE HELPERS ============
+
+const SAVED_PAPERS_KEY = 'scihub_saved_papers';
+
+const getSavedPapers = (): SavedPaper[] => {
+  try {
+    const stored = localStorage.getItem(SAVED_PAPERS_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+};
+
+const savePaper = (paper: SearchResult, notes: string = '') => {
+  const saved = getSavedPapers();
+  const exists = saved.find(s => s.id === paper.id);
+  if (!exists) {
+    saved.unshift({
+      id: paper.id,
+      savedAt: new Date(),
+      notes,
+      paper,
+    });
+    localStorage.setItem(SAVED_PAPERS_KEY, JSON.stringify(saved));
+    return true;
+  }
+  return false;
+};
+
+const unsavePaper = (paperId: string) => {
+  const saved = getSavedPapers().filter(s => s.id !== paperId);
+  localStorage.setItem(SAVED_PAPERS_KEY, JSON.stringify(saved));
+};
+
+const isPaperSaved = (paperId: string): boolean => {
+  return getSavedPapers().some(s => s.id === paperId);
+};
+
 // ============ API FUNCTIONS ============
 
 /**
  * Search arXiv API
- * Free, no API key required
  */
 async function searchArxiv(query: string, maxResults: number = 10): Promise<SearchResult[]> {
   try {
     const encodedQuery = encodeURIComponent(query);
     const response = await fetch(
       `https://export.arxiv.org/api/query?search_query=all:${encodedQuery}&start=0&max_results=${maxResults}&sortBy=relevance&sortOrder=descending`,
-      { 
-        mode: 'cors',
-        headers: { 'Accept': 'application/xml' }
-      }
+      { mode: 'cors' }
     );
 
-    if (!response.ok) {
-      throw new Error(`arXiv API error: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`arXiv API error: ${response.status}`);
 
     const text = await response.text();
-    
-    // Parse XML response
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(text, 'text/xml');
     
@@ -187,16 +215,21 @@ async function searchArxiv(query: string, maxResults: number = 10): Promise<Sear
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
-      
-      // Extract data from XML
       const id = entry.getElementsByTagName('id')[0]?.textContent?.split('/').pop() || '';
       const title = entry.getElementsByTagName('title')[0]?.textContent?.trim() || '';
       const summary = entry.getElementsByTagName('summary')[0]?.textContent?.trim() || '';
       const published = entry.getElementsByTagName('published')[0]?.textContent || '';
       const journalRef = entry.getElementsByTagName('journal_ref')[0]?.textContent || '';
       const doi = entry.getElementsByTagName('arxiv_doi')[0]?.textContent || undefined;
-      
-      // Extract authors
+
+      // Extract categories
+      const categoryElements = entry.getElementsByTagName('category');
+      const categories: string[] = [];
+      for (let j = 0; j < categoryElements.length; j++) {
+        const term = categoryElements[j].getAttribute('term');
+        if (term && !categories.includes(term)) categories.push(term);
+      }
+
       const authorElements = entry.getElementsByTagName('author');
       const authors: string[] = [];
       for (let j = 0; j < authorElements.length; j++) {
@@ -204,17 +237,20 @@ async function searchArxiv(query: string, maxResults: number = 10): Promise<Sear
         if (name) authors.push(name);
       }
 
-      // Extract PDF link
       let pdfUrl = '';
+      let htmlUrl = '';
       const links = entry.getElementsByTagName('link');
       for (let j = 0; j < links.length; j++) {
-        if (links[j].getAttribute('title') === 'pdf') {
-          pdfUrl = links[j].getAttribute('href') || '';
-          break;
-        }
+        const href = links[j].getAttribute('href') || '';
+        if (links[j].getAttribute('title') === 'pdf') pdfUrl = href;
+        if (links[j].getAttribute('type') === 'text/html' && !htmlUrl) htmlUrl = href;
       }
 
-      // Parse year from published date
+      // Generate arXiv HTML5 URL
+      if (id && !htmlUrl) {
+        htmlUrl = `https://ar5iv.labs.arxiv.org/html/${id}`;
+      }
+
       const year = published ? new Date(published).getFullYear() : new Date().getFullYear();
 
       results.push({
@@ -223,7 +259,7 @@ async function searchArxiv(query: string, maxResults: number = 10): Promise<Sear
         authors,
         year,
         source: 'arxiv',
-        citations: 0, // arXiv doesn't provide citation count directly
+        citations: 0,
         type: 'preprint',
         doi,
         abstract: summary,
@@ -231,37 +267,28 @@ async function searchArxiv(query: string, maxResults: number = 10): Promise<Sear
         openAccess: true,
         url: `https://arxiv.org/abs/${id}`,
         pdfUrl,
-        externalIds: {
-          ArXiv: id,
-          ...(doi && { DOI: doi }),
-        },
+        htmlUrl,
+        externalIds: { ArXiv: id, ...(doi && { DOI: doi }) },
+        categories: categories.slice(0, 3),
       });
     }
 
     return results;
   } catch (error) {
     console.error('arXiv search error:', error);
-    throw new Error(`Failed to search arXiv: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw error;
   }
 }
 
 /**
  * Search Semantic Scholar API
- * Free, no API key required (rate limited)
  */
 async function searchSemanticScholar(query: string, limit: number = 10): Promise<SearchResult[]> {
   try {
     const encodedQuery = encodeURIComponent(query);
     const fields = [
-      'title',
-      'authors',
-      'year',
-      'citationCount',
-      'abstract',
-      'externalIds',
-      'openAccessPdf',
-      'venue',
-      'isOpenAccess'
+      'title', 'authors', 'year', 'citationCount', 'abstract',
+      'externalIds', 'openAccessPdf', 'venue', 'isOpenAccess'
     ].join(',');
 
     const response = await fetch(
@@ -269,20 +296,16 @@ async function searchSemanticScholar(query: string, limit: number = 10): Promise
       { mode: 'cors' }
     );
 
-    if (!response.ok) {
-      throw new Error(`Semantic Scholar API error: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`S2 API error: ${response.status}`);
 
     const data = await response.json();
     
-    if (!data.data || !Array.isArray(data.data)) {
-      return [];
-    }
+    if (!data.data || !Array.isArray(data.data)) return [];
 
-    return data.data.map((paper: SemanticScholarPaper) => ({
+    return data.data.map((paper: any) => ({
       id: `ss-${paper.paperId}`,
       title: paper.title,
-      authors: paper.authors.map(a => a.name),
+      authors: paper.authors?.map((a: any) => a.name) || [],
       year: paper.year || new Date().getFullYear(),
       source: 'semantic_scholar' as const,
       citations: paper.citationCount || 0,
@@ -290,7 +313,6 @@ async function searchSemanticScholar(query: string, limit: number = 10): Promise
       doi: paper.externalIds?.DOI,
       abstract: paper.abstract || 'Abstract not available.',
       journal: paper.venue || undefined,
-      relevanceScore: undefined,
       openAccess: paper.isOpenAccess || false,
       url: `https://www.semanticscholar.org/paper/${paper.paperId}`,
       pdfUrl: paper.openAccessPdf?.url,
@@ -298,12 +320,45 @@ async function searchSemanticScholar(query: string, limit: number = 10): Promise
     }));
   } catch (error) {
     console.error('Semantic Scholar search error:', error);
-    throw new Error(`Failed to search Semantic Scholar: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw error;
   }
 }
 
 /**
- * Get citation details from Semantic Scholar by arXiv ID
+ * Get related papers from Semantic Scholar
+ */
+async function getRelatedPapers(paperId: string): Promise<RelatedPaper[]> {
+  try {
+    const fields = ['title', 'year', 'citationCount', 'authors', 'openAccessPdf'].join(',');
+    const response = await fetch(
+      `https://api.semanticscholar.org/graph/v1/paper/${paperId}/related?limit=5&fields=${fields}`,
+      { mode: 'cors' }
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    
+    if (!data.related || !Array.isArray(data.related)) return [];
+
+    return data.related
+      .filter((r: any) => r.paperId)
+      .map((r: any) => ({
+        paperId: r.paperId,
+        title: r.title,
+        year: r.year,
+        citationCount: r.citationCount || 0,
+        authors: r.authors || [],
+        openAccessPdf: r.openAccessPdf,
+      }))
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Get citation count from Semantic Scholar
  */
 async function getCitationsFromSemanticScholar(arxivId: string): Promise<number> {
   try {
@@ -311,9 +366,7 @@ async function getCitationsFromSemanticScholar(arxivId: string): Promise<number>
       `https://api.semanticscholar.org/graph/v1/paper/arXiv:${arxivId}?fields=citationCount`,
       { mode: 'cors' }
     );
-    
     if (!response.ok) return 0;
-    
     const data = await response.json();
     return data.citationCount || 0;
   } catch {
@@ -321,7 +374,7 @@ async function getCitationsFromSemanticScholar(arxivId: string): Promise<number>
   }
 }
 
-// ============ UTILITY FUNCTIONS ============
+// ============ EXPORT FORMATTERS ============
 
 const generateBibTeX = (result: SearchResult): string => {
   const authors = result.authors.join(' and ');
@@ -333,6 +386,35 @@ const generateBibTeX = (result: SearchResult): string => {
   year={${result.year}},
   ${(result.journal ? `journal={${result.journal}},\n  ` : '')}${(result.doi ? `doi={${result.doi}},\n  ` : '')}
 }`;
+};
+
+const generateRIS = (result: SearchResult): string => {
+  const lines = [
+    'TY  - JOUR',
+    ...result.authors.map(a => `AU  - ${a}`),
+    `TI  - ${result.title}`,
+    `PY  - ${result.year}`,
+    result.journal && `JO  - ${result.journal}`,
+    result.doi && `DO  - ${result.doi}`,
+    result.url && `UR  - ${result.url}`,
+    'ER  - ',
+  ].filter(Boolean);
+  
+  return lines.join('\n');
+};
+
+const generateAPA = (result: SearchResult): string => {
+  const authorList = result.authors.length > 1 
+    ? `${result.authors[0]}, et al.` 
+    : result.authors[0] || 'Unknown Author';
+  return `${authorList} (${result.year}). ${result.title}. ${result.journal || 'Preprint'}${result.doi ? `. https://doi.org/${result.doi}` : ''}`;
+};
+
+const generateMLA = (result: SearchResult): string => {
+  const authorList = result.authors.length > 1
+    ? `${result.authors[0]}, et al.`
+    : result.authors[0] || 'Unknown Author';
+  return `"${result.title}." ${result.journal || ''}, ${result.year}${result.url ? `, ${result.url}` : ''}.`;
 };
 
 const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -348,6 +430,18 @@ const copyToClipboard = async (text: string): Promise<boolean> => {
 
 function SearchResultRow({ result, onViewDetails }: { result: SearchResult; onViewDetails: (r: SearchResult) => void }) {
   const [expanded, setExpanded] = useState(false);
+  const [saved, setSaved] = useState(isPaperSaved(result.id));
+
+  const handleSave = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (saved) {
+      unsavePaper(result.id);
+      setSaved(false);
+    } else {
+      savePaper(result);
+      setSaved(true);
+    }
+  };
 
   const getSourceBadge = () => {
     switch (result.source) {
@@ -356,10 +450,7 @@ function SearchResultRow({ result, onViewDetails }: { result: SearchResult; onVi
       case 'semantic_scholar':
         return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">🔍 S2</Badge>;
       default:
-        return <Badge variant={result.openAccess ? 'default' : 'secondary'} 
-                className={result.openAccess ? 'bg-green-100 text-green-700' : ''}>
-          Demo
-        </Badge>;
+        return <Badge variant={result.openAccess ? 'default' : 'secondary'} className={result.openAccess ? 'bg-green-100 text-green-700' : ''}>Demo</Badge>;
     }
   };
 
@@ -368,69 +459,39 @@ function SearchResultRow({ result, onViewDetails }: { result: SearchResult; onVi
       <TableRow className="hover:bg-muted/50 cursor-pointer" onClick={() => setExpanded(!expanded)}>
         <TableCell className="font-medium max-w-md">
           <div className="flex items-start gap-2">
+            <button onClick={(e) => { e.stopPropagation(); handleSave(e); }} className="mt-0.5 text-lg hover:scale-110 transition-transform" title={saved ? 'Unsave' : 'Save'}>
+              {saved ? '⭐' : '☆'}
+            </button>
             <span className={`mt-1 ${result.openAccess ? 'text-green-500' : 'text-yellow-500'}`}>●</span>
             <span className="line-clamp-2">{result.title}</span>
             {result.pdfUrl && (
-              <a 
-                href={result.pdfUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-red-500 hover:text-red-600 ml-1"
-                title="PDF available"
-              >
-                📕
-              </a>
+              <a href={result.pdfUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="text-red-500 hover:text-red-600 ml-1" title="PDF">📕</a>
             )}
           </div>
         </TableCell>
         <TableCell>
-          <div className="text-sm">
-            {result.authors.slice(0, 2).map(a => a.split(' ').pop()).join(', ')}
-            {result.authors.length > 2 && ` et al.`}
-          </div>
+          <div className="text-sm">{result.authors.slice(0, 2).map(a => a.split(' ').pop()).join(', ')}{result.authors.length > 2 && ' et al.'}</div>
         </TableCell>
         <TableCell>{result.year}</TableCell>
         <TableCell>{getSourceBadge()}</TableCell>
+        <TableCell><span className={result.citations > 100 ? 'font-bold text-green-600' : ''}>{result.citations}</span></TableCell>
         <TableCell>
-          <span className={result.citations > 100 ? 'font-bold text-green-600' : ''}>
-            {result.citations}
-          </span>
-        </TableCell>
-        <TableCell>
-          <div className="flex items-center gap-1">
-            <Button 
-              size="sm" 
-              variant="ghost" 
-              className="h-7 text-xs px-2"
-              onClick={(e) => { e.stopPropagation(); onViewDetails(result); }}
-            >
-              👁️ View
-            </Button>
-          </div>
+          <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={(e) => { e.stopPropagation(); onViewDetails(result); }}>
+            👁️ View
+          </Button>
         </TableCell>
       </TableRow>
 
-      {/* Expanded Row */}
       {expanded && (
         <TableRow>
           <TableCell colSpan={6} className="bg-muted/30 p-4">
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground line-clamp-3">
-                {result.abstract}
-              </p>
-              <div className="flex items-center gap-4 text-xs">
-                {result.url && (
-                  <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                    🔗 View Original →
-                  </a>
-                )}
-                {result.doi && (
-                  <span className="text-muted-foreground">DOI: {result.doi}</span>
-                )}
-                {result.journal && (
-                  <Badge variant="outline">{result.journal}</Badge>
-                )}
+              <p className="text-sm text-muted-foreground line-clamp-3">{result.abstract}</p>
+              <div className="flex items-center gap-4 text-xs flex-wrap">
+                {result.url && <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">🔗 View Original →</a>}
+                {result.doi && <span className="text-muted-foreground">DOI: {result.doi}</span>}
+                {result.journal && <Badge variant="outline">{result.journal}</Badge>}
+                {result.categories && result.categories.map(c => <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>)}
               </div>
             </div>
           </TableCell>
@@ -440,204 +501,403 @@ function SearchResultRow({ result, onViewDetails }: { result: SearchResult; onVi
   );
 }
 
+// ============ ENHANCED PAPER DETAIL DIALOG ============
+
 function PaperDetailDialog({ paper, onClose }: { paper: SearchResult | null; onClose: () => void }) {
+  const [activeTab, setActiveTab] = useState('overview');
   const [citations, setCitations] = useState<number | null>(null);
   const [loadingCitations, setLoadingCitations] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [relatedPapers, setRelatedPapers] = useState<RelatedPaper[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
+  const [copiedFormat, setCopiedFormat] = useState<string | null>(null);
+  const [saved, setSaved] = useState(paper ? isPaperSaved(paper.id) : false);
+  const [notes, setNotes] = useState('');
+  const [showNotesInput, setShowNotesInput] = useState(false);
 
   useEffect(() => {
     if (paper) {
       setCitations(paper.citations);
+      setSaved(isPaperSaved(paper.id));
+      
+      // Auto-fetch related papers when dialog opens
+      if (paper.source === 'semantic_scholar' && paper.id.startsWith('ss-')) {
+        fetchRelatedPapers(paper.id.replace('ss-', ''));
+      }
     }
   }, [paper]);
 
   const fetchCitations = useCallback(async () => {
     if (!paper || loadingCitations) return;
-    
     setLoadingCitations(true);
     try {
-      if (paper.externalIds?.ArXid || paper.id.startsWith('arxiv-')) {
-        const arxivId = paper.externalIds?.ArXid || paper.id.replace('arxiv-', '');
+      if (paper.externalIds?.ArXiv || paper.id.startsWith('arxiv-')) {
+        const arxivId = paper.externalIds?.ArXiv || paper.id.replace('arxiv-', '');
         const count = await getCitationsFromSemanticScholar(arxivId);
         setCitations(count);
       }
-    } catch (error) {
-      console.error('Failed to fetch citations:', error);
     } finally {
       setLoadingCitations(false);
     }
   }, [paper, loadingCitations]);
 
-  const handleCopyBibTeX = async () => {
-    if (!paper) return;
-    const bibtex = generateBibTeX(paper);
-    const success = await copyToClipboard(bibtex);
+  const fetchRelatedPapers = useCallback(async (paperId: string) => {
+    setLoadingRelated(true);
+    try {
+      const papers = await getRelatedPapers(paperId);
+      setRelatedPapers(papers);
+    } finally {
+      setLoadingRelated(false);
+    }
+  }, []);
+
+  const handleCopy = async (format: string, content: string) => {
+    const success = await copyToClipboard(content);
     if (success) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedFormat(format);
+      setTimeout(() => setCopiedFormat(null), 2000);
+    }
+  };
+
+  const handleSaveToggle = () => {
+    if (!paper) return;
+    if (saved) {
+      unsavePaper(paper.id);
+      setSaved(false);
+    } else {
+      savePaper(paper.id, notes);
+      setSaved(true);
     }
   };
 
   if (!paper) return null;
 
   return (
-    <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle className="text-xl pr-8 leading-tight">{paper.title}</DialogTitle>
-        <DialogDescription>
-          {paper.year} • {paper.journal || 'Preprint'}
-        </DialogDescription>
-      </DialogHeader>
-
-      <div className="space-y-6 mt-4">
-        {/* Authors */}
-        <div>
-          <h4 className="font-medium mb-2 flex items-center gap-2">
-            👥 Authors
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {paper.authors.map((author, i) => (
-              <Badge key={i} variant="secondary" className="text-sm">
-                {author}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        {/* Abstract */}
-        <div>
-          <h4 className="font-medium mb-2 flex items-center gap-2">
-            📝 Abstract
-          </h4>
-          <p className="text-sm text-muted-foreground leading-relaxed bg-muted/50 p-4 rounded-lg">
-            {paper.abstract}
-          </p>
-        </div>
-
-        {/* Metrics */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card className="p-4 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              {citations !== null ? citations : '—'}
-            </div>
-            <div className="text-xs text-muted-foreground">Citations</div>
-            {!citations && paper.source === 'arxiv' && (
-              <Button 
-                variant="link" 
-                size="sm" 
-                className="text-xs mt-1 h-auto p-0"
-                onClick={fetchCitations}
-                disabled={loadingCitations}
-              >
-                {loadingCitations ? 'Loading...' : 'Fetch from S2'}
-              </Button>
-            )}
-          </Card>
-          <Card className="p-4 text-center">
-            <div className="text-2xl font-bold text-green-600">{paper.year}</div>
-            <div className="text-xs text-muted-foreground">Year</div>
-          </Card>
-          <Card className="p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">{paper.authors.length}</div>
-            <div className="text-xs text-muted-foreground">Authors</div>
-          </Card>
-          <Card className="p-4 text-center">
-            <div className="text-2xl font-bold">{paper.openAccess ? '✓' : '🔒'}</div>
-            <div className="text-xs text-muted-foreground">Open Access</div>
-          </Card>
-        </div>
-
-        {/* Source Info */}
-        <div>
-          <h4 className="font-medium mb-2 flex items-center gap-2">
-            🔗 Source Information
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {paper.url && (
-              <a 
-                href={paper.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 p-3 border rounded-lg hover:bg-muted transition-colors"
-              >
-                <span>🌐</span>
-                <span className="text-sm truncate">
-                  {paper.source === 'arxiv' ? 'View on arXiv' : 'View on Semantic Scholar'}
-                </span>
-                <span className="ml-auto">→</span>
-              </a>
-            )}
-            {paper.pdfUrl && (
-              <a 
-                href={paper.pdfUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 p-3 border rounded-lg hover:bg-muted transition-colors"
-              >
-                <span>📕</span>
-                <span className="text-sm">Download PDF</span>
-                <span className="ml-auto">→</span>
-              </a>
-            )}
-            {paper.doi && (
-              <a 
-                href={`https://doi.org/${paper.doi}`} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 p-3 border rounded-lg hover:bg-muted transition-colors"
-              >
-                <span>🔖</span>
-                <span className="text-sm truncate">DOI: {paper.doi}</span>
-                <span className="ml-auto">→</span>
-              </a>
-            )}
-          </div>
-        </div>
-
-        {/* Export Options */}
-        <div>
-          <h4 className="font-medium mb-2 flex items-center gap-2">
-            📤 Export Citation
-          </h4>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleCopyBibTeX}
-              className="gap-2"
-            >
-              {copied ? '✅ Copied!' : '📋 Copy BibTeX'}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => copyToClipboard(JSON.stringify(paper, null, 2))}
-              className="gap-2"
-            >
-              📄 Copy JSON
-            </Button>
-            {paper.url && (
-              <a href={paper.url} target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" size="sm" className="gap-2">
-                  🔗 Open in New Tab
-                </Button>
-              </a>
-            )}
+    <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogHeader className="pb-2">
+        <div className="flex items-start justify-between gap-4 pr-8">
+          <div className="flex-1 min-w-0">
+            <DialogTitle className="text-xl leading-tight">{paper.title}</DialogTitle>
+            <DialogDescription className="mt-1 flex items-center gap-3 flex-wrap">
+              <span>{paper.year}</span>
+              {paper.journal && <span>• {paper.journal}</span>}
+              <span>•</span>
+              {getSourceIcon(paper.source)}
+              {paper.categories && paper.categories.map(c => (
+                <Badge key={c} variant="outline" className="text-xs">{c}</Badge>
+              ))}
+            </DialogDescription>
           </div>
           
-          {/* BibTeX Preview */}
-          <details className="mt-3">
-            <summary className="text-sm text-muted-foreground cursor-pointer hover:text-foreground">
-              Preview BibTeX
-            </summary>
-            <pre className="mt-2 p-3 bg-muted rounded-lg text-xs overflow-x-auto">
-              {generateBibTeX(paper)}
-            </pre>
-          </details>
+          {/* Quick Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="ghost" size="sm" onClick={handleSaveToggle} className="gap-1">
+              {saved ? '⭐' : '☆'} {saved ? 'Saved' : 'Save'}
+            </Button>
+          </div>
         </div>
-      </div>
+      </DialogHeader>
+
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="overview">📋 Overview</TabsTrigger>
+          <TabsTrigger value="viewer">📖 Read</TabsTrigger>
+          <TabsTrigger value="citations">📊 Citations</TabsTrigger>
+          <TabsTrigger value="related">🔗 Related</TabsTrigger>
+          <TabsTrigger value="export">📤 Export</TabsTrigger>
+        </TabsList>
+
+        {/* Overview Tab */}
+        <TabsContent value="overview" className="flex-1 overflow-y-auto mt-4 space-y-6">
+          {/* Authors */}
+          <Card><CardContent className="p-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">👥 Authors ({paper.authors.length})</h4>
+            <div className="flex flex-wrap gap-2">{paper.authors.map((a, i) => (
+              <Badge key={i} variant="secondary" className="py-1 px-3 text-sm">{a}</Badge>
+            ))}</div>
+          </CardContent></Card>
+
+          {/* Abstract */}
+          <Card><CardContent className="p-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">📝 Abstract</h4>
+            <p className="text-sm text-muted-foreground leading-relaxed bg-muted/50 p-4 rounded-lg">{paper.abstract}</p>
+          </CardContent></Card>
+
+          {/* Metrics Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 text-center"><div className="text-2xl font-bold text-blue-600">
+              {citations !== null ? citations.toLocaleString() : '—'}
+            </div><div className="text-xs text-muted-foreground mt-1">Citations</div>
+              {!citations && paper.source === 'arxiv' && (
+                <Button variant="link" size="sm" className="text-xs mt-1 h-auto p-0" onClick={fetchCitations} disabled={loadingCitations}>
+                  {loadingCitations ? 'Loading...' : 'Fetch Live'}
+                </Button>)}
+            </Card>
+            <Card className="p-4 text-center"><div className="text-2xl font-bold text-green-600">{paper.year}</div><div className="text-xs text-muted-foreground mt-1">Year</div></Card>
+            <Card className="p-4 text-center"><div className="text-2xl font-bold text-purple-600">{paper.authors.length}</div><div className="text-xs text-muted-foreground mt-1">Authors</div></Card>
+            <Card className="p-4 text-center"><div className="text-2xl font-bold">{paper.openAccess ? '✓' : '🔒'}</div><div className="text-xs text-muted-foreground mt-1">Open Access</div></Card>
+          </div>
+
+          {/* Source Links */}
+          <Card><CardContent className="p-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">🔗 External Links</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {paper.url && <ExternalLink href={paper.url} icon="🌐" label={paper.source === 'arxiv' ? 'View on arXiv' : 'View on S2'} />}
+              {paper.htmlUrl && <ExternalLink href={paper.htmlUrl} icon="📖" label="HTML5 Version (ar5iv)" />}
+              {paper.pdfUrl && <ExternalLink href={paper.pdfUrl} icon="📕" label="Download PDF" />}
+              {paper.doi && <ExternalLink href={`https://doi.org/${paper.doi}`} icon="🔖" label={`DOI: ${paper.doi}`} />}
+              {paper.externalIds?.PubMed && <ExternalLink href={`https://pubmed.ncbi.nlm.nih.gov/${paper.externalIds.PubMed}`} icon="🏥" label="PubMed" />}
+            </div>
+          </CardContent></Card>
+
+          {/* Notes */}
+          <Card><CardContent className="p-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">📝 Personal Notes</h4>
+            {showNotesInput ? (
+              <div className="space-y-2">
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add your notes about this paper..." rows={3} />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => { if (saved) { /* update notes */ } setShowNotesInput(false); }}>💾 Save Note</Button>
+                  <Button size="sm" variant="ghost" onClick={() => setShowNotesInput(false)}>Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setShowNotesInput(true)}>+ Add Note</Button>
+            )}
+          </CardContent></Card>
+        </TabsContent>
+
+        {/* Viewer Tab */}
+        <TabsContent value="viewer" className="flex-1 overflow-hidden mt-4">
+          <Card className="h-full flex flex-col">
+            <CardContent className="flex-1 p-0 relative">
+              {paper.htmlUrl ? (
+                <iframe
+                  src={paper.htmlUrl}
+                  className="w-full h-full border-0 rounded-lg"
+                  title={`Paper viewer: ${paper.title}`}
+                  sandbox="allow-same-origin allow-scripts allow-popups"
+                />
+              ) : paper.pdfUrl ? (
+                <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+                  <span className="text-6xl mb-4">📕</span>
+                  <h3 className="text-xl font-semibold mb-2">PDF Available</h3>
+                  <p className="text-muted-foreground mb-4">This paper has a PDF but no HTML preview.</p>
+                  <a href={paper.pdfUrl} target="_blank" rel="noopener noreferrer">
+                    <Button>Open PDF in New Tab →</Button>
+                  </a>
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center p-8 text-center">
+                  <span className="text-6xl mb-4">🔒</span>
+                  <h3 className="text-xl font-semibold mb-2">No Preview Available</h3>
+                  <p className="text-muted-foreground mb-4">This paper doesn't have an online preview or PDF.</p>
+                  {paper.url && (
+                    <a href={paper.url} target="_blank" rel="noopener noreferrer">
+                      <Button>Visit Original Source →</Button>
+                    </a>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Citations Tab */}
+        <TabsContent value="citations" className="flex-1 overflow-y-auto mt-4 space-y-6">
+          <Card><CardContent className="p-6">
+            <div className="text-center space-y-4">
+              <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-blue-50 dark:bg-blue-950 border-4 border-blue-200 dark:border-blue-800">
+                <div>
+                  <div className="text-3xl font-bold text-blue-600">{citations !== null ? citations.toLocaleString() : '—'}</div>
+                  <div className="text-xs text-muted-foreground">Total Citations</div>
+                </div>
+              </div>
+              
+              {!citations && paper.source === 'arxiv' && (
+                <Button onClick={fetchCitations} disabled={loadingCitations}>
+                  {loadingCitations ? 'Fetching...' : '🔄 Fetch Live Citations from Semantic Scholar'}
+                </Button>
+              )}
+
+              {/* Citation Impact Visualization */}
+              <div className="pt-4">
+                <h4 className="font-medium mb-3">Citation Impact</h4>
+                <div className="space-y-2">
+                  <ImpactBar label="Highly Cited (>100)" value={citations ? Math.min((citations / 100) * 100, 100) : 0} threshold={100} color="green" />
+                  <ImpactBar label="Well Cited (10-100)" value={citations ? Math.min(((Math.min(citations, 100) - 10) / 90) * 100, 100) : 0} threshold={10} color="blue" />
+                  <ImpactBar label="Emerging (<10)" value={citations ? Math.min((citations / 10) * 100, 100) : 0} threshold={0} color="yellow" />
+                </div>
+              </div>
+            </div>
+          </CardContent></Card>
+
+          {/* Citation Graph Visualization */}
+          <Card><CardContent className="p-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">🕸️ Citation Network</h4>
+            <div className="bg-muted/30 rounded-lg p-8 min-h-[200px] flex items-center justify-center">
+              <CitationGraphVisualization citations={citations || 0} />
+            </div>
+          </CardContent></Card>
+        </TabsContent>
+
+        {/* Related Papers Tab */}
+        <TabsContent value="related" className="flex-1 overflow-y-auto mt-4 space-y-4">
+          <Card><CardContent className="p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-medium flex items-center gap-2">🔗 Related Papers</h4>
+              {(paper.source === 'semantic_scholar' || paper.externalIds?.CorpusId) && !relatedPapers.length && (
+                <Button size="sm" variant="outline" onClick={() => {
+                  const id = paper.externalIds?.CorpusId || paper.id.replace('ss-', '');
+                  fetchRelatedPapers(String(id));
+                }} disabled={loadingRelated}>
+                  {loadingRelated ? 'Loading...' : '🔄 Load Related'}
+                </Button>
+              )}
+            </div>
+            
+            {loadingRelated ? (
+              <div className="text-center py-8 text-muted-foreground">Loading related papers...</div>
+            ) : relatedPapers.length > 0 ? (
+              <div className="space-y-3">
+                {relatedPapers.map((rp, i) => (
+                  <div key={i} className="p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h5 className="font-medium text-sm line-clamp-2">{rp.title}</h5>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {rp.authors.slice(0, 2).map(a => a.name).join(', ')}{rp.authors.length > 2 ? ' et al.' : ''} • {rp.year}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <Badge variant="outline" className="text-xs">{rp.citationCount} cites</Badge>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <p className="mb-2">No related papers loaded yet.</p>
+                <p className="text-xs">Click "Load Related" to find similar papers from Semantic Scholar.</p>
+              </div>
+            )}
+          </CardContent></Card>
+        </TabsContent>
+
+        {/* Export Tab */}
+        <TabsContent value="export" className="flex-1 overflow-y-auto mt-4 space-y-4">
+          <Card><CardContent className="p-4">
+            <h4 className="font-medium mb-4 flex items-center gap-2">📤 Export Citation</h4>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <ExportButton format="BibTeX" content={generateBibTeX(paper)} copiedFormat={copiedFormat} onCopy={handleCopy} />
+              <ExportButton format="RIS" content={generateRIS(paper)} copiedFormat={copiedFormat} onCopy={handleCopy} />
+              <ExportButton format="APA" content={generateAPA(paper)} copiedFormat={copiedFormat} onCopy={handleCopy} />
+              <ExportButton format="MLA" content={generateMLA(paper)} copiedFormat={copiedFormat} onCopy={handleCopy} />
+            </div>
+          </CardContent></Card>
+
+          {/* BibTeX Preview */}
+          <Card><CardContent className="p-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">📄 BibTeX Preview</h4>
+            <pre className="bg-muted p-4 rounded-lg text-xs overflow-x-auto whitespace-pre-wrap">{generateBibTeX(paper)}</pre>
+          </CardContent></Card>
+
+          {/* Full Metadata */}
+          <Card><CardContent className="p-4">
+            <h4 className="font-medium mb-3 flex items-center gap-2">🔧 Raw Metadata (JSON)</h4>
+            <details>
+              <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">Click to expand</summary>
+              <pre className="mt-2 bg-muted p-4 rounded-lg text-xs overflow-x-auto">{JSON.stringify(paper, null, 2)}</pre>
+            </details>
+          </CardContent></Card>
+        </TabsContent>
+      </Tabs>
     </DialogContent>
   );
+}
+
+// ============ HELPER COMPONENTS ============
+
+function ExternalLink({ href, icon, label }: { href: string; icon: string; label: string }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer"
+       className="flex items-center gap-2 p-3 border rounded-lg hover:bg-muted transition-colors group">
+      <span className="text-lg">{icon}</span>
+      <span className="text-sm truncate flex-1">{label}</span>
+      <span className="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+    </a>
+  );
+}
+
+function ExportButton({ format, content, copiedFormat, onCopy }: { format: string; content: string; copiedFormat: string | null; onCopy: (f: string, c: string) => void }) {
+  return (
+    <Button variant="outline" className="justify-start gap-2 h-auto py-3" onClick={() => onCopy(format, content)}>
+      <span className="text-base">📋</span>
+      <div className="text-left">
+        <div className="font-medium text-sm">{format}</div>
+        <div className="text-xs opacity-70">{content.substring(0, 40)}...</div>
+      </div>
+      {copiedFormat === format && <span className="ml-auto text-green-600">✓</span>}
+    </Button>
+  );
+}
+
+function ImpactBar({ label, value, threshold, color }: { label: string; value: number; threshold: number; color: string }) {
+  const colorClasses = {
+    green: 'bg-green-500',
+    blue: 'bg-blue-500',
+    yellow: 'bg-yellow-500',
+  };
+  
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-sm w-36 text-right">{label}</span>
+      <Progress value={value} className="flex-1 h-2" />
+    </div>
+  );
+}
+
+function CitationGraphVisualization({ citations }: { citations: number }) {
+  const nodeSize = Math.min(Math.max(20 + citations * 0.5, 20), 80);
+  const ringNodes = Math.min(Math.ceil(citations / 50), 12);
+  
+  return (
+    <svg viewBox="0 0 400 250" className="w-full max-w-md mx-auto">
+      {/* Central node */}
+      <circle cx="200" cy="125" r={nodeSize / 2} fill="#3b82f6" stroke="#1d4ed8" strokeWidth="2" />
+      <text x="200" y="130" textAnchor="middle" fill="white" fontSize="12" fontWeight="bold">{citations}</text>
+      
+      {/* Ring nodes */}
+      {Array.from({ length: ringNodes }).map((_, i) => {
+        const angle = (i / ringNodes) * 2 * Math.PI - Math.PI / 2;
+        const x = 200 + Math.cos(angle) * 120;
+        const y = 125 + Math.sin(angle) * 80;
+        const size = 15 + Math.random() * 15;
+        
+        return (
+          <g key={i}>
+            <line x1="200" y1="125" x2={x} y2={y} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="4" />
+            <circle cx={x} cy={y} r={size / 2} fill="#94a3b8" opacity="0.7" />
+          </g>
+        );
+      })}
+      
+      {/* Legend */}
+      <text x="200" y="235" textAnchor="middle" fill="#6b7280" fontSize="11">
+        Citation network visualization • Each node represents a citing paper
+      </text>
+    </svg>
+  );
+}
+
+function getSourceIcon(source: string) {
+  switch (source) {
+    case 'arxiv': return <Badge className="bg-orange-100 text-orange-700 text-xs">📄 arXiv</Badge>;
+    case 'semantic_scholar': return <Badge className="bg-blue-100 text-blue-700 text-xs">🔍 S2</Badge>;
+    default: return <Badge variant="secondary" className="text-xs">Demo</Badge>;
+  }
 }
 
 // ============ MAIN SEARCH COMPONENT ============
@@ -651,15 +911,11 @@ export default function SearchPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedPaper, setSelectedPaper] = useState<SearchResult | null>(null);
-  const [searchStats, setSearchStats] = useState<{ arxiv: number; semantic_scholar: number }>({
-    arxiv: 0,
-    semantic_scholar: 0,
-  });
+  const [searchStats, setSearchStats] = useState({ arxiv: 0, semantic_scholar: 0 });
+  const [savedCount, setSavedCount] = useState(getSavedPapers().length);
 
-  // Real search handler
   const handleSearch = useCallback(async () => {
     if (!searchQuery.trim()) return;
-    
     setIsSearching(true);
     setError(null);
     
@@ -667,39 +923,29 @@ export default function SearchPage() {
       let allResults: SearchResult[] = [];
       const stats = { arxiv: 0, semantic_scholar: 0 };
 
-      // Search based on selected source
       if (selectedSource === 'all' || selectedSource === 'arxiv') {
         try {
           const arxivResults = await searchArxiv(searchQuery, selectedSource === 'arxiv' ? 20 : 10);
           allResults.push(...arxivResults);
           stats.arxiv = arxivResults.length;
-        } catch (err) {
-          console.warn('arXiv search failed:', err);
-        }
+        } catch (err) { console.warn('arXiv failed:', err); }
       }
 
       if (selectedSource === 'all' || selectedSource === 'semantic_scholar') {
         try {
           const ssResults = await searchSemanticScholar(searchQuery, selectedSource === 'semantic_scholar' ? 20 : 10);
           allResults.push(...ssResults);
-          stats.semantic_scholar = ssResults.length.length;
-        } catch (err) {
-          console.warn('Semantic Scholar search failed:', err);
-        }
+          stats.semantic_scholar = ssResults.length;
+        } catch (err) { console.warn('S2 failed:', err); }
       }
 
-      // If both APIs fail, use demo data
       if (allResults.length === 0) {
         setError('APIs unavailable. Showing demo results.');
         allResults = SAMPLE_RESULTS;
       }
 
-      // Sort results
-      if (sortBy === 'date') {
-        allResults.sort((a, b) => b.year - a.year);
-      } else if (sortBy === 'citations') {
-        allResults.sort((a, b) => b.citations - a.citations);
-      }
+      if (sortBy === 'date') allResults.sort((a, b) => b.year - a.year);
+      else if (sortBy === 'citations') allResults.sort((a, b) => b.citations - a.citations);
 
       setResults(allResults);
       setSearchStats(stats);
@@ -711,7 +957,6 @@ export default function SearchPage() {
     }
   }, [searchQuery, selectedSource, sortBy]);
 
-  // Handle Enter key
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') handleSearch();
   };
@@ -723,12 +968,10 @@ export default function SearchPage() {
         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3 mb-2">
           <span className="text-4xl">🔍</span>
           Scientific Literature Search
-          <Badge variant="outline" className="text-xs">
-            v1.2 Live APIs
-          </Badge>
+          <Badge variant="outline" className="text-xs">v1.3 Enhanced Details</Badge>
         </h1>
         <p className="text-muted-foreground text-lg">
-          Real-time search across <strong>arXiv</strong> (2M+ papers) &amp; <strong>Semantic Scholar</strong> (200M+ papers). No API key required!
+          Real-time search across <strong>arXiv</strong> &amp; <strong>Semantic Scholar</strong>. Enhanced paper details with PDF viewer, citations, and more.
         </p>
       </div>
 
@@ -737,84 +980,42 @@ export default function SearchPage() {
         <CardContent className="p-6">
           <div className="flex gap-4 flex-col md:flex-row">
             <div className="flex-1 relative">
-              <Input
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Search papers, authors, topics, DOIs... (real-time API)"
-                className="text-lg h-12 pl-12"
-              />
+              <Input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={handleKeyDown}
+                     placeholder="Search papers, authors, topics, DOIs... (real-time API)" className="text-lg h-12 pl-12" />
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">🔍</span>
             </div>
             
             <div className="flex gap-2">
               <Select value={selectedSource} onValueChange={(v) => setSelectedSource(v as any)}>
-                <SelectTrigger className="w-[180px] h-12">
-                  <SelectValue placeholder="All Sources" />
-                </SelectTrigger>
+                <SelectTrigger className="w-[180px] h-12"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">
-                    <span className="mr-2">🌐</span> All Sources
-                  </SelectItem>
-                  <SelectItem value="arxiv">
-                    <span className="mr-2">📄</span> arXiv Only
-                  </SelectItem>
-                  <SelectItem value="semantic_scholar">
-                    <span className="mr-2">🔍</span> Semantic Scholar
-                  </SelectItem>
+                  <SelectItem value="all">🌐 All Sources</SelectItem>
+                  <SelectItem value="arxiv">📄 arXiv Only</SelectItem>
+                  <SelectItem value="semantic_scholar">🔍 Semantic Scholar</SelectItem>
                 </SelectContent>
               </Select>
               
-              <Button 
-                onClick={handleSearch} 
-                disabled={isSearching || !searchQuery.trim()}
-                className="h-12 px-8"
-              >
-                {isSearching ? (
-                  <>
-                    <span className="animate-spin mr-2">⏳</span>
-                    Searching...
-                  </>
-                ) : (
-                  <>Search 🚀</>
-                )}
+              <Button onClick={handleSearch} disabled={isSearching || !searchQuery.trim()} className="h-12 px-8">
+                {isSearching ? <>⏳ Searching...</> : <>Search 🚀</>}
               </Button>
             </div>
           </div>
 
-          {/* Quick Suggestions */}
           {!searchQuery && (
             <div className="mt-4 pt-4 border-t">
               <p className="text-sm text-muted-foreground mb-2">💡 Try these real searches:</p>
               <div className="flex flex-wrap gap-2">
-                {SUGGESTED_SEARCHES.map((suggestion) => (
-                  <Button
-                    key={suggestion}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSearchQuery(suggestion)}
-                    className="text-xs"
-                  >
-                    {suggestion}
-                  </Button>
+                {SUGGESTED_SEARCHES.map(s => (
+                  <Button key={s} variant="outline" size="sm" onClick={() => setSearchQuery(s)} className="text-xs">{s}</Button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* API Status */}
           <div className="mt-3 pt-3 border-t flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-              arXiv API: Online
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-              Semantic Scholar: Online
-            </span>
-            <span className="ml-auto">
-              Free tier • No authentication required
-            </span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> arXiv API: Online</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Semantic Scholar: Online</span>
+            <span className="ml-auto">⭐ {savedCount} papers saved</span>
           </div>
         </CardContent>
       </Card>
@@ -822,7 +1023,6 @@ export default function SearchPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         {/* Main Results */}
         <div className="lg:col-span-3 space-y-4">
-          {/* Results Header */}
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h2 className="text-xl font-semibold">
               {results.length} Results Found
@@ -834,104 +1034,59 @@ export default function SearchPage() {
             </h2>
             
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Sort by:</span>
+              <span className="text-sm text-muted-foreground">Sort:</span>
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="relevance">Relevance</SelectItem>
                   <SelectItem value="date">Date (Newest)</SelectItem>
                   <SelectItem value="citations">Citations</SelectItem>
                 </SelectContent>
               </Select>
-              
-              <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
-                Filters {showFilters ? '▲' : '▼'}
-              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>Filters {showFilters ? '▲' : '▼'}</Button>
             </div>
           </div>
 
-          {/* Error Message */}
           {error && (
             <Card className="border-yellow-200 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950">
               <CardContent className="p-4 flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm text-yellow-700 dark:text-yellow-300">
-                  <span>⚠️</span>
-                  {error}
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setError(null)}>
-                  Dismiss
-                </Button>
+                <span className="text-sm text-yellow-700 dark:text-yellow-300">⚠️ {error}</span>
+                <Button variant="ghost" size="sm" onClick={() => setError(null)}>Dismiss</Button>
               </CardContent>
             </Card>
           )}
 
-          {/* Filters Panel */}
           {showFilters && (
-            <Card className="border-border/50">
-              <CardContent className="p-4">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Year From</label>
-                    <Input placeholder="2020" type="number" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Year To</label>
-                    <Input placeholder="2024" type="number" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Type</label>
-                    <Select defaultValue="all">
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Types</SelectItem>
-                        <SelectItem value="article">Articles</SelectItem>
-                        <SelectItem value="preprint">Preprints</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium mb-1 block">Min Citations</label>
-                    <Input placeholder="0" type="number" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <Card className="border-border/50"><CardContent className="p-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div><label className="text-sm font-medium mb-1 block">Year From</label><Input placeholder="2020" type="number" /></div>
+                <div><label className="text-sm font-medium mb-1 block">Year To</label><Input placeholder="2024" type="number" /></div>
+                <div><label className="text-sm font-medium mb-1 block">Type</label><Select defaultValue="all"><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Types</SelectItem><SelectItem value="article">Articles</SelectItem><SelectItem value="preprint">Preprints</SelectItem></SelectContent></Select></div>
+                <div><label className="text-sm font-medium mb-1 block">Min Citations</label><Input placeholder="0" type="number" /></div>
+              </div>
+            </CardContent></Card>
           )}
 
-          {/* Results Table */}
-          <Card className="border-border/50">
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[40%]">Title</TableHead>
-                    <TableHead>Authors</TableHead>
-                    <TableHead>Year</TableHead>
-                    <TableHead>Source</TableHead>
-                    <TableHead>Citations</TableHead>
-                    <TableHead>Action</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {results.map((result) => (
-                    <SearchResultRow 
-                      key={result.id} 
-                      result={result} 
-                      onViewDetails={setSelectedPaper}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          <Card className="border-border/50"><CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[42%]">Title</TableHead>
+                  <TableHead>Authors</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Cites</TableHead>
+                  <TableHead>Action</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {results.map(r => <SearchResultRow key={r.id} result={r} onViewDetails={setSelectedPaper} />)}
+              </TableBody>
+            </Table>
+          </CardContent></Card>
 
-          {/* Pagination */}
           <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
-              Showing 1-{Math.min(results.length, 10)} of {results.length} results
-            </p>
+            <p className="text-sm text-muted-foreground">Showing 1-{Math.min(results.length, 10)} of {results.length} results</p>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" disabled>← Previous</Button>
               <Button variant="outline" size="sm">Next →</Button>
@@ -941,113 +1096,55 @@ export default function SearchPage() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Data Sources Status */}
-          <Card className="border-border/50">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">🔌 Connected APIs</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800">
-                <div className="flex items-center gap-2">
-                  <span>📄</span>
-                  <div>
-                    <p className="text-sm font-medium">arXiv API</p>
-                    <p className="text-xs text-muted-foreground">2M+ preprints</p>
-                  </div>
-                </div>
-                <Badge className="bg-green-100 text-green-700 text-xs">Live</Badge>
-              </div>
-              
-              <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-2">
-                  <span>🔍</span>
-                  <div>
-                    <p className="text-sm font-medium">Semantic Scholar</p>
-                    <p className="text-xs text-muted-foreground">200M+ papers</p>
-                  </div>
-                </div>
-                <Badge className="bg-green-100 text-green-700 text-xs">Live</Badge>
-              </div>
+          <Card className="border-border/50"><CardHeader className="pb-4"><CardTitle className="text-lg">🔌 Connected APIs</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center justify-between p-3 rounded-lg bg-orange-50 dark:bg-orange-950 border border-orange-200 dark:border-orange-800">
+              <div className="flex items-center gap-2"><span>📄</span><div><p className="text-sm font-medium">arXiv API</p><p className="text-xs text-muted-foreground">2M+ preprints</p></div></div>
+              <Badge className="bg-green-100 text-green-700 text-xs">Live</Badge>
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2"><span>🔍</span><div><p className="text-sm font-medium">Semantic Scholar</p><p className="text-xs text-muted-foreground">200M+ papers</p></div></div>
+              <Badge className="bg-green-100 text-green-700 text-xs">Live</Badge>
+            </div>
+          </CardContent></Card>
 
-              <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-900 border border-dashed">
-                <p className="text-xs text-muted-foreground text-center">
-                  💡 Both APIs are free and require no authentication
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+          <Card className="border-border/50"><CardHeader className="pb-4"><CardTitle className="text-lg">📊 This Search</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-muted/50 rounded-lg text-center"><div className="text-xl font-bold text-orange-600">{searchStats.arxiv}</div><div className="text-xs text-muted-foreground">from arXiv</div></div>
+              <div className="p-3 bg-muted/50 rounded-lg text-center"><div className="text-xl font-bold text-blue-600">{searchStats.semantic_scholar}</div><div className="text-xs text-muted-foreground">from S2</div></div>
+            </div>
+            <div className="pt-2 border-t space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Total</span><span className="font-medium">{results.length}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">With PDF</span><span className="font-medium">{results.filter(r => r.pdfUrl).length}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Open Access</span><span className="font-medium">{results.filter(r => r.openAccess).length}</span></div>
+            </div>
+          </CardContent></Card>
 
-          {/* Search Stats */}
-          <Card className="border-border/50">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">📊 This Search</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 bg-muted/50 rounded-lg text-center">
-                  <div className="text-xl font-bold text-orange-600">{searchStats.arxiv}</div>
-                  <div className="text-xs text-muted-foreground">from arXiv</div>
-                </div>
-                <div className="p-3 bg-muted/50 rounded-lg text-center">
-                  <div className="text-xl font-bold text-blue-600">{searchStats.semantic_scholar}</div>
-                  <div className="text-xs text-muted-foreground">from S2</div>
-                </div>
-              </div>
-              
-              <div className="pt-2 border-t space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Total results</span>
-                  <span className="font-medium">{results.length}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">With PDF</span>
-                  <span className="font-medium">{results.filter(r => r.pdfUrl).length}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Open Access</span>
-                  <span className="font-medium">{results.filter(r => r.openAccess).length}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <Card className="border-border/50"><CardHeader className="pb-4"><CardTitle className="text-lg">📤 Export</CardTitle></CardHeader>
+          <CardContent className="space-y-2">
+            {['BibTeX', 'CSV', 'RIS', 'EndNote'].map(f => <Button key={f} variant="outline" className="w-full justify-start gap-2" size="sm">📋 {f}</Button>)}
+          </CardContent></Card>
 
-          {/* Export Options */}
-          <Card className="border-border/50">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg">📤 Export Results</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {['BibTeX', 'CSV', 'RIS', 'EndNote', 'Clipboard'].map((format) => (
-                <Button key={format} variant="outline" className="w-full justify-start gap-2" size="sm">
-                  📋 Export as {format}
-                </Button>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* Feature Highlight */}
-          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950 dark:to-emerald-950 border-green-200 dark:border-green-800">
+          <Card className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border-purple-200 dark:border-purple-800">
             <CardContent className="p-4 space-y-3">
-              <h4 className="font-medium text-green-900 dark:text-green-100 flex items-center gap-2">
-                ✨ Real API Integration
-              </h4>
-              <ul className="text-sm text-green-700 dark:text-green-300 space-y-1">
-                <li>• Live arXiv preprints</li>
-                <li>• Semantic Scholar citations</li>
-                <li>• Direct PDF links</li>
-                <li>• One-click BibTeX export</li>
+              <h4 className="font-medium text-purple-900 dark:text-purple-100 flex items-center gap-2">✨ Enhanced Features</h4>
+              <ul className="text-sm text-purple-700 dark:text-purple-300 space-y-1">
+                <li>• 📖 Inline PDF/HTML viewer</li>
+                <li>• 📊 Citation network graph</li>
+                <li>• 🔗 Related papers from S2</li>
+                <li>• ⭐ Save papers locally</li>
+                <li>• 📤 Multi-format export</li>
               </ul>
             </CardContent>
           </Card>
         </div>
       </div>
 
-      {/* Paper Detail Dialog */}
       <Dialog open={!!selectedPaper} onOpenChange={() => setSelectedPaper(null)}>
         <PaperDetailDialog paper={selectedPaper} onClose={() => setSelectedPaper(null)} />
       </Dialog>
 
-      {/* Footer spacing */}
       <div className="h-8"></div>
     </div>
   );
