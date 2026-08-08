@@ -719,13 +719,13 @@ function BioinformaticsToolsSection() {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-3xl font-bold text-emerald-600">6+</p>
-            <p className="text-sm text-muted-foreground">Tools Available</p>
+            <p className="text-sm text-muted-foreground">Bio Tools</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-3xl font-bold text-blue-600">4</p>
-            <p className="text-sm text-muted-foreground">Pre-built Pipelines</p>
+            <p className="text-sm text-muted-foreground">Pipelines</p>
           </CardContent>
         </Card>
         <Card>
@@ -740,6 +740,189 @@ function BioinformaticsToolsSection() {
             <p className="text-sm text-muted-foreground">Free Tier Jobs</p>
           </CardContent>
         </Card>
+      </div>
+
+      <Separator className="my-8" />
+
+      {/* ============ CHEMINFORMATICS SECTION ============ */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span className="text-2xl">⚗️</span> Cheminformatics Tools Library
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            { id: 'rdkit', name: 'RDKit', category: 'Chemistry Toolkit', description: 'Open-source cheminformatics and ML library', version: '2024.03', inputs: ['SMILES', 'SDF', 'MOL'] },
+            { id: 'openbabel', name: 'Open Babel', category: 'File Conversion', description: 'Chemical file format converter (55+ formats)', version: '3.1.1', inputs: ['MOL', 'SDF', 'PDB'] },
+            { id: 'autodock', name: 'AutoDock Vina', category: 'Molecular Docking', description: 'Protein-ligand docking simulation engine', version: '1.2.5', inputs: ['Receptor PDB', 'Ligand MOL2'] },
+            { id: 'gromacs', name: 'GROMACS', category: 'MD Simulation', description: 'High-performance molecular dynamics package', version: '2024.3', inputs: ['Topology', 'Coordinates'] },
+            { id: 'ambertools', name: 'AmberTools', category: 'Simulation Suite', description: 'Biomolecular simulation programs (AMBER)', version: '24.0', inputs: ['PRMTOP', 'INPCRD'] },
+            { id: 'chemaxon', name: 'ChemAxon Marble', category: 'Prediction Suite', description: 'Chemical property prediction platform', version: '23.20', inputs: ['Structure', 'SMILES'] }
+          ].map((tool) => (
+            <Card key={tool.id} className="hover:shadow-md transition-shadow cursor-pointer group border-violet-200 dark:border-violet-800">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base group-hover:text-violet-600 transition-colors">{tool.name}</CardTitle>
+                    <CardDescription className="mt-1">{tool.description}</CardDescription>
+                  </div>
+                  <Badge variant="secondary">{tool.version}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Badge variant="outline" className="bg-violet-50 dark:bg-violet-950">{tool.category}</Badge>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Inputs:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {tool.inputs.map((input) => (
+                        <Badge key={input} variant="secondary" className="text-xs">{input}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Button className="w-full" size="sm" variant="outline">Launch Tool →</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Chemistry Workflows */}
+        <div className="mt-6">
+          <h4 className="font-medium mb-3 flex items-center gap-2">
+            <span>🔬</span> Pre-built Chemistry Workflows
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {[
+              { name: 'Virtual Screening Pipeline', steps: 8, time: '6-24 hours', tools: ['Ligand Prep', 'Docking', 'Scoring', 'ADMET'] },
+              { name: 'QSAR Modeling Workflow', steps: 6, time: '2-4 hours', tools: ['Descriptor Calc', 'Feature Selection', 'ML Model'] },
+              { name: 'MD Simulation Setup', steps: 10, time: '1-2h + runtime', tools: ['Structure Prep', 'Solvation', 'Minimization'] },
+              { name: 'Property Prediction Batch', steps: 4, time: '30min - 2h', tools: ['Parser', 'Calculator', 'Report Gen'] }
+            ].map((workflow, idx) => (
+              <Card key={idx} className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-medium text-sm">{workflow.name}</span>
+                    <Badge className="bg-violet-500 text-white">{workflow.steps} Steps</Badge>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                    <span>Est: {workflow.time}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {workflow.tools.map((tool) => (
+                      <Badge key={tool} variant="outline" className="text-xs">{tool}</Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <Separator className="my-8" />
+
+      {/* ============ MOLECULAR MODELLING SECTION ============ */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span className="text-2xl">🔬</span> Molecular Modelling Suite
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            { id: 'pymol', name: 'PyMOL', category: 'Visualization', description: '3D molecular visualization & rendering', version: '3.0', inputs: ['PDB', 'SDF', 'CIF'] },
+            { id: 'schrodinger', name: 'Schrodinger Suite', category: 'Drug Design', description: 'Complete drug discovery platform', version: '2024.3', inputs: ['Structures', 'Ligands'] },
+            { id: 'namd', name: 'NAMD', category: 'MD Simulation', description: 'Scalable molecular dynamics (GPU)', version: '3.0', inputs: ['PSF', 'DCD', 'COOR'] },
+            { id: 'lammps', name: 'LAMMPS', category: 'Classical MD', description: 'Classical molecular dynamics simulator', version: '2023.11', inputs: ['Data file', 'Input script'] },
+            { id: 'cp2k', name: 'CP2K', category: 'QM/MM', description: 'Quantum chemistry & DFT methods', version: '2024.1', inputs: ['XYZ', 'INPUT'] },
+            { id: 'desmond', name: 'Desmond', category: 'MD Engine', description: 'High-performance MD simulator (Schrodinger)', version: '6.9', inputs: ['CMS', 'MAE'] }
+          ].map((tool) => (
+            <Card key={tool.id} className="hover:shadow-md transition-shadow cursor-pointer group border-cyan-200 dark:border-cyan-800">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base group-hover:text-cyan-600 transition-colors">{tool.name}</CardTitle>
+                    <CardDescription className="mt-1">{tool.description}</CardDescription>
+                  </div>
+                  <Badge variant="secondary">{tool.version}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Badge variant="outline" className="bg-cyan-50 dark:bg-cyan-950">{tool.category}</Badge>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Inputs:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {tool.inputs.map((input) => (
+                        <Badge key={input} variant="secondary" className="text-xs">{input}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Button className="w-full" size="sm" variant="outline">Launch Tool →</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Molecular Modelling Workflows */}
+        <div className="mt-6">
+          <h4 className="font-medium mb-3 flex items-center gap-2">
+            <span>⚛️</span> Pre-built Modelling Workflows
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {[
+              { name: 'Protein-Ligand Complex Setup', steps: 7, time: '1-2 hours', tools: ['PrepWizard', 'LigPrep', 'Grid Gen'] },
+              { name: 'Binding Free Energy Calculation', steps: 12, time: '24-48 hours', tools: ['Minimization', 'Production', 'MM-GBSA'] },
+              { name: 'Conformational Analysis', steps: 5, time: '2-6 hours', tools: ['Conf Search', 'Clustering', 'Energy Map'] },
+              { name: 'Reaction Pathway Simulation', steps: 15, time: '48-72 hours', tools: ['TS Search', 'IRC', 'Thermochemistry'] }
+            ].map((workflow, idx) => (
+              <Card key={idx} className="bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/30 border-cyan-200">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-medium text-sm">{workflow.name}</span>
+                    <Badge className="bg-cyan-500 text-white">{workflow.steps} Steps</Badge>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                    <span>Est: {workflow.time}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {workflow.tools.map((tool) => (
+                      <Badge key={tool} variant="outline" className="text-xs">{tool}</Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Combined Life Sciences Stats */}
+      <div className="mt-8 p-6 bg-gradient-to-r from-emerald-50 via-violet-50 to-cyan-50 dark:from-emerald-950/20 dark:via-violet-950/20 dark:to-cyan-950/20 rounded-xl border">
+        <h4 className="font-semibold mb-4 text-center flex items-center justify-center gap-2">
+          🧪 Life Sciences Computing Hub
+        </h4>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-emerald-600">18+</p>
+            <p className="text-sm text-muted-foreground">Total Tools</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-violet-600">3</p>
+            <p className="text-sm text-muted-foreground">Scientific Domains</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-cyan-600">12</p>
+            <p className="text-sm text-muted-foreground">Workflows</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-orange-600">GPU</p>
+            <p className="text-sm text-muted-foreground">Accelerated</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-green-600">24/7</p>
+            <p className="text-sm text-muted-foreground">Available</p>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -762,7 +945,7 @@ export default function EnhancedComputationHub() {
             </h1>
           </div>
           <p className="text-lg text-muted-foreground max-w-3xl">
-            Unified access to Quantum Computing, HPC Clusters, AI Platforms, and Bioinformatics Tools — 
+            Unified access to Quantum Computing, HPC Clusters, AI Platforms, Bioinformatics, Cheminformatics, and Molecular Modelling — 
             all in one integrated scientific computing environment.
           </p>
           <div className="flex flex-wrap gap-2 mt-4">
@@ -776,7 +959,10 @@ export default function EnhancedComputationHub() {
               🤖 AI Models
             </Badge>
             <Badge className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white">
-              🧬 Bioinformatics
+              🧬 Life Sciences
+            </Badge>
+            <Badge className="px-3 py-1 bg-gradient-to-r from-violet-500 to-purple-500 text-white">
+              ⚗️ Chemistry
             </Badge>
           </div>
         </div>
