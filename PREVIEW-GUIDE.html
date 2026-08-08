@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SciHub Pro - Visual Preview Guide</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            text-align: center;
+            color: white;
+            font-size: 3em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        .subtitle {
+            text-align: center;
+            color: rgba(255,255,255,0.9);
+            font-size: 1.2em;
+            margin-bottom: 40px;
+        }
+        .live-badge {
+            display: inline-block;
+            background: #00ff88;
+            color: #000;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.8em;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 25px;
+            margin-top: 30px;
+        }
+        .card {
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+        .card-header {
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .card-header h2 {
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .card-header .url {
+            font-size: 0.8em;
+            opacity: 0.9;
+            margin-top: 5px;
+            word-break: break-all;
+        }
+        .card-body {
+            padding: 20px;
+        }
+        .feature-list {
+            list-style: none;
+            margin: 15px 0;
+        }
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .feature-list li:last-child { border-bottom: none; }
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: bold;
+        }
+        .badge-free { background: #d4edda; color: #155724; }
+        .badge-premium { background: #f8d7da; color: #721c24; }
+        .badge-api { background: #cce5ff; color: #004085; }
+        .btn {
+            display: inline-block;
+            padding: 12px 25px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-top: 10px;
+            transition: transform 0.2s;
+        }
+        .btn:hover { transform: scale(1.05); }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .stat {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value { font-size: 1.5em; font-weight: bold; color: #667eea; }
+        .stat-label { font-size: 0.8em; color: #666; }
+        .preview-box {
+            background: #f0f0f0;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: monospace;
+            font-size: 0.85em;
+            color: #333;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 50px;
+            padding: 20px;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 SciHub Pro <span class="live-badge">● LIVE NOW</span></h1>
+        <p class="subtitle">11 Pages • 12 Free Scientific APIs • Dynamic Subscription System<br>
+        <strong>Repository:</strong> <a href="https://github.com/testdemoqwenai2025-creator/scihub-pro-demo" style="color: white;">github.com/testdemoqwenai2025-creator/scihub-pro-demo</a></p>
+
+        <div class="grid">
+
+            <!-- LANDING PAGE -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🏠 Landing Page</h2>
+                    <div class="url">/ (Root)</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>The entry point to SciHub Pro</strong></p>
+                    <ul class="feature-list">
+                        <li>✨ Hero section with animated gradient</li>
+                        <li>🎯 Call-to-action buttons (Get Started, View Docs)</li>
+                        <li>💰 Pricing tiers comparison (Free/Pro/Enterprise)</li>
+                        <li>📊 Feature highlights grid</li>
+                        <li>🔬 Scientific API showcase</li>
+                        <li>📱 Responsive mobile design</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/" target="_blank" class="btn">View Landing →</a>
+                </div>
+            </div>
+
+            <!-- DASHBOARD -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>📊 Dashboard</h2>
+                    <div class="url">/dashboard</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>Your research command center</strong></p>
+                    <div class="stats">
+                        <div class="stat"><div class="stat-value">⚡</div><div class="stat-label">Active Jobs</div></div>
+                        <div class="stat"><div class="stat-value">💾</div><div class="stat-label">Storage</div></div>
+                        <div class="stat"><div class="stat-value">🔌</div><div class="stat-label">API Calls</div></div>
+                    </div>
+                    <ul class="feature-list">
+                        <li>📈 Editable stat cards (click to edit!)</li>
+                        <li>🕐 Real-time activity feed</li>
+                        <li>💻 Quick action shortcuts</li>
+                        <li>🏥 System health monitor</li>
+                        <li>👤 Profile editor inline</li>
+                        <li>⚠️ Volume threshold warnings</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/dashboard" target="_blank" class="btn">View Dashboard →</a>
+                </div>
+            </div>
+
+            <!-- DATA LAKE -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>💾 Data Lake</h2>
+                    <div class="url">/data</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>Dataset management hub</strong></p>
+                    <div class="stats">
+                        <div class="stat"><div class="stat-value">4</div><div class="stat-label">Datasets</div></div>
+                        <div class="stat"><div class="stat-value">120MB</div><div class="stat-label">Storage Used</div></div>
+                        <div class="stat"><div class="stat-value">∞</div><div class="stat-label">Free Tier</div></div>
+                    </div>
+                    <ul class="feature-list">
+                        <li>📁 Grid & Table view toggle</li>
+                        <li>🔍 Search & filter datasets</li>
+                        <li>➕ Create new dataset form</li>
+                        <li>📊 Storage usage visualization</li>
+                        <li>🏷️ Tag-based organization</li>
+                        <li>📤 Export to CSV/JSON</li>
+                    </ul>
+                    <span class="badge badge-free">Free: 10 datasets</span>
+                    <span class="badge badge-premium">Pro: 100 datasets</span>
+                    <br><br>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/data" target="_blank" class="btn">View Data Lake →</a>
+                </div>
+            </div>
+
+            <!-- CONNECTORS -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔗 Connectors</h2>
+                    <div class="url">/connectors</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>12 FREE + 3 Premium scientific APIs</strong></p>
+                    <span class="badge badge-api">CrossRef</span>
+                    <span class="badge badge-api">OpenAlex</span>
+                    <span class="badge badge-api">arXiv</span>
+                    <span class="badge badge-api">NCBI</span>
+                    <span class="badge badge-api">PubChem</span>
+                    <span class="badge badge-api">UniProt</span>
+                    <ul class="feature-list">
+                        <li>🆓 Tabbed view: Free vs Premium APIs</li>
+                        <li>🔌 Connect/disconnect toggles</li>
+                        <li>⚙️ API key configuration panel</li>
+                        <li>🔄 Sync status indicators</li>
+                        <li>⭐ Subscription form for premium</li>
+                        <li>📋 Rate limit info per source</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/connectors" target="_blank" class="btn">View Connectors →</a>
+                </div>
+            </div>
+
+            <!-- QUERY/SEARCH -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔍 Query & Search</h2>
+                    <div class="url">/query</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>Literature search across databases</strong></p>
+                    <ul class="feature-list">
+                        <li>🔎 Multi-source search (CrossRef + OpenAlex)</li>
+                        <li>📅 Year range filters</li>
+                        <li>📂 Type filters (article, review, etc.)</li>
+                        <li>📊 Sort by relevance/date/citations</li>
+                        <li>⭐ Save to library with tags</li>
+                        <li>📤 Export results (CSV/BibTeX)</li>
+                        <li>📋 Citation analysis tools</li>
+                    </ul>
+                    <div class="preview-box">
+                        Example query: "machine learning drug discovery"<br>
+                        → Returns real results from CrossRef/OpenAlex<br>
+                        → Falls back to synthetic data if APIs down
+                    </div>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/query" target="_blank" class="btn">View Search →</a>
+                </div>
+            </div>
+
+            <!-- WORKSPACE -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>💻 Workspace</h2>
+                    <div class="url">/workspace</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>Interactive code editor environment</strong></p>
+                    <ul class="feature-list">
+                        <li>🐍 Python code execution</li>
+                        <li>🗃️ SQL query editor</li>
+                        <li>📈 R statistical analysis</li>
+                        <li>📝 Markdown documentation</li>
+                        <li>📁 Multi-file workspace</li>
+                        <li>💾 Auto-save functionality</li>
+                        <li>📚 Template library (pre-built)</li>
+                        <li>▶️ Run code simulation</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/workspace" target="_blank" class="btn">View Workspace →</a>
+                </div>
+            </div>
+
+            <!-- COMPUTE -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>⚙️ Compute Cluster</h2>
+                    <div class="url">/compute</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>Job queue & GPU monitoring</strong></p>
+                    <div class="stats">
+                        <div class="stat"><div class="stat-value">6</div><div class="stat-label">Active Jobs</div></div>
+                        <div class="stat"><div class="stat-value">4</div><div class="stat-label">GPU Nodes</div></div>
+                        <div class="stat"><div class="stat-value">87%</div><div class="stat-label">Health</div></div>
+                    </div>
+                    <ul class="feature-list">
+                        <li>📋 Job queue management</li>
+                        <li>🔄 Status tracking (queued→running→done)</li>
+                        <li>🖥️ GPU cluster monitoring</li>
+                        <li>📊 Resource usage charts</li>
+                        <li>📝 Live log viewer</li>
+                        <li>⏱️ Execution time tracking</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/compute" target="_blank" class="btn">View Compute →</a>
+                </div>
+            </div>
+
+            <!-- AETHEL AI -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🤖 AETHEL AI Assistant</h2>
+                    <div class="url">/aethel</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>AI-powered research assistant</strong></p>
+                    <ul class="feature-list">
+                        <li>💬 Chat interface for queries</li>
+                        <li>🧬 Domain-specific knowledge</li>
+                        <li>📝 Literature summarization</li>
+                        <li>🔬 Hypothesis generation</li>
+                        <li>📊 Data analysis suggestions</li>
+                        <li>🎯 Research recommendations</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/aethel" target="_blank" class="btn">View AI →</a>
+                </div>
+            </div>
+
+            <!-- KNOWLEDGE GRAPH -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🕸️ Knowledge Graph</h2>
+                    <div class="url">/knowledge</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>Visual knowledge exploration</strong></p>
+                    <ul class="feature-list">
+                        <li>🔗 Entity relationship mapping</li>
+                        <li>📊 Interactive graph visualization</li>
+                        <li>🔍 Concept discovery</li>
+                        <li>📚 Citation network views</li>
+                        <li>🏷️ Topic clustering</li>
+                        <li>🔬 Gene-disease associations</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/knowledge" target="_blank" class="btn">View Graph →</a>
+                </div>
+            </div>
+
+            <!-- COLLABORATION -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>👥 Collaboration</h2>
+                    <div class="url">/collaboration</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>Team sharing & permissions</strong></p>
+                    <ul class="feature-list">
+                        <li>👨‍🔬 Team member management</li>
+                        <li>📁 Shared workspaces</li>
+                        <li>🔒 Permission controls (view/edit/admin)</li>
+                        <li>💬 Comments & discussions</li>
+                        <li>📊 Activity tracking</li>
+                        <li>🔔 Notification settings</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/collaboration" target="_blank" class="btn">View Team →</a>
+                </div>
+            </div>
+
+            <!-- SETTINGS -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>⚙️ Settings</h2>
+                    <div class="url">/settings</div>
+                </div>
+                <div class="card-body">
+                    <p><strong>User preferences & configuration</strong></p>
+                    <ul class="feature-list">
+                        <li>👤 Profile information</li>
+                        <li>🔔 Notification preferences</li>
+                        <li>🎨 Theme customization</li>
+                        <li>📦 Database configuration</li>
+                        <li>🔑 API key management</li>
+                        <li>📊 Data export options</li>
+                        <li>🌐 Language settings</li>
+                    </ul>
+                    <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/settings" target="_blank" class="btn">View Settings →</a>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- API ROUTES SECTION -->
+        <div style="background: white; border-radius: 15px; padding: 30px; margin-top: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
+            <h2 style="color: #667eea; margin-bottom: 20px;">🔌 Dynamic API Routes (5 Endpoints)</h2>
+            <div class="grid">
+                <div style="padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                    <h3>/api/search</h3>
+                    <p>Literature search via CrossRef + OpenAlex</p>
+                    <span class="badge badge-free">FREE</span>
+                </div>
+                <div style="padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                    <h3>/api/connectors</h3>
+                    <p>Manage 15 data sources (12 free + 3 premium)</p>
+                    <span class="badge badge-free">FREE</span>
+                </div>
+                <div style="padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                    <h3>/api/datasets</h3>
+                    <p>CRUD operations with tier limits</p>
+                    <span class="badge badge-free">FREE</span>
+                </div>
+                <div style="padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                    <h3>/api/subscription</h3>
+                    <p>Handle upgrade requests & forms</p>
+                    <span class="badge badge-premium">PREMIUM</span>
+                </div>
+                <div style="padding: 15px; background: #f8f9fa; border-radius: 10px;">
+                    <h3>/api/health</h3>
+                    <p>System health & API monitoring</p>
+                    <span class="badge badge-free">FREE</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p><strong>SciHub Pro v2.0</strong> | Built with Next.js 16 • TypeScript • Tailwind CSS • shadcn/ui</p>
+            <p style="margin-top: 10px;">🚀 <strong>All pages are LIVE now at:</strong> <a href="https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/" style="color: #00ff88;">Click here to open</a></p>
+        </div>
+    </div>
+</body>
+</html>
