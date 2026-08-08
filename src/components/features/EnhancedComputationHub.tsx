@@ -719,13 +719,13 @@ function BioinformaticsToolsSection() {
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-3xl font-bold text-emerald-600">6+</p>
-            <p className="text-sm text-muted-foreground">Bio Tools</p>
+            <p className="text-sm text-muted-foreground">Tools Available</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
             <p className="text-3xl font-bold text-blue-600">4</p>
-            <p className="text-sm text-muted-foreground">Pipelines</p>
+            <p className="text-sm text-muted-foreground">Pre-built Pipelines</p>
           </CardContent>
         </Card>
         <Card>
@@ -740,119 +740,6 @@ function BioinformaticsToolsSection() {
             <p className="text-sm text-muted-foreground">Free Tier Jobs</p>
           </CardContent>
         </Card>
-      </div>
-
-      <Separator className="my-8" />
-
-      {/* ============ CHEMINFORMATICS SECTION ============ */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <span className="text-2xl">⚗️</span> Cheminformatics Tools Library
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { id: 'rdkit', name: 'RDKit', category: 'Chemistry Toolkit', description: 'Open-source cheminformatics and ML', version: '2024.03', inputs: ['SMILES', 'SDF', 'MOL'] },
-            { id: 'openbabel', name: 'Open Babel', category: 'File Conversion', description: 'Chemical format converter', version: '3.1.1', inputs: ['55+ Formats'] },
-            { id: 'autodock', name: 'AutoDock Vina', category: 'Molecular Docking', description: 'Protein-ligand docking', version: '1.2.5', inputs: ['PDB', 'MOL2'] },
-            { id: 'gromacs', name: 'GROMACS', category: 'MD Simulation', description: 'Molecular dynamics package', version: '2024.3', inputs: ['Topology', 'Coords'] },
-            { id: 'ambertools', name: 'AmberTools', category: 'Simulation Suite', description: 'Biomolecular simulation', version: '24.0', inputs: ['PRMTOP', 'INPCRD'] },
-            { id: 'chemaxon', name: 'ChemAxon Marble', category: 'Prediction Suite', description: 'Property prediction platform', version: '23.20', inputs: ['SMILES', 'Structure'] }
-          ].map((tool) => (
-            <Card key={tool.id} className="hover:shadow-md transition-shadow cursor-pointer group">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base group-hover:text-violet-600 transition-colors">{tool.name}</CardTitle>
-                    <CardDescription className="mt-1">{tool.description}</CardDescription>
-                  </div>
-                  <Badge variant="secondary">{tool.version}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Badge variant="outline" className="mb-2">{tool.category}</Badge>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Inputs:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {tool.inputs.map((input) => (
-                        <Badge key={input} variant="secondary" className="text-xs">{input}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <Button className="w-full" size="sm" variant="outline">Launch Tool →</Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      <Separator className="my-8" />
-
-      {/* ============ MOLECULAR MODELLING SECTION ============ */}
-      <div>
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-          <span className="text-2xl">🔬</span> Molecular Modelling Suite
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[
-            { id: 'pymol', name: 'PyMOL', category: 'Visualization', description: '3D molecular visualization', version: '3.0', inputs: ['PDB', 'SDF', 'CIF'] },
-            { id: 'schrodinger', name: 'Schrodinger Suite', category: 'Drug Design', description: 'Complete drug discovery suite', version: '2024.3', inputs: ['Structures', 'Ligands'] },
-            { id: 'namd', name: 'NAMD', category: 'MD Simulation', description: 'Scalable molecular dynamics', version: '3.0', inputs: ['PSF', 'DCD'] },
-            { id: 'lammps', name: 'LAMMPS', category: 'Classical MD', description: 'Classical molecular dynamics', version: '2023.11', inputs: ['Data file', 'Input script'] },
-            { id: 'cp2k', name: 'CP2K', category: 'QM/MM', description: 'Quantum chemistry methods', version: '2024.1', inputs: ['XYZ', 'INPUT'] },
-            { id: 'desmond', name: 'Desmond', category: 'MD Engine', description: 'High-performance MD simulator', version: '6.9', inputs: ['CMS', 'MAE'] }
-          ].map((tool) => (
-            <Card key={tool.id} className="hover:shadow-md transition-shadow cursor-pointer group">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base group-hover:text-cyan-600 transition-colors">{tool.name}</CardTitle>
-                    <CardDescription className="mt-1">{tool.description}</CardDescription>
-                  </div>
-                  <Badge variant="secondary">{tool.version}</Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Badge variant="outline" className="mb-2">{tool.category}</Badge>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Inputs:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {tool.inputs.map((input) => (
-                        <Badge key={input} variant="secondary" className="text-xs">{input}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <Button className="w-full" size="sm" variant="outline">Launch Tool →</Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-
-      {/* Combined Stats */}
-      <div className="mt-8 p-6 bg-gradient-to-r from-emerald-50 via-violet-50 to-cyan-50 dark:from-emerald-950/20 dark:via-violet-950/20 dark:to-cyan-950/20 rounded-xl border">
-        <h4 className="font-semibold mb-4 text-center">🧪 Life Sciences Computing Hub</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center">
-            <p className="text-2xl font-bold text-emerald-600">18+</p>
-            <p className="text-sm text-muted-foreground">Total Tools</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-violet-600">3</p>
-            <p className="text-sm text-muted-foreground">Scientific Domains</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-cyan-600">GPU</p>
-            <p className="text-sm text-muted-foreground">Accelerated</p>
-          </div>
-          <div className="text-center">
-            <p className="text-2xl font-bold text-orange-600">24/7</p>
-            <p className="text-sm text-muted-foreground">Available</p>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -875,7 +762,7 @@ export default function EnhancedComputationHub() {
             </h1>
           </div>
           <p className="text-lg text-muted-foreground max-w-3xl">
-            Unified access to Quantum Computing, HPC Clusters, AI Platforms, Bioinformatics, Cheminformatics, and Molecular Modelling — 
+            Unified access to Quantum Computing, HPC Clusters, AI Platforms, and Bioinformatics Tools — 
             all in one integrated scientific computing environment.
           </p>
           <div className="flex flex-wrap gap-2 mt-4">
@@ -889,10 +776,7 @@ export default function EnhancedComputationHub() {
               🤖 AI Models
             </Badge>
             <Badge className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white">
-              🧬 Life Sciences
-            </Badge>
-            <Badge className="px-3 py-1 bg-gradient-to-r from-violet-500 to-purple-500 text-white">
-              ⚗️ Chemistry
+              🧬 Bioinformatics
             </Badge>
           </div>
         </div>
