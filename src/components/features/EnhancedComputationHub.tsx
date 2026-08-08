@@ -745,6 +745,210 @@ function BioinformaticsToolsSection() {
   );
 }
 
+// ============ CHEMINFORMATICS SECTION ============
+
+function CheminformaticsSection() {
+  const [tools] = useState([
+    {
+      id: 'rdkit',
+      name: 'RDKit',
+      category: 'Chemistry Toolkit',
+      description: 'Open-source cheminformatics and machine learning',
+      version: '2024.03.0',
+      inputs: ['SMILES', 'SDF', 'MOL'],
+      output: ['Descriptors', 'Fingerprints', 'Molecular Graphs']
+    },
+    {
+      id: 'openbabel',
+      name: 'Open Babel',
+      category: 'File Conversion',
+      description: 'Chemical file format converter and toolbox',
+      version: '3.1.1',
+      inputs: ['55+ Formats'],
+      output: ['Converted Files', '3D Coordinates']
+    },
+    {
+      id: 'autodock',
+      name: 'AutoDock Vina',
+      category: 'Molecular Docking',
+      description: 'Protein-ligand docking simulation',
+      version: '1.2.5',
+      inputs: ['Receptor PDB', 'Ligand MOL2'],
+      output: ['Binding Poses', 'Affinity Scores']
+    },
+    {
+      id: 'gromacs',
+      name: 'GROMACS',
+      category: 'MD Simulation',
+      description: 'Molecular dynamics package for biochemistry',
+      version: '2024.3',
+      inputs: ['Topology', 'Coordinate Files'],
+      output: ['Trajectories', 'Energy Data']
+    },
+    {
+      id: 'ambertools',
+      name: 'AmberTools',
+      category: 'Simulation Suite',
+      description: 'Biomolecular simulation programs',
+      version: '24.0',
+      inputs: ['PRMTOP', 'INPCRD'],
+      output: ['Trajectories', 'Analysis']
+    },
+    {
+      id: 'chemaxon',
+      name: 'ChemAxon Marble',
+      category: 'Prediction Suite',
+      description: 'Chemical property prediction platform',
+      version: '23.20',
+      inputs: ['Structure', 'SMILES'],
+      output: ['pKa', 'LogP', 'Solubility']
+    }
+  ]);
+
+  const [workflows] = useState([
+    {
+      id: 'drug-discovery',
+      name: 'Virtual Screening Pipeline',
+      steps: 8,
+      estimatedTime: '6-24 hours',
+      toolsUsed: ['Ligand Prep', 'Docking', 'Scoring', 'ADMET']
+    },
+    {
+      id: 'qsar',
+      name: 'QSAR Modeling Workflow',
+      steps: 6,
+      estimatedTime: '2-4 hours',
+      toolsUsed: ['Descriptor Calc', 'Feature Selection', 'ML Model', 'Validation']
+    },
+    {
+      id: 'md-setup',
+      name: 'MD Simulation Setup',
+      steps: 10,
+      estimatedTime: '1-2 hours setup + runtime',
+      toolsUsed: ['Structure Prep', 'Solvation', 'Minimization', 'Equilibration']
+    },
+    {
+      id: 'property-prediction',
+      name: 'Property Prediction Batch',
+      steps: 4,
+      estimatedTime: '30 min - 2 hours',
+      toolsUsed: ['Input Parser', 'Calculator', 'Report Generator']
+    }
+  ]);
+
+  return (
+    <div className="space-y-6">
+      {/* Cheminformatics Tools Grid */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span className="text-2xl">⚗️</span> Cheminformatics Tools Library
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tools.map((tool) => (
+            <Card key={tool.id} className="hover:shadow-md transition-shadow cursor-pointer group">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base group-hover:text-primary transition-colors">
+                      {tool.name}
+                    </CardTitle>
+                    <CardDescription className="mt-1">{tool.description}</CardDescription>
+                  </div>
+                  <Badge variant="secondary">{tool.version}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div>
+                    <Badge variant="outline" className="mb-2">{tool.category}</Badge>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Inputs:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {tool.inputs.map((input) => (
+                        <Badge key={input} variant="secondary" className="text-xs">{input}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Button className="w-full" size="sm" variant="outline">
+                    Launch Tool →
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Pre-built Workflows */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span className="text-2xl">🔬</span> Pre-built Chemistry Workflows
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {workflows.map((workflow) => (
+            <Card key={workflow.id} className="bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-950/30 dark:to-purple-950/30 border-violet-200">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <CardTitle className="text-base">{workflow.name}</CardTitle>
+                  <Badge className="bg-violet-500">{workflow.steps} Steps</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Est. Time:</span>
+                    <span className="font-medium">{workflow.estimatedTime}</span>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground mb-1">Tools Used:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {workflow.toolsUsed.map((tool) => (
+                        <Badge key={tool} variant="outline" className="text-xs">{tool}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <Button className="w-full mt-4" size="sm">
+                  Run Workflow →
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-violet-600">6+</p>
+            <p className="text-sm text-muted-foreground">Tools Available</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-blue-600">4</p>
+            <p className="text-sm text-muted-foreground">Pre-built Workflows</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-purple-600">GPU</p>
+            <p className="text-sm text-muted-foreground">Accelerated</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center">
+            <p className="text-3xl font-bold text-orange-600">∞</p>
+            <p className="text-sm text-muted-foreground">Free Tier Jobs</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 // ============ MAIN COMPONENT ============
 
 export default function EnhancedComputationHub() {
@@ -762,7 +966,7 @@ export default function EnhancedComputationHub() {
             </h1>
           </div>
           <p className="text-lg text-muted-foreground max-w-3xl">
-            Unified access to Quantum Computing, HPC Clusters, AI Platforms, and Bioinformatics Tools — 
+            Unified access to Quantum Computing, HPC Clusters, AI Platforms, Bioinformatics, and Cheminformatics Tools — 
             all in one integrated scientific computing environment.
           </p>
           <div className="flex flex-wrap gap-2 mt-4">
@@ -778,12 +982,15 @@ export default function EnhancedComputationHub() {
             <Badge className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white">
               🧬 Bioinformatics
             </Badge>
+            <Badge className="px-3 py-1 bg-gradient-to-r from-violet-500 to-purple-500 text-white">
+              ⚗️ Cheminformatics
+            </Badge>
           </div>
         </div>
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 max-w-4xl mx-auto mb-8 h-auto">
+          <TabsList className="grid w-full grid-cols-6 max-w-5xl mx-auto mb-8 h-auto">
             <TabsTrigger value="quantum" className="gap-2 py-3 text-xs sm:text-sm">
               <span>⚛️</span> Quantum
             </TabsTrigger>
@@ -795,6 +1002,9 @@ export default function EnhancedComputationHub() {
             </TabsTrigger>
             <TabsTrigger value="bio" className="gap-2 py-3 text-xs sm:text-sm">
               <span>🧬</span> Bioinformatics
+            </TabsTrigger>
+            <TabsTrigger value="chem" className="gap-2 py-3 text-xs sm:text-sm">
+              <span>⚗️</span> Cheminformatics
             </TabsTrigger>
             <TabsTrigger value="status" className="gap-2 py-3 text-xs sm:text-sm">
               <span>📊</span> System Status
@@ -815,6 +1025,10 @@ export default function EnhancedComputationHub() {
 
           <TabsContent value="bio">
             <BioinformaticsToolsSection />
+          </TabsContent>
+
+          <TabsContent value="chem">
+            <CheminformaticsSection />
           </TabsContent>
 
           <TabsContent value="status">

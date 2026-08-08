@@ -1,0 +1,964 @@
+     1→'use client';
+     2→
+     3→import { useState, useEffect } from 'react';
+     4→import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+     5→import { Badge } from '@/components/ui/badge';
+     6→import { Button } from '@/components/ui/button';
+     7→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+     8→import { Progress } from '@/components/ui/progress';
+     9→import { Separator } from '@/components/ui/separator';
+    10→
+    11→// ============ TYPES ============
+    12→
+    13→interface ComputeResource {
+    14→  id: string;
+    15→  name: string;
+    16→  type: 'quantum' | 'hpc' | 'ai' | 'bioinformatics';
+    17→  status: 'available' | 'busy' | 'offline' | 'maintenance';
+    18→  capacity: number;
+    19→  used: number;
+    20→  specs: string[];
+    21→  region: string;
+    22→}
+    23→
+    24→interface JobQueue {
+    25→  id: string;
+    26→  name: string;
+    27→  type: string;
+    28→  status: 'queued' | 'running' | 'completed' | 'failed';
+    29→  progress: number;
+    30→  submitter: string;
+    31→  computeTime: string;
+    32→  priority: 'low' | 'normal' | 'high' | 'urgent';
+    33→}
+    34→
+    35→// ============ QUANTUM COMPUTING SECTION ============
+    36→
+    37→function QuantumComputingSection() {
+    38→  const [quantumBackends] = useState([
+    39→    {
+    40→      id: 'ibm-montreal',
+    41→      name: 'IBM Montreal',
+    42→      qubits: 127,
+    43→      type: 'Superconducting',
+    44→      status: 'available',
+    45→      queueTime: '~2 min',
+    46→      errorRate: '0.05%'
+    47→    },
+    48→    {
+    49→      id: 'google-sycamore',
+    50→      name: 'Google Sycamore',
+    51→      qubits: 53,
+    52→      type: 'Superconducting',
+    53→      status: 'busy',
+    54→      queueTime: '~15 min',
+    55→      errorRate: '0.03%'
+    56→    },
+    57→    {
+    58→      id: 'ionq-harmony',
+    59→      name: 'IonQ Harmony',
+    60→      qubits: 32,
+    61→      type: 'Trapped Ion',
+    62→      status: 'available',
+    63→      queueTime: '~5 min',
+    64→      errorRate: '0.01%'
+    65→    },
+    66→    {
+    67→      id: 'rigetti-aspen',
+    68→      name: 'Rigetti Aspen-M',
+    69→      qubits: 80,
+    70→      type: 'Superconducting',
+    71→      status: 'available',
+    72→      queueTime: '~8 min',
+    73→      errorRate: '0.08%'
+    74→    }
+    75→  ]);
+    76→
+    77→  const [quantumAlgorithms] = useState([
+    78→    { name: 'VQE (Variational Quantum Eigensolver)', category: 'Chemistry', difficulty: 'Advanced' },
+    79→    { name: 'QAOA (Quantum Approximate Optimization)', category: 'Optimization', difficulty: 'Intermediate' },
+    80→    { name: 'Grover\'s Search Algorithm', category: 'Database', difficulty: 'Beginner' },
+    81→    { name: 'Shor\'s Factoring', category: 'Cryptography', difficulty: 'Expert' },
+    82→    { name: 'Quantum Phase Estimation', category: 'Simulation', difficulty: 'Advanced' },
+    83→    { name: 'QFT (Quantum Fourier Transform)', category: 'Signal Processing', difficulty: 'Intermediate' }
+    84→  ]);
+    85→
+    86→  return (
+    87→    <div className="space-y-6">
+    88→      {/* Quantum Backends Grid */}
+    89→      <div>
+    90→        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+    91→          <span className="text-2xl">⚛️</span> Quantum Processing Units (QPUs)
+    92→        </h3>
+    93→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    94→          {quantumBackends.map((backend) => (
+    95→            <Card key={backend.id} className={`border-2 ${
+    96→              backend.status === 'available' ? 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20' :
+    97→              backend.status === 'busy' ? 'border-yellow-200 bg-yellow-50/50 dark:border-yellow-800 dark:bg-yellow-950/20' :
+    98→              'border-gray-200'
+    99→            }`}>
+   100→              <CardHeader className="pb-3">
+   101→                <div className="flex items-start justify-between">
+   102→                  <div>
+   103→                    <CardTitle className="text-base">{backend.name}</CardTitle>
+   104→                    <CardDescription className="mt-1">{backend.type} • {backend.qubits} Qubits</CardDescription>
+   105→                  </div>
+   106→                  <Badge 
+   107→                    variant={backend.status === 'available' ? 'default' : 'secondary'}
+   108→                    className={backend.status === 'available' ? 'bg-green-500' : 'bg-yellow-500'}
+   109→                  >
+   110→                    {backend.status}
+   111→                  </Badge>
+   112→                </div>
+   113→              </CardHeader>
+   114→              <CardContent>
+   115→                <div className="space-y-2 text-sm">
+   116→                  <div className="flex justify-between">
+   117→                    <span className="text-muted-foreground">Queue Time:</span>
+   118→                    <span className="font-medium">{backend.queueTime}</span>
+   119→                  </div>
+   120→                  <div className="flex justify-between">
+   121→                    <span className="text-muted-foreground">Error Rate:</span>
+   122→                    <span className="font-medium">{backend.errorRate}</span>
+   123→                  </div>
+   124→                </div>
+   125→                <Button className="w-full mt-4" size="sm" variant="outline">
+   126→                  Launch Quantum Job →
+   127→                </Button>
+   128→              </CardContent>
+   129→            </Card>
+   130→          ))}
+   131→        </div>
+   132→      </div>
+   133→
+   134→      {/* Quantum Algorithms */}
+   135→      <div>
+   136→        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+   137→          <span className="text-2xl">🔬</span> Available Algorithms
+   138→        </h3>
+   139→        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+   140→          {quantumAlgorithms.map((algo, idx) => (
+   141→            <Card key={idx} className="hover:shadow-md transition-shadow cursor-pointer">
+   142→              <CardContent className="p-4">
+   143→                <h4 className="font-medium text-sm">{algo.name}</h4>
+   144→                <div className="flex gap-2 mt-2">
+   145→                  <Badge variant="secondary" className="text-xs">{algo.category}</Badge>
+   146→                  <Badge variant="outline" className="text-xs">{algo.difficulty}</Badge>
+   147→                </div>
+   148→              </CardContent>
+   149→            </Card>
+   150→          ))}
+   151→        </div>
+   152→      </div>
+   153→
+   154→      {/* Quick Stats */}
+   155→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   156→        <Card className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
+   157→          <CardContent className="p-4 text-center">
+   158→            <p className="text-3xl font-bold">292</p>
+   159→            <p className="text-sm opacity-90">Total Qubits</p>
+   160→          </CardContent>
+   161→        </Card>
+   162→        <Card className="bg-gradient-to-br from-blue-500 to-cyan-600 text-white">
+   163→          <CardContent className="p-4 text-center">
+   164→            <p className="text-3xl font-bold">4</p>
+   165→            <p className="text-sm opacity-90">QPUs Online</p>
+   166→          </CardContent>
+   167→        </Card>
+   168→        <Card className="bg-gradient-to-br from-green-500 to-emerald-600 text-white">
+   169→          <CardContent className="p-4 text-center">
+   170→            <p className="text-3xl font-bold">6</p>
+   171→            <p className="text-sm opacity-90">Algorithms</p>
+   172→          </CardContent>
+   173→        </Card>
+   174→        <Card className="bg-gradient-to-br from-orange-500 to-red-600 text-white">
+   175→          <CardContent className="p-4 text-center">
+   176→            <p className="text-3xl font-bold">99.9%</p>
+   177→            <p className="text-sm opacity-90">Uptime</p>
+   178→          </CardContent>
+   179→        </Card>
+   180→      </div>
+   181→    </div>
+   182→  );
+   183→}
+   184→
+   185→// ============ HPC CLUSTERS SECTION ============
+   186→
+   187→function HPCClustersSection() {
+   188→  const [clusters] = useState([
+   189→    {
+   190→      id: 'cluster-alpha',
+   191→      name: 'Alpha Cluster',
+   192→      nodes: 1024,
+   193→      cores: 16384,
+   194→      gpuNodes: 128,
+   195→      memory: '64TB',
+   196→      status: 'operational',
+   197→      utilization: 78
+   198→    },
+   199→    {
+   200→      id: 'cluster-beta',
+   201→      name: 'Beta Cluster',
+   202→      nodes: 512,
+   203→      cores: 8192,
+   204→      gpuNodes: 64,
+   205→      memory: '32TB',
+   206→      status: 'operational',
+   207→      utilization: 45
+   208→    },
+   209→    {
+   210→      id: 'cluster-gamma',
+   211→      name: 'Gamma Cluster (GPU)',
+   212→      nodes: 256,
+   213→      cores: 4096,
+   214→      gpuNodes: 256,
+   215→      memory: '16TB',
+   216→      status: 'maintenance',
+   217→      utilization: 0
+   218→    }
+   219→  ]);
+   220→
+   221→  const [jobQueue] = useState<JobQueue[]>([
+   222→    { id: 'j1', name: 'Molecular Dynamics Simulation', type: 'MD', status: 'running', progress: 67, submitter: 'Dr. Chen', computeTime: '48h', priority: 'high' },
+   223→    { id: 'j2', name: 'Genome Assembly Pipeline', type: 'Bio', status: 'queued', progress: 0, submitter: 'Prof. Lee', computeTime: '12h', priority: 'normal' },
+   224→    { id: 'j3', name: 'Neural Network Training', type: 'AI', status: 'running', progress: 34, submitter: 'Dr. Patel', computeTime: '24h', priority: 'urgent' },
+   225→    { id: 'j4', name: 'CFD Simulation', type: 'Eng', status: 'completed', progress: 100, submitter: 'Dr. Kim', computeTime: '72h', priority: 'low' }
+   226→  ]);
+   227→
+   228→  return (
+   229→    <div className="space-y-6">
+   230→      {/* HPC Clusters Overview */}
+   231→      <div>
+   232→        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+   233→          <span className="text-2xl">🖥️</span> HPC Infrastructure
+   234→        </h3>
+   235→        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+   236→          {clusters.map((cluster) => (
+   237→            <Card key={cluster.id} className={
+   238→              cluster.status === 'maintenance' ? 'opacity-60 border-dashed' : ''
+   239→            }>
+   240→              <CardHeader className="pb-3">
+   241→                <div className="flex items-start justify-between">
+   242→                  <CardTitle className="text-base">{cluster.name}</CardTitle>
+   243→                  <Badge 
+   244→                    variant={cluster.status === 'operational' ? 'default' : 'secondary'}
+   245→                    className={cluster.status === 'maintenance' ? 'bg-orange-500' : 'bg-green-500'}
+   246→                  >
+   247→                    {cluster.status}
+   248→                  </Badge>
+   249→                </div>
+   250→              </CardHeader>
+   251→              <CardContent>
+   252→                <div className="space-y-3">
+   253→                  <div className="grid grid-cols-2 gap-2 text-sm">
+   254→                    <div>
+   255→                      <p className="text-muted-foreground">Nodes</p>
+   256→                      <p className="font-semibold text-lg">{cluster.nodes.toLocaleString()}</p>
+   257→                    </div>
+   258→                    <div>
+   259→                      <p className="text-muted-foreground">Cores</p>
+   260→                      <p className="font-semibold text-lg">{cluster.cores.toLocaleString()}</p>
+   261→                    </div>
+   262→                    <div>
+   263→                      <p className="text-muted-foreground">GPU Nodes</p>
+   264→                      <p className="font-semibold text-lg">{cluster.gpuNodes}</p>
+   265→                    </div>
+   266→                    <div>
+   267→                      <p className="text-muted-foreground">Memory</p>
+   268→                      <p className="font-semibold text-lg">{cluster.memory}</p>
+   269→                    </div>
+   270→                  </div>
+   271→                  
+   272→                  {cluster.status === 'operational' && (
+   273→                    <div>
+   274→                      <div className="flex justify-between text-sm mb-1">
+   275→                        <span className="text-muted-foreground">Utilization</span>
+   276→                        <span className="font-medium">{cluster.utilization}%</span>
+   277→                      </div>
+   278→                      <Progress value={cluster.utilization} />
+   279→                    </div>
+   280→                  )}
+   281→                </div>
+   282→              </CardContent>
+   283→            </Card>
+   284→          ))}
+   285→        </div>
+   286→      </div>
+   287→
+   288→      {/* Job Queue */}
+   289→      <div>
+   290→        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+   291→          <span className="text-2xl">📋</span> Active Job Queue
+   292→        </h3>
+   293→        <Card>
+   294→          <CardContent className="p-0">
+   295→            <div className="overflow-x-auto">
+   296→              <table className="w-full">
+   297→                <thead className="bg-muted/50">
+   298→                  <tr>
+   299→                    <th className="text-left p-3 text-sm font-medium">Job Name</th>
+   300→                    <th className="text-left p-3 text-sm font-medium">Type</th>
+   301→                    <th className="text-left p-3 text-sm font-medium">Status</th>
+   302→                    <th className="text-left p-3 text-sm font-medium">Progress</th>
+   303→                    <th className="text-left p-3 text-sm font-medium">Submitter</th>
+   304→                    <th className="text-left p-3 text-sm font-medium">Priority</th>
+   305→                  </tr>
+   306→                </thead>
+   307→                <tbody>
+   308→                  {jobQueue.map((job) => (
+   309→                    <tr key={job.id} className="border-t">
+   310→                      <td className="p-3 text-sm font-medium">{job.name}</td>
+   311→                      <td className="p-3"><Badge variant="outline" className="text-xs">{job.type}</Badge></td>
+   312→                      <td className="p-3">
+   313→                        <Badge 
+   314→                          variant={job.status === 'running' ? 'default' : job.status === 'completed' ? 'default' : 'secondary'}
+   315→                          className={
+   316→                            job.status === 'running' ? 'bg-blue-500' : 
+   317→                            job.status === 'completed' ? 'bg-green-500' : 
+   318→                            job.status === 'failed' ? 'bg-red-500' : ''
+   319→                          }
+   320→                        >
+   321→                          {job.status}
+   322→                        </Badge>
+   323→                      </td>
+   324→                      <td className="p-3 min-w-[120px]">
+   325→                        {job.status === 'running' ? (
+   326→                          <div className="space-y-1">
+   327→                            <Progress value={job.progress} className="h-2" />
+   328→                            <span className="text-xs text-muted-foreground">{job.progress}%</span>
+   329→                          </div>
+   330→                        ) : (
+   331→                          <span className="text-sm text-muted-foreground">—</span>
+   332→                        )}
+   333→                      </td>
+   334→                      <td className="p-3 text-sm">{job.submitter}</td>
+   335→                      <td className="p-3">
+   336→                        <Badge 
+   337→                          variant={job.priority === 'urgent' ? 'default' : 'secondary'}
+   338→                          className={
+   339→                            job.priority === 'urgent' ? 'bg-red-500' : 
+   340→                            job.priority === 'high' ? 'bg-orange-500' : ''
+   341→                          }
+   342→                        >
+   343→                          {job.priority}
+   344→                        </Badge>
+   345→                      </td>
+   346→                    </tr>
+   347→                  ))}
+   348→                </tbody>
+   349→              </table>
+   350→            </div>
+   351→          </CardContent>
+   352→        </Card>
+   353→      </div>
+   354→
+   355→      {/* Submit New Job */}
+   356→      <Card className="bg-gradient-to-r from-slate-900 to-slate-800 text-white">
+   357→        <CardContent className="p-6">
+   358→          <div className="flex items-center justify-between">
+   359→            <div>
+   360→              <h3 className="text-xl font-semibold">⚡ Submit HPC Job</h3>
+   361→              <p className="text-slate-300 mt-1">Access 16,384+ cores across our cluster infrastructure</p>
+   362→            </div>
+   363→            <Button size="lg" className="bg-white text-black hover:bg-slate-200">
+   364→              Launch Job →
+   365→            </Button>
+   366→          </div>
+   367→        </CardContent>
+   368→      </Card>
+   369→    </div>
+   370→  );
+   371→}
+   372→
+   373→// ============ AI PLATFORMS SECTION ============
+   374→
+   375→function AIPlatformsSection() {
+   376→  const [aiModels] = useState([
+   377→    {
+   378→      id: 'gpt-4-turbo',
+   379→      name: 'GPT-4 Turbo',
+   380→      provider: 'OpenAI',
+   381→      context: '128K tokens',
+   382→      speed: 'Fast',
+   383→      cost: '$0.01/1K tokens',
+   384→      capabilities: ['Text', 'Code', 'Analysis'],
+   385→      available: true
+   386→    },
+   387→    {
+   388→      id: 'claude-3-opus',
+   389→      name: 'Claude 3 Opus',
+   390→      provider: 'Anthropic',
+   391→      context: '200K tokens',
+   392→      speed: 'Medium',
+   393→      cost: '$0.015/1K tokens',
+   394→      capabilities: ['Text', 'Analysis', 'Long-form'],
+   395→      available: true
+   396→    },
+   397→    {
+   398→      id: 'llama-3-400b',
+   399→      name: 'Llama 3 400B',
+   400→      provider: 'Meta (Self-hosted)',
+   401→      context: '128K tokens',
+   402→      speed: 'Fast',
+   403→      cost: 'Free (Compute only)',
+   404→      capabilities: ['Text', 'Code', 'Multilingual'],
+   405→      available: true
+   406→    },
+   407→    {
+   408→      id: 'gemini-ultra',
+   409→      name: 'Gemini Ultra',
+   410→      provider: 'Google',
+   411→      context: '1M tokens',
+   412→      speed: 'Medium',
+   413→      cost: '$0.02/1K tokens',
+   414→      capabilities: ['Multimodal', 'Text', 'Image', 'Code'],
+   415→      available: false
+   416→    }
+   417→  ]);
+   418→
+   419→  const [gpuPools] = useState([
+   420→    { name: 'NVIDIA A100 80GB', count: 64, available: 23, performance: '312 TFLOPS' },
+   421→    { name: 'NVIDIA H100 80GB', count: 32, available: 8, performance: '1979 TFLOPS' },
+   422→    { name: 'AMD MI250X', count: 16, available: 12, performance: '383 TFLOPS' }
+   423→  ]);
+   424→
+   425→  return (
+   426→    <div className="space-y-6">
+   427→      {/* AI Models Available */}
+   428→      <div>
+   429→        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+   430→          <span className="text-2xl">🤖</span> AI Model Hub
+   431→        </h3>
+   432→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   433→          {aiModels.map((model) => (
+   434→            <Card key={model.id} className={!model.available ? 'opacity-60' : ''}>
+   435→              <CardHeader className="pb-3">
+   436→                <div className="flex items-start justify-between">
+   437→                  <div>
+   438→                    <CardTitle className="text-base">{model.name}</CardTitle>
+   439→                    <CardDescription className="mt-1">{model.provider}</CardDescription>
+   440→                  </div>
+   441→                  <Badge variant={model.available ? 'default' : 'secondary'}>
+   442→                    {model.available ? 'Available' : 'Maintenance'}
+   443→                  </Badge>
+   444→                </div>
+   445→              </CardHeader>
+   446→              <CardContent>
+   447→                <div className="space-y-2 text-sm">
+   448→                  <div className="flex justify-between">
+   449→                    <span className="text-muted-foreground">Context Window:</span>
+   450→                    <span className="font-medium">{model.context}</span>
+   451→                  </div>
+   452→                  <div className="flex justify-between">
+   453→                    <span className="text-muted-foreground">Speed:</span>
+   454→                    <span className="font-medium">{model.speed}</span>
+   455→                  </div>
+   456→                  <div className="flex justify-between">
+   457→                    <span className="text-muted-foreground">Cost:</span>
+   458→                    <span className="font-medium">{model.cost}</span>
+   459→                  </div>
+   460→                </div>
+   461→                <div className="flex flex-wrap gap-1 mt-3">
+   462→                  {model.capabilities.map((cap) => (
+   463→                    <Badge key={cap} variant="outline" className="text-xs">{cap}</Badge>
+   464→                  ))}
+   465→                </div>
+   466→                <Button className="w-full mt-4" size="sm" disabled={!model.available}>
+   467→                  Use Model →
+   468→                </Button>
+   469→              </CardContent>
+   470→            </Card>
+   471→          ))}
+   472→        </div>
+   473→      </div>
+   474→
+   475→      {/* GPU Resource Pools */}
+   476→      <div>
+   477→        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+   478→          <span className="text-2xl">🎮</span> GPU Compute Pools
+   479→        </h3>
+   480→        <Card>
+   481→          <CardContent className="p-0">
+   482→            <div className="overflow-x-auto">
+   483→              <table className="w-full">
+   484→                <thead className="bg-muted/50">
+   485→                  <tr>
+   486→                    <th className="text-left p-3 text-sm font-medium">GPU Type</th>
+   487→                    <th className="text-left p-3 text-sm font-medium">Total</th>
+   488→                    <th className="text-left p-3 text-sm font-medium">Available</th>
+   489→                    <th className="text-left p-3 text-sm font-medium">Performance</th>
+   490→                    <th className="text-left p-3 text-sm font-medium">Utilization</th>
+   491→                  </tr>
+   492→                </thead>
+   493→                <tbody>
+   494→                  {gpuPools.map((gpu, idx) => (
+   495→                    <tr key={idx} className="border-t">
+   496→                      <td className="p-3 font-medium">{gpu.name}</td>
+   497→                      <td className="p-3">{gpu.count}</td>
+   498→                      <td className="p-3">
+   499→                        <span className={gpu.available < 10 ? 'text-red-500 font-medium' : 'text-green-600'}>
+   500→                          {gpu.available}
+   501→                        </span>
+   502→                      </td>
+   503→                      <td className="p-3">{gpu.performance}</td>
+   504→                      <td className="p-3 min-w-[150px]">
+   505→                        <Progress value={(gpu.count - gpu.available) / gpu.count * 100} />
+   506→                      </td>
+   507→                    </tr>
+   508→                  ))}
+   509→                </tbody>
+   510→              </table>
+   511→            </div>
+   512→          </CardContent>
+   513→        </Card>
+   514→      </div>
+   515→
+   516→      {/* AI Services */}
+   517→      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+   518→        <Card className="cursor-pointer hover:shadow-lg transition-shadow border-purple-200">
+   519→          <CardContent className="p-6 text-center">
+   520→            <div className="text-4xl mb-3">🧠</div>
+   521→            <h4 className="font-semibold">Fine-Tuning</h4>
+   522→            <p className="text-sm text-muted-foreground mt-1">Custom model training on your data</p>
+   523→          </CardContent>
+   524→        </Card>
+   525→        <Card className="cursor-pointer hover:shadow-lg transition-shadow border-blue-200">
+   526→          <CardContent className="p-6 text-center">
+   527→            <div className="text-4xl mb-3">📊</div>
+   528→            <h4 className="font-semibold">Inference API</h4>
+   529→            <p className="text-sm text-muted-foreground mt-1">Scalable prediction endpoints</p>
+   530→          </CardContent>
+   531→        </Card>
+   532→        <Card className="cursor-pointer hover:shadow-lg transition-shadow border-green-200">
+   533→          <CardContent className="p-6 text-center">
+   534→            <div className="text-4xl mb-3">🔄</div>
+   535→            <h4 className="font-semibold">AutoML</h4>
+   536→            <p className="text-sm text-muted-foreground mt-1">Automated ML pipeline creation</p>
+   537→          </CardContent>
+   538→        </Card>
+   539→      </div>
+   540→    </div>
+   541→  );
+   542→}
+   543→
+   544→// ============ BIOINFORMATICS TOOLS SECTION ============
+   545→
+   546→function BioinformaticsToolsSection() {
+   547→  const [tools] = useState([
+   548→    {
+   549→      id: 'gatk',
+   550→      name: 'GATK 5.0',
+   551→      category: 'Genomics',
+   552→      description: 'Variant discovery and genotyping pipeline',
+   553→      version: '5.0.2',
+   554→      inputs: ['BAM/CRAM', 'Reference FASTQ', 'VCF'],
+   555→      output: ['VCF', 'Metrics']
+   556→    },
+   557→    {
+   558→      id: 'blast',
+   559→      name: 'BLAST+',
+   560→      category: 'Sequence Analysis',
+   561→      description: 'Basic Local Alignment Search Tool',
+   562→      version: '2.15.0',
+   563→      inputs: ['FASTA', 'FASTQ', 'Nucleotide', 'Protein'],
+   564→      output: ['Alignments', 'Hit Table']
+   565→    },
+   566→    {
+   567→      id: 'alphafold',
+   568→      name: 'AlphaFold 3',
+   569→      category: 'Structure Prediction',
+   570→      description: 'AI-powered protein structure prediction',
+   571→      version: '3.0.0',
+   572→      inputs: ['Amino Acid Sequence', 'MSA'],
+   573→      output: ['PDB', 'Confidence Scores', 'PAE Matrix']
+   574→    },
+   575→    {
+   576→      id: 'bowtie2',
+   577→      name: 'Bowtie 2',
+   578→      category: 'Alignment',
+   579→      description: 'Ultrafast short-read alignment',
+   580→      version: '2.5.4',
+   581→      inputs: ['FASTQ', 'Reference Index'],
+   582→      output: ['SAM/BAM', 'Stats']
+   583→    },
+   584→    {
+   585→      id: 'samtools',
+   586→      name: 'SAMtools',
+   587→      category: 'Analysis',
+   588→      description: 'Utilities for SAM/BAM files',
+   589→      version: '1.21',
+   590→      inputs: ['SAM/BAM', 'CRAM'],
+   591→      output: ['Sorted BAM', 'Index', 'Stats']
+   592→    },
+   593→    {
+   594→      id: 'bcftools',
+   595→      name: 'BCFtools',
+   596→      category: 'Variant Calling',
+   597→      description: 'Manipulating VCF/BCF files',
+   598→      version: '1.21',
+   599→      inputs: ['BAM', 'Reference', 'VCF'],
+   600→      output: ['VCF', 'Consensus']
+   601→    }
+   602→  ]);
+   603→
+   604→  const [pipelines] = useState([
+   605→    {
+   606→      id: 'rna-seq',
+   607→      name: 'RNA-Seq Analysis',
+   608→      steps: 6,
+   609→      estimatedTime: '4-8 hours',
+   610→      toolsUsed: ['FastQC', 'STAR', 'featureCounts', 'DESeq2']
+   611→    },
+   612→    {
+   613→      id: 'variant-calling',
+   614→      name: 'Whole Genome Variant Calling',
+   615→      steps: 12,
+   616→      estimatedTime: '24-48 hours',
+   617→      toolsUsed: ['BWA', 'GATK', 'Picard', 'VQSR']
+   618→    },
+   619→    {
+   620→      id: 'single-cell',
+   621→      name: 'Single-Cell RNA-Seq',
+   622→      steps: 8,
+   623→      estimatedTime: '6-12 hours',
+   624→      toolsUsed: ['CellRanger', 'Seurat', 'Scanpy']
+   625→    },
+   626→    {
+   627→      id: 'metagenomics',
+   628→      name: 'Metagenomics Analysis',
+   629→      steps: 7,
+   630→      estimatedTime: '8-16 hours',
+   631→      toolsUsed: ['Kraken2', 'Bracken', 'HUMAnN3']
+   632→    }
+   633→  ]);
+   634→
+   635→  return (
+   636→    <div className="space-y-6">
+   637→      {/* Bioinformatics Tools Grid */}
+   638→      <div>
+   639→        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+   640→          <span className="text-2xl">🧬</span> Bioinformatics Tools Library
+   641→        </h3>
+   642→        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+   643→          {tools.map((tool) => (
+   644→            <Card key={tool.id} className="hover:shadow-md transition-shadow cursor-pointer group">
+   645→              <CardHeader className="pb-3">
+   646→                <div className="flex items-start justify-between">
+   647→                  <div>
+   648→                    <CardTitle className="text-base group-hover:text-primary transition-colors">
+   649→                      {tool.name}
+   650→                    </CardTitle>
+   651→                    <CardDescription className="mt-1">{tool.description}</CardDescription>
+   652→                  </div>
+   653→                  <Badge variant="secondary">{tool.version}</Badge>
+   654→                </div>
+   655→              </CardHeader>
+   656→              <CardContent>
+   657→                <div className="space-y-3">
+   658→                  <div>
+   659→                    <Badge variant="outline" className="mb-2">{tool.category}</Badge>
+   660→                  </div>
+   661→                  <div>
+   662→                    <p className="text-xs text-muted-foreground mb-1">Inputs:</p>
+   663→                    <div className="flex flex-wrap gap-1">
+   664→                      {tool.inputs.map((input) => (
+   665→                        <Badge key={input} variant="secondary" className="text-xs">{input}</Badge>
+   666→                      ))}
+   667→                    </div>
+   668→                  </div>
+   669→                  <Button className="w-full" size="sm" variant="outline">
+   670→                    Launch Tool →
+   671→                  </Button>
+   672→                </div>
+   673→              </CardContent>
+   674→            </Card>
+   675→          ))}
+   676→        </div>
+   677→      </div>
+   678→
+   679→      {/* Pre-built Pipelines */}
+   680→      <div>
+   681→        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+   682→          <span className="text-2xl">🔗</span> Pre-built Analysis Pipelines
+   683→        </h3>
+   684→        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+   685→          {pipelines.map((pipeline) => (
+   686→            <Card key={pipeline.id} className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border-emerald-200">
+   687→              <CardHeader className="pb-3">
+   688→                <div className="flex items-start justify-between">
+   689→                  <CardTitle className="text-base">{pipeline.name}</CardTitle>
+   690→                  <Badge className="bg-emerald-500">{pipeline.steps} Steps</Badge>
+   691→                </div>
+   692→              </CardHeader>
+   693→              <CardContent>
+   694→                <div className="space-y-2 text-sm">
+   695→                  <div className="flex justify-between">
+   696→                    <span className="text-muted-foreground">Est. Time:</span>
+   697→                    <span className="font-medium">{pipeline.estimatedTime}</span>
+   698→                  </div>
+   699→                  <div>
+   700→                    <p className="text-muted-foreground mb-1">Tools Used:</p>
+   701→                    <div className="flex flex-wrap gap-1">
+   702→                      {pipeline.toolsUsed.map((tool) => (
+   703→                        <Badge key={tool} variant="outline" className="text-xs">{tool}</Badge>
+   704→                      ))}
+   705→                    </div>
+   706→                  </div>
+   707→                </div>
+   708→                <Button className="w-full mt-4" size="sm">
+   709→                  Run Pipeline →
+   710→                </Button>
+   711→              </CardContent>
+   712→            </Card>
+   713→          ))}
+   714→        </div>
+   715→      </div>
+   716→
+   717→      {/* Quick Stats */}
+   718→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   719→        <Card>
+   720→          <CardContent className="p-4 text-center">
+   721→            <p className="text-3xl font-bold text-emerald-600">6+</p>
+   722→            <p className="text-sm text-muted-foreground">Tools Available</p>
+   723→          </CardContent>
+   724→        </Card>
+   725→        <Card>
+   726→          <CardContent className="p-4 text-center">
+   727→            <p className="text-3xl font-bold text-blue-600">4</p>
+   728→            <p className="text-sm text-muted-foreground">Pre-built Pipelines</p>
+   729→          </CardContent>
+   730→        </Card>
+   731→        <Card>
+   732→          <CardContent className="p-4 text-center">
+   733→            <p className="text-3xl font-bold text-purple-600">24/7</p>
+   734→            <p className="text-sm text-muted-foreground">Availability</p>
+   735→          </CardContent>
+   736→        </Card>
+   737→        <Card>
+   738→          <CardContent className="p-4 text-center">
+   739→            <p className="text-3xl font-bold text-orange-600">∞</p>
+   740→            <p className="text-sm text-muted-foreground">Free Tier Jobs</p>
+   741→          </CardContent>
+   742→        </Card>
+   743→      </div>
+   744→    </div>
+   745→  );
+   746→}
+   747→
+   748→// ============ MAIN COMPONENT ============
+   749→
+   750→export default function EnhancedComputationHub() {
+   751→  const [activeTab, setActiveTab] = useState('overview');
+   752→
+   753→  return (
+   754→    <div className="min-h-screen bg-gradient-to-br from-background via-slate-50/50 to-background dark:via-slate-950/50 p-6">
+   755→      {/* Header */}
+   756→      <div className="max-w-7xl mx-auto">
+   757→        <div className="mb-8">
+   758→          <div className="flex items-center gap-3 mb-2">
+   759→            <span className="text-4xl">⚡</span>
+   760→            <h1 className="text-3xl md:text-4xl font-bold">
+   761→              Enhanced Computation Hub
+   762→            </h1>
+   763→          </div>
+   764→          <p className="text-lg text-muted-foreground max-w-3xl">
+   765→            Unified access to Quantum Computing, HPC Clusters, AI Platforms, and Bioinformatics Tools — 
+   766→            all in one integrated scientific computing environment.
+   767→          </p>
+   768→          <div className="flex flex-wrap gap-2 mt-4">
+   769→            <Badge className="px-3 py-1 bg-gradient-to-r from-cyan-500 to-blue-500 text-white">
+   770→              ⚛️ Quantum Ready
+   771→            </Badge>
+   772→            <Badge className="px-3 py-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+   773→              🖥️ 16K+ Cores
+   774→            </Badge>
+   775→            <Badge className="px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-500 text-white">
+   776→              🤖 AI Models
+   777→            </Badge>
+   778→            <Badge className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white">
+   779→              🧬 Bioinformatics
+   780→            </Badge>
+   781→          </div>
+   782→        </div>
+   783→
+   784→        {/* Main Content Tabs */}
+   785→        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+   786→          <TabsList className="grid w-full grid-cols-5 max-w-4xl mx-auto mb-8 h-auto">
+   787→            <TabsTrigger value="quantum" className="gap-2 py-3 text-xs sm:text-sm">
+   788→              <span>⚛️</span> Quantum
+   789→            </TabsTrigger>
+   790→            <TabsTrigger value="hpc" className="gap-2 py-3 text-xs sm:text-sm">
+   791→              <span>🖥️</span> HPC Clusters
+   792→            </TabsTrigger>
+   793→            <TabsTrigger value="ai" className="gap-2 py-3 text-xs sm:text-sm">
+   794→              <span>🤖</span> AI Platforms
+   795→            </TabsTrigger>
+   796→            <TabsTrigger value="bio" className="gap-2 py-3 text-xs sm:text-sm">
+   797→              <span>🧬</span> Bioinformatics
+   798→            </TabsTrigger>
+   799→            <TabsTrigger value="status" className="gap-2 py-3 text-xs sm:text-sm">
+   800→              <span>📊</span> System Status
+   801→            </TabsTrigger>
+   802→          </TabsList>
+   803→
+   804→          <TabsContent value="quantum">
+   805→            <QuantumComputingSection />
+   806→          </TabsContent>
+   807→
+   808→          <TabsContent value="hpc">
+   809→            <HPCClustersSection />
+   810→          </TabsContent>
+   811→
+   812→          <TabsContent value="ai">
+   813→            <AIPlatformsSection />
+   814→          </TabsContent>
+   815→
+   816→          <TabsContent value="bio">
+   817→            <BioinformaticsToolsSection />
+   818→          </TabsContent>
+   819→
+   820→          <TabsContent value="status">
+   821→            <SystemStatusDashboard />
+   822→          </TabsContent>
+   823→        </Tabs>
+   824→      </div>
+   825→    </div>
+   826→  );
+   827→}
+   828→
+   829→// ============ SYSTEM STATUS DASHBOARD ============
+   830→
+   831→function SystemStatusDashboard() {
+   832→  const [systemMetrics] = useState({
+   833→    totalJobsToday: 1247,
+   834→    activeJobs: 89,
+   835→    completedJobs: 1158,
+   836→    failedJobs: 12,
+   837→    avgWaitTime: '4.2 min',
+   838→    totalComputeHours: 2847.5,
+   839→    gpuUtilization: 76,
+   840→    cpuUtilization: 62,
+   841→    storageUsed: '847 TB / 1.2 PB'
+   842→  });
+   843→
+   844→  const [recentActivity] = useState([
+   845→    { time: '2 min ago', event: 'Quantum job completed - VQE calculation', user: 'Dr. Smith', type: 'success' },
+   846→    { time: '5 min ago', event: 'HPC cluster scaled up +32 nodes', user: 'System', type: 'info' },
+   847→    { time: '8 min ago', event: 'AlphaFold prediction started', user: 'Prof. Johnson', type: 'info' },
+   848→    { time: '15 min ago', event: 'Job failed - Out of memory', user: 'Dr. Chen', type: 'error' },
+   849→    { time: '22 min ago', event: 'Pipeline completed - RNA-Seq analysis', user: 'Dr. Patel', type: 'success' },
+   850→    { time: '30 min ago', event: 'New GPU pool added - 8x H100', user: 'Admin', type: 'info' }
+   851→  ]);
+   852→
+   853→  return (
+   854→    <div className="space-y-6">
+   855→      {/* Key Metrics */}
+   856→      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+   857→        <Card>
+   858→          <CardContent className="p-4">
+   859→            <p className="text-sm text-muted-foreground">Jobs Today</p>
+   860→            <p className="text-3xl font-bold">{systemMetrics.totalJobsToday.toLocaleString()}</p>
+   861→            <p className="text-xs text-green-600 mt-1">↑ 12% from yesterday</p>
+   862→          </CardContent>
+   863→        </Card>
+   864→        <Card>
+   865→          <CardContent className="p-4">
+   866→            <p className="text-sm text-muted-foreground">Active Now</p>
+   867→            <p className="text-3xl font-bold text-blue-600">{systemMetrics.activeJobs}</p>
+   868→            <p className="text-xs text-muted-foreground mt-1">Running jobs</p>
+   869→          </CardContent>
+   870→        </Card>
+   871→        <Card>
+   872→          <CardContent className="p-4">
+   873→            <p className="text-sm text-muted-foreground">Compute Hours</p>
+   874→            <p className="text-3xl font-bold">{systemMetrics.totalComputeHours.toLocaleString()}</p>
+   875→            <p className="text-xs text-muted-foreground mt-1">Hours used today</p>
+   876→          </CardContent>
+   877→        </Card>
+   878→        <Card>
+   879→          <CardContent className="p-4">
+   880→            <p className="text-sm text-muted-foreground">Avg Wait Time</p>
+   881→            <p className="text-3xl font-bold text-green-600">{systemMetrics.avgWaitTime}</p>
+   882→            <p className="text-xs text-green-600 mt-1">↓ 18% faster</p>
+   883→          </CardContent>
+   884→        </Card>
+   885→      </div>
+   886→
+   887→      {/* Resource Utilization */}
+   888→      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+   889→        <Card>
+   890→          <CardHeader>
+   891→            <CardTitle className="text-base">Resource Utilization</CardTitle>
+   892→          </CardHeader>
+   893→          <CardContent className="space-y-4">
+   894→            <div>
+   895→              <div className="flex justify-between mb-2">
+   896→                <span className="text-sm font-medium">GPU Utilization</span>
+   897→                <span className="text-sm">{systemMetrics.gpuUtilization}%</span>
+   898→              </div>
+   899→              <Progress value={systemMetrics.gpuUtilization} className="h-3" />
+   900→            </div>
+   901→            <div>
+   902→              <div className="flex justify-between mb-2">
+   903→                <span className="text-sm font-medium">CPU Utilization</span>
+   904→                <span className="text-sm">{systemMetrics.cpuUtilization}%</span>
+   905→              </div>
+   906→              <Progress value={systemMetrics.cpuUtilization} className="h-3" />
+   907→            </div>
+   908→            <div>
+   909→              <div className="flex justify-between mb-2">
+   910→                <span className="text-sm font-medium">Storage Used</span>
+   911→                <span className="text-sm">{systemMetrics.storageUsed}</span>
+   912→              </div>
+   913→              <Progress value={70} className="h-3" />
+   914→            </div>
+   915→          </CardContent>
+   916→        </Card>
+   917→
+   918→        <Card>
+   919→          <CardHeader>
+   920→            <CardTitle className="text-base">Recent Activity</CardTitle>
+   921→          </CardHeader>
+   922→          <CardContent>
+   923→            <div className="space-y-3 max-h-[240px] overflow-y-auto">
+   924→              {recentActivity.map((activity, idx) => (
+   925→                <div key={idx} className="flex items-start gap-3 pb-3 border-b last:border-0">
+   926→                  <div className={`w-2 h-2 rounded-full mt-2 ${
+   927→                    activity.type === 'success' ? 'bg-green-500' :
+   928→                    activity.type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+   929→                  }`} />
+   930→                  <div className="flex-1 min-w-0">
+   931→                    <p className="text-sm">{activity.event}</p>
+   932→                    <p className="text-xs text-muted-foreground">
+   933→                      {activity.user} • {activity.time}
+   934→                    </p>
+   935→                  </div>
+   936→                </div>
+   937→              ))}
+   938→            </div>
+   939→          </CardContent>
+   940→        </Card>
+   941→      </div>
+   942→
+   943→      {/* System Health */}
+   944→      <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-200">
+   945→        <CardContent className="p-6">
+   946→          <div className="flex items-center justify-between">
+   947→            <div className="flex items-center gap-3">
+   948→              <div className="w-4 h-4 rounded-full bg-green-500 animate-pulse" />
+   949→              <div>
+   950→                <h3 className="font-semibold text-lg">All Systems Operational</h3>
+   951→                <p className="text-sm text-muted-foreground">No reported outages or degraded performance</p>
+   952→              </div>
+   953→            </div>
+   954→            <div className="text-right">
+   955→              <p className="text-sm text-muted-foreground">Last Updated</p>
+   956→              <p className="font-medium">{new Date().toLocaleTimeString()}</p>
+   957→            </div>
+   958→          </div>
+   959→        </CardContent>
+   960→      </Card>
+   961→    </div>
+   962→  );
+   963→}
+   964→
