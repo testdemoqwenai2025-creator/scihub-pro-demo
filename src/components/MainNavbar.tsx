@@ -58,6 +58,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'AlphaFold', href: '/alphafold', icon: '🧬', description: 'Protein structure AI (FREE)', badge: 'FREE', badgeVariant: 'secondary' },
       { label: 'Search', href: '/query', icon: '🔍', description: 'Literature search' },
       { label: 'Knowledge Graph', href: '/knowledge', icon: '🕸️', description: 'Visual exploration' },
+      { label: 'Paper Playlist', href: '/playlist', icon: '🎵', description: 'ML-powered paper curation', badge: 'NEW', badgeVariant: 'secondary' },
     ]
   },
   {
