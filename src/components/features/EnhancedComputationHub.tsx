@@ -1040,7 +1040,7 @@ function MolecularModellingSection() {
       category: 'Drug Discovery MD',
       description: 'High-performance MD code optimized for drug discovery workflows',
       version: '6.3',
-      features: '["Event-driven tasks", "Replica exchange", "Free energy perturbation", "Wizard interfaces"]',
+      features: ['Event-driven tasks', 'Replica exchange', 'Free energy perturbation', 'Wizard interfaces'],
       maxAtoms: 'Millions',
       parallelization: 'MPI + CUDA'
     },
@@ -2110,38 +2110,40 @@ export default function EnhancedComputationHub() {
 
         {/* Main Content Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-10 max-w-6xl mx-auto mb-8 h-auto gap-1">
-            <TabsTrigger value="quantum" className="gap-1 py-2 text-xs" title="Quantum Computing">
-              <span>⚛️</span><span className="hidden sm:inline">Quantum</span>
-            </TabsTrigger>
-            <TabsTrigger value="hpc" className="gap-1 py-2 text-xs" title="HPC Clusters">
-              <span>🖥️</span><span className="hidden sm:inline">HPC</span>
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="gap-1 py-2 text-xs" title="AI Platforms">
-              <span>🤖</span><span className="hidden sm:inline">AI</span>
-            </TabsTrigger>
-            <TabsTrigger value="bio" className="gap-1 py-2 text-xs" title="Bioinformatics">
-              <span>🧬</span><span className="hidden sm:inline">Bio</span>
-            </TabsTrigger>
-            <TabsTrigger value="chem" className="gap-1 py-2 text-xs" title="Cheminformatics">
-              <span>🧪</span><span className="hidden sm:inline">Chemo</span>
-            </TabsTrigger>
-            <TabsTrigger value="molecular" className="gap-1 py-2 text-xs" title="Molecular Dynamics">
-              <span>🫧</span><span className="hidden sm:inline">MD</span>
-            </TabsTrigger>
-            <TabsTrigger value="materials" className="gap-1 py-2 text-xs" title="Materials Science">
-              <span>💎</span><span className="hidden sm:inline">MatSci</span>
-            </TabsTrigger>
-            <TabsTrigger value="astronomy" className="gap-1 py-2 text-xs" title="Astronomy">
-              <span>📡</span><span className="hidden sm:inline">Astro</span>
-            </TabsTrigger>
-            <TabsTrigger value="climate" className="gap-1 py-2 text-xs" title="Climate Science">
-              <span>🌍</span><span className="hidden sm:inline">Climate</span>
-            </TabsTrigger>
-            <TabsTrigger value="physics" className="gap-1 py-2 text-xs" title="Physics Sims">
-              <span>⚡</span><span className="hidden sm:inline">Physics</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className="mb-8 overflow-x-auto">
+            <TabsList className="inline-flex min-w-max max-w-6xl mx-auto h-auto gap-1 flex-wrap justify-center p-1 bg-muted rounded-lg">
+              <TabsTrigger value="quantum" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="Quantum Computing">
+                <span>⚛️</span><span className="hidden sm:inline ml-1">Quantum</span>
+              </TabsTrigger>
+              <TabsTrigger value="hpc" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="HPC Clusters">
+                <span>🖥️</span><span className="hidden sm:inline ml-1">HPC</span>
+              </TabsTrigger>
+              <TabsTrigger value="ai" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="AI Platforms">
+                <span>🤖</span><span className="hidden sm:inline ml-1">AI</span>
+              </TabsTrigger>
+              <TabsTrigger value="bio" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="Bioinformatics">
+                <span>🧬</span><span className="hidden sm:inline ml-1">Bio</span>
+              </TabsTrigger>
+              <TabsTrigger value="chem" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="Cheminformatics">
+                <span>🧪</span><span className="hidden sm:inline ml-1">Chemo</span>
+              </TabsTrigger>
+              <TabsTrigger value="molecular" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="Molecular Dynamics">
+                <span>🫧</span><span className="hidden sm:inline ml-1">MD</span>
+              </TabsTrigger>
+              <TabsTrigger value="materials" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="Materials Science">
+                <span>💎</span><span className="hidden sm:inline ml-1">MatSci</span>
+              </TabsTrigger>
+              <TabsTrigger value="astronomy" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="Astronomy">
+                <span>📡</span><span className="hidden sm:inline ml-1">Astro</span>
+              </TabsTrigger>
+              <TabsTrigger value="climate" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="Climate Science">
+                <span>🌍</span><span className="hidden sm:inline ml-1">Climate</span>
+              </TabsTrigger>
+              <TabsTrigger value="physics" className="gap-1 px-3 py-2 text-xs data-[state=active]:bg-background shadow-sm" title="Physics Sims">
+                <span>⚡</span><span className="hidden sm:inline ml-1">Physics</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="quantum">
             <QuantumComputingSection />
