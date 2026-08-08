@@ -1,0 +1,9 @@
+{
+  "name": "scihub-pro",
+  "version": "3.0.0",
+  "buildDate": "2026-08-08T14:05:27Z",
+  "bundleType": "static-export",
+  "archive": "scihub-pro-v3.0.0.zip",
+  "sourceRepository": "https://github.com/testdemoqwenai2025-creator/Demo2SciHub",
+  "liveDemo": "https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/"
+}

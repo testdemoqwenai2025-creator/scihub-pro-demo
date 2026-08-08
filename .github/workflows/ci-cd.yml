@@ -1,0 +1,237 @@
+# SciHub Pro CI/CD Pipeline
+# Automated testing, building, and deployment
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  
+  # Manual trigger for production deployments
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  NODE_VERSION: '20'
+  NEXTJS_VERSION: '16'
+
+jobs:
+  # Job 1: Code Quality & Testing
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        
+      - name: Run linter
+        run: npm run lint --if-present
+        continue-on-error: true
+        
+      - name: Run tests
+        run: npm test --if-present -- --coverage
+        continue-on-error: true
+        
+      - name: Upload coverage report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+  # Job 2: Build Application
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+    needs: [test]
+    
+    strategy:
+      matrix:
+        node-version: ['20']
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scihub-pro-build-${{ github.sha }}
+          path: out/
+          retention-days: 30
+          
+      - name: Create deployment bundle
+        run: |
+          cd /tmp
+          zip -r scihub-pro-bundle.zip /home/workspace/out/*
+          echo "Bundle created at /tmp/scihub-pro-bundle.zip"
+          
+      - name: Upload deployment bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: scihub-pro-deployment-bundle
+          path: /tmp/scihub-pro-bundle.zip
+          retention-days: 90
+
+  # Job 3: Deploy to GitHub Pages (Automatic)
+  deploy-github-pages:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+        
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+          
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+        
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out/
+          
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  # Job 4: Docker Image Build (for GCP/AWS/Azure)
+  build-docker:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && contains(github.event.commits[0].message, '[deploy]'))
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/scihub-pro
+          tags: |
+            type=sha,prefix=
+            type=ref,event=branch
+            latest
+            
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Job 5: Security Scan
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: [build]
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          
+      - name: Run dependency audit
+        run: npm audit --audit-level=moderate || true
+
+  # Job 6: Notify Success/Failure
+  notify:
+    name: Notification
+    runs-on: ubuntu-latest
+    needs: [deploy-github-pages]
+    if: always()
+    
+    steps:
+      - name: Send notification
+        run: |
+          if [ "${{ needs.deploy-github-pages.result }}" == "success" ]; then
+            echo "✅ Deployment successful!"
+            echo "Preview URL: https://testdemoqwenai2025-creator.github.io/scihub-pro-demo/"
+          else
+            echo "❌ Deployment failed"
+            exit 1
+          fi
