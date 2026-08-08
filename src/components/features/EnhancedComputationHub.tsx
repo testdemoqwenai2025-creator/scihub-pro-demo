@@ -907,11 +907,11 @@ function BioinformaticsToolsSection() {
             <p className="text-sm text-muted-foreground">Total Tools</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-violet-600">3</p>
+            <p className="text-2xl font-bold text-violet-600">4</p>
             <p className="text-sm text-muted-foreground">Scientific Domains</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-bold text-cyan-600">12</p>
+            <p className="text-2xl font-bold text-cyan-600">16</p>
             <p className="text-sm text-muted-foreground">Workflows</p>
           </div>
           <div className="text-center">
@@ -921,6 +921,83 @@ function BioinformaticsToolsSection() {
           <div className="text-center">
             <p className="text-2xl font-bold text-green-600">24/7</p>
             <p className="text-sm text-muted-foreground">Available</p>
+          </div>
+        </div>
+      </div>
+
+      <Separator className="my-8" />
+
+      {/* ============ DRUG DISCOVERY SECTION ============ */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+          <span className="text-2xl">💊</span> Drug Discovery Platform
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[
+            { id: 'maestro', name: 'Maestro', category: 'Drug Design Suite', description: 'Comprehensive molecular modeling environment', version: '13.8', inputs: ['Structures', 'Project Files'] },
+            { id: 'phase', name: 'Phase', category: 'Ligand-Based Design', description: 'Pharmacophore modeling & screening', version: '7.0', inputs: ['Ligands', 'Features'] },
+            { id: 'glide', name: 'Glide', category: 'Docking Engine', description: 'High-throughput docking & scoring', version: '9.5', inputs: ['Receptor', 'Ligand Library'] },
+            { id: 'qikprop', name: 'QikProp', category: 'ADMET Prediction', description: 'Physicochemical property prediction', version: '8.2', inputs: ['Molecules', 'SMILES'] },
+            { id: 'epik', name: 'Epik', category: 'Protonation States', description: 'Ionization & tautomeric state prediction', version: '6.0', inputs: ['Structures'] },
+            { id: 'ligprep', name: 'LigPrep', category: 'Ligand Preparation', description: 'Systematic ligand preparation workflow', version: '5.0', inputs: ['Raw Ligands'] }
+          ].map((tool) => (
+            <Card key={tool.id} className="hover:shadow-md transition-shadow cursor-pointer group border-pink-200 dark:border-pink-800">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-base group-hover:text-pink-600 transition-colors">{tool.name}</CardTitle>
+                    <CardDescription className="mt-1">{tool.description}</CardDescription>
+                  </div>
+                  <Badge variant="secondary">{tool.version}</Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Badge variant="outline" className="bg-pink-50 dark:bg-pink-950">{tool.category}</Badge>
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-1">Inputs:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {tool.inputs.map((input) => (
+                        <Badge key={input} variant="secondary" className="text-xs">{input}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Button className="w-full" size="sm" variant="outline">Launch Tool →</Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Drug Discovery Pipelines */}
+        <div className="mt-6">
+          <h4 className="font-medium mb-3 flex items-center gap-2">
+            <span>🧬</span> Pre-built Drug Discovery Pipelines
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {[
+              { name: 'Lead Optimization Pipeline', steps: 10, time: '1-2 weeks', tools: ['SAR Analysis', 'Activity Cliff Detection', 'R-Group Enumeration'] },
+              { name: 'Virtual Screening Campaign', steps: 12, time: '2-4 weeks', tools: ['Library Prep', 'HT Docking', 'Rescoring', 'ADMET Filter'] },
+              { name: 'Hit-to-Lead Workflow', steps: 15, time: '4-8 weeks', tools: ['Hit Validation', 'Analog Synthesis', 'SAR Development', 'PK Studies'] },
+              { name: 'De Novo Drug Design', steps: 8, time: '1-3 weeks', tools: ['Fragment Growing', 'Linking', 'Scaffold Hopping', 'AI Generation'] }
+            ].map((pipeline, idx) => (
+              <Card key={idx} className="bg-gradient-to-r from-pink-50 to-rose-50 dark:from-pink-950/30 dark:to-rose-950/30 border-pink-200">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-medium text-sm">{pipeline.name}</span>
+                    <Badge className="bg-pink-500 text-white">{pipeline.steps} Steps</Badge>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                    <span>Est: {pipeline.time}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {pipeline.tools.map((tool) => (
+                      <Badge key={tool} variant="outline" className="text-xs">{tool}</Badge>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         </div>
       </div>
@@ -959,10 +1036,16 @@ export default function EnhancedComputationHub() {
               🤖 AI Models
             </Badge>
             <Badge className="px-3 py-1 bg-gradient-to-r from-orange-500 to-red-500 text-white">
-              🧬 Life Sciences
+              🧬 Bioinformatics
             </Badge>
             <Badge className="px-3 py-1 bg-gradient-to-r from-violet-500 to-purple-500 text-white">
-              ⚗️ Chemistry
+              ⚗️ Cheminformatics
+            </Badge>
+            <Badge className="px-3 py-1 bg-gradient-to-r from-cyan-500 to-teal-500 text-white">
+              🔬 Molecular Modelling
+            </Badge>
+            <Badge className="px-3 py-1 bg-gradient-to-r from-pink-500 to-rose-500 text-white">
+              💊 Drug Discovery
             </Badge>
           </div>
         </div>
